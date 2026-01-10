@@ -4,12 +4,17 @@ import { useUserStore } from "../stores/userStore";
 import { useGameStore } from "../stores/gameStore";
 import { getSocket } from "../services/socket";
 import { getGame } from "./registry";
+
 import TicTacToeUI from "./tictactoe/TicTacToeUI";
 import { TicTacToe } from "./tictactoe/TicTacToe";
 import CaroUI from "./caro/CaroUI";
 import { Caro } from "./caro/Caro";
 import ChessUI from "./chess/ChessUI";
 import { ChessGame } from "./chess/Chess";
+import { YouTubeWatch } from "./youtube/YouTubeWatch";
+import { YouTubeWatchUI } from "./youtube/YouTubeWatchUI";
+import { CanvasGame } from "./canvas/CanvasGame";
+import { CanvasGameUI } from "./canvas/CanvasGameUI";
 
 export default function GameContainer() {
   const { currentRoom } = useRoomStore();
@@ -138,6 +143,14 @@ export default function GameContainer() {
 
   if (gameInstance instanceof ChessGame) {
     return <ChessUI game={gameInstance} />;
+  }
+
+  if (gameInstance instanceof YouTubeWatch) {
+    return <YouTubeWatchUI game={gameInstance} />;
+  }
+
+  if (gameInstance instanceof CanvasGame) {
+    return <CanvasGameUI game={gameInstance} currentUserId={userId} />;
   }
 
   return (

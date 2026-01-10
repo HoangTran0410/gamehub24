@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { LogOut, Crown } from "lucide-react";
+import { Crown, ArrowLeft } from "lucide-react";
 import { useRoomStore } from "../stores/roomStore";
 import { useChatStore } from "../stores/chatStore";
 import { useUserStore } from "../stores/userStore";
@@ -129,8 +129,8 @@ export default function RoomPage() {
   return (
     <div className="min-h-screen bg-background-primary">
       {/* Room Header */}
-      <header className="sticky top-0 z-40 glass-card border-b border-white/10">
-        <div className="max-w-7xl mx-auto px-6 py-4">
+      <header className="md:sticky md:top-0 z-40 glass-card border-b border-white/10">
+        <div className="max-w-7xl mx-auto px-2 md:px-4 py-2 md:py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <button
@@ -138,7 +138,7 @@ export default function RoomPage() {
                 className="p-2 hover:bg-white/10 rounded-lg transition-colors cursor-pointer"
                 aria-label="Leave room"
               >
-                <LogOut className="w-5 h-5 text-text-secondary" />
+                <ArrowLeft className="w-5 h-5 text-text-secondary" />
               </button>
               <div>
                 <h1 className="text-xl font-display text-text-primary">
@@ -150,12 +150,17 @@ export default function RoomPage() {
               </div>
             </div>
 
-            {isHost && (
-              <div className="flex items-center gap-2 text-sm text-primary">
-                <Crown className="w-4 h-4" />
-                <span>Host</span>
-              </div>
-            )}
+            <div className="flex items-center gap-2 text-sm">
+              <Crown className="w-4 h-4" />
+              <span>
+                Host:{" "}
+                {
+                  currentRoom.players.find((p) => p.id === currentRoom.ownerId)
+                    ?.username
+                }{" "}
+                {isHost ? "(You)" : ""}
+              </span>
+            </div>
           </div>
         </div>
       </header>
@@ -164,7 +169,7 @@ export default function RoomPage() {
       <main className="max-w-7xl mx-auto px-2 md:px-4 py-6">
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-6">
           {/* Game Container */}
-          <div className="glass-card rounded-2xl p-2 md:p-6">
+          <div className="glass-card rounded-2xl p-2 md:p-4">
             <GameContainer />
           </div>
 

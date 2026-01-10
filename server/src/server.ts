@@ -230,11 +230,14 @@ io.on("connection", (socket: Socket) => {
 
   // DISCONNECT
 
-  socket.on("disconnect", () => {
-    console.log(`🔴 User disconnected: ${username} (${userId}) [${socket.id}]`);
+  socket.on("disconnect", (reason) => {
+    console.log(
+      `🔴 User disconnected: ${username} (${userId}) [${socket.id}]. Reason: ${reason}`
+    );
 
     // Handle room cleanup
     const result = roomManager.leaveRoom(userId);
+
     if (result.roomId) {
       if (result.room) {
         io.to(result.roomId).emit("room:players", result.room.players);

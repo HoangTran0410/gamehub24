@@ -35,6 +35,10 @@ export class RoomManager {
     this.rooms.set(roomId, room);
     this.playerRoomMap.set(userId, roomId);
 
+    console.log(
+      `[RoomManager] Created room ${roomId} for user ${userId} (${username})`
+    );
+
     return room;
   }
 
@@ -76,6 +80,10 @@ export class RoomManager {
 
     this.playerRoomMap.set(userId, roomId);
 
+    console.log(
+      `[RoomManager] User ${userId} (${username}) joined room ${roomId}`
+    );
+
     return { success: true, room };
   }
 
@@ -106,6 +114,11 @@ export class RoomManager {
       this.rooms.delete(roomId);
       // Remove all players from this room
       room.players.forEach((p) => this.playerRoomMap.delete(p.id));
+      console.log(
+        `[RoomManager] Deleted room ${roomId} (Host Left: ${wasHost}, Empty: ${
+          room.players.length === 0
+        })`
+      );
       return { roomId, wasHost };
     }
 
@@ -113,6 +126,9 @@ export class RoomManager {
     if (wasHost && room.players.length > 0) {
       room.players[0].isHost = true;
       room.ownerId = room.players[0].id;
+      console.log(
+        `[RoomManager] Reassigned host for room ${roomId} to ${room.players[0].username}`
+      );
     }
 
     return { roomId, room, wasHost };

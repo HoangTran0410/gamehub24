@@ -1,14 +1,19 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Gamepad, Users, Plus, Settings as SettingsIcon } from "lucide-react";
+import { Gamepad, Users, Plus, Trash2 } from "lucide-react";
 import { useRoomStore } from "../stores/roomStore";
+import { useUserStore } from "../stores/userStore";
+import { useSocketStore } from "../stores/socketStore";
 import { getSocket } from "../services/socket";
 import { getAllGames } from "../games/registry";
 import type { Room } from "../stores/roomStore";
 
 export default function Lobby() {
+  const { username } = useUserStore();
+  const { isConnected } = useSocketStore();
   const { publicRooms, setPublicRooms } = useRoomStore();
   const [showCreateModal, setShowCreateModal] = useState<string | null>(null);
+  const [showRegenerateModal, setShowRegenerateModal] = useState(false);
 
   useEffect(() => {
     const socket = getSocket();
@@ -37,17 +42,31 @@ export default function Lobby() {
     <div className="min-h-screen bg-background-primary">
       {/* Navbar */}
       <nav className="fixed top-4 left-4 right-4 z-50">
-        <div className="max-w-7xl mx-auto glass-card rounded-2xl px-6 py-4">
+        <div className="max-w-7xl mx-auto glass-card rounded-2xl px-4 md:px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <Gamepad className="w-8 h-8 text-primary" />
               <span className="text-xl font-display text-text-primary">
-                Gaming Hub
+                GameHub
               </span>
             </div>
-            <button className="p-2 hover:bg-white/10 rounded-lg transition-colors cursor-pointer">
-              <SettingsIcon className="w-5 h-5 text-text-secondary" />
-            </button>
+
+            <div
+              onClick={() => setShowRegenerateModal(true)}
+              className={`flex items-center gap-2 px-3 py-1.5 bg-white/5 rounded-full border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all cursor-pointer ${
+                !isConnected ? "opacity-50" : ""
+              }`}
+              title={isConnected ? "Connected" : "Disconnected"}
+            >
+              <div
+                className={`w-2 h-2 rounded-full ${
+                  isConnected ? "bg-green-500 animate-pulse" : "bg-red-500"
+                }`}
+              />
+              <span className="text-sm font-medium text-text-primary">
+                {username}
+              </span>
+            </div>
           </div>
         </div>
       </nav>
@@ -93,7 +112,8 @@ export default function Lobby() {
                       !game.isAvailable ? "opacity-50" : ""
                     }`}
                   >
-                    <div className="mb-4">
+                    {/* align center */}
+                    <div className="mb-4 flex items-center justify-center">
                       <Icon className="w-12 h-12 text-primary" />
                     </div>
                     <h4 className="font-display text-xl text-text-primary mb-2">
@@ -164,6 +184,13 @@ export default function Lobby() {
           onClose={() => setShowCreateModal(null)}
         />
       )}
+
+      {/* Regenerate Identity Modal */}
+      {showRegenerateModal && (
+        <RegenerateIdentityModal
+          onClose={() => setShowRegenerateModal(false)}
+        />
+      )}
     </div>
   );
 }
@@ -171,10 +198,12 @@ export default function Lobby() {
 // Room List Item Component
 function RoomListItem({ room }: { room: Room }) {
   const navigate = useNavigate();
-  const socket = getSocket();
+  const { username } = useUserStore();
   const { setCurrentRoom } = useRoomStore();
 
   const handleJoin = () => {
+    const socket = getSocket();
+    if (!socket) return alert("Socket not connected");
     socket.emit(
       "room:join",
       { roomId: room.id },
@@ -189,27 +218,74 @@ function RoomListItem({ room }: { room: Room }) {
     );
   };
 
+  const handleCloseRoom = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm("Are you sure you want to close this room?")) return;
+
+    const socket = getSocket();
+    socket.emit("room:leave", { roomId: room.id });
+  };
+
+  const host = room.players.find((p) => p.isHost);
+  const hostName = host?.username || "Unknown";
+  const isHost = host?.username === username;
+  const game = getAllGames().find((g) => g.id === room.gameType);
+  const GameIcon = game?.icon || Gamepad;
+
   return (
-    <div className="glass-card rounded-xl p-4 hover:border-primary/30 transition-all duration-200 cursor-pointer group">
-      <div className="flex items-center justify-between">
-        <div className="flex-1">
-          <div className="flex items-center gap-3 mb-1">
-            <h4 className="font-display text-lg text-text-primary group-hover:text-primary transition-colors">
-              {room.name}
-            </h4>
+    <div className="glass-card rounded-xl p-4 hover:border-primary/30 transition-all duration-200 cursor-pointer group flex flex-col sm:flex-row items-start sm:items-center gap-4">
+      {/* Icon */}
+      <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center shrink-0">
+        <GameIcon className="w-6 h-6 text-primary" />
+      </div>
+
+      {/* Info */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 mb-1">
+          <h4 className="font-display text-lg text-text-primary truncate transition-colors">
+            {room.name}
+          </h4>
+          {room.password && (
+            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-yellow-500/20 text-yellow-500 border border-yellow-500/30 uppercase tracking-wider">
+              Private
+            </span>
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3 text-sm text-text-secondary">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="w-1.5 h-1.5 rounded-full bg-primary/50" />
+            <span className="capitalize truncate max-w-[100px]">
+              {game?.name || room.gameType}
+            </span>
           </div>
-          <div className="flex items-center gap-4 text-sm text-text-secondary">
-            <span className="capitalize">{room.gameType}</span>
-            <span>•</span>
+          <div className="flex items-center gap-1.5 min-w-0">
+            <Users className="w-3.5 h-3.5 text-text-muted" />
+            <span className="truncate max-w-[120px]">Host: {hostName}</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-text-muted">•</span>
             <span>
-              {room.players.length}/{room.maxPlayers} players
+              {room.players.length}/{room.maxPlayers}
             </span>
           </div>
         </div>
+      </div>
 
+      {/* Action */}
+      <div className="flex items-center gap-2 mt-2 sm:mt-0 w-full sm:w-auto">
+        {isHost && (
+          <button
+            onClick={handleCloseRoom}
+            className="px-3 py-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-lg border border-red-500/20 transition-all duration-200"
+            title="Close Room"
+          >
+            <Trash2 className="w-5 h-5" />
+          </button>
+        )}
         <button
           onClick={handleJoin}
-          className="px-6 py-2.5 bg-primary hover:bg-primary-light text-white font-semibold rounded-lg shadow-lg shadow-primary/30 transition-all duration-200"
+          className="flex-1 sm:flex-initial px-6 py-2.5 bg-primary hover:bg-primary-light text-white font-semibold rounded-lg shadow-lg shadow-primary/30 transition-all duration-200"
         >
           Join
         </button>
@@ -231,7 +307,6 @@ function CreateRoomModal({
   const [isPublic, setIsPublic] = useState(true);
   const [password, setPassword] = useState("");
   const navigate = useNavigate();
-  const socket = getSocket();
   const { setCurrentRoom } = useRoomStore();
 
   const handleCreate = () => {
@@ -240,6 +315,8 @@ function CreateRoomModal({
       return;
     }
 
+    const socket = getSocket();
+    if (!socket) return alert("Socket not connected");
     socket.emit(
       "room:create",
       {
@@ -262,7 +339,7 @@ function CreateRoomModal({
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 animate-fadeIn">
-      <div className="bg-background-secondary border border-white/10 rounded-2xl p-8 max-w-md w-full shadow-2xl animate-slideUp mx-4">
+      <div className="bg-background-secondary border border-white/10 rounded-2xl p-8 max-w-md w-full shadow-2xl mx-4">
         <h2 className="font-display text-2xl text-text-primary mb-6">
           Create Room
         </h2>
@@ -342,6 +419,45 @@ function CreateRoomModal({
             className="flex-1 px-4 py-2.5 bg-primary hover:bg-primary-light text-white rounded-lg shadow-lg shadow-primary/30 transition-all cursor-pointer"
           >
             Create
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Regenerate Identity Modal Component
+function RegenerateIdentityModal({ onClose }: { onClose: () => void }) {
+  const { generateNewId } = useUserStore();
+
+  const handleConfirm = () => {
+    generateNewId();
+    window.location.reload();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 animate-fadeIn">
+      <div className="glass-card border border-white/10 rounded-2xl p-8 max-w-md w-full shadow-2xl animate-slideUp mx-4">
+        <h2 className="font-display text-2xl text-text-primary mb-4">
+          New Identity
+        </h2>
+        <p className="text-text-secondary mb-8">
+          Are you sure you want to generate a new random identity? The page will
+          reload.
+        </p>
+
+        <div className="flex gap-3">
+          <button
+            onClick={onClose}
+            className="flex-1 px-4 py-2.5 bg-white/5 hover:bg-white/10 text-text-secondary rounded-lg transition-colors cursor-pointer font-medium"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleConfirm}
+            className="flex-1 px-4 py-2.5 bg-primary hover:bg-primary-light text-white rounded-lg shadow-lg shadow-primary/30 transition-all cursor-pointer font-medium"
+          >
+            Confirm
           </button>
         </div>
       </div>

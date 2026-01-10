@@ -1,5 +1,6 @@
 import { io, Socket } from "socket.io-client";
 import { useUserStore } from "../stores/userStore";
+import { useSocketStore } from "../stores/socketStore";
 
 let socket: Socket | null = null;
 
@@ -28,10 +29,12 @@ export const initSocket = (): Socket => {
   // Connection event handlers
   socket.on("connect", () => {
     console.log("✅ Connected to server:", socket?.id);
+    useSocketStore.getState().setIsConnected(true);
   });
 
   socket.on("disconnect", (reason) => {
     console.log("❌ Disconnected from server:", reason);
+    useSocketStore.getState().setIsConnected(false);
   });
 
   socket.on("connect_error", (error) => {

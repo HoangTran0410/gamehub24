@@ -1,10 +1,13 @@
 import { Socket } from "socket.io-client";
+import { Grid3x3, Crown, Tv, Circle, Palette } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+
 import { BaseGame } from "./BaseGame";
 import { TicTacToe } from "./tictactoe/TicTacToe";
 import { Caro } from "./caro/Caro";
-import { Grid3x3, Crown } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
 import { ChessGame } from "./chess/Chess";
+import { YouTubeWatch } from "./youtube/YouTubeWatch";
+import { CanvasGame } from "./canvas/CanvasGame";
 
 export interface GameModule {
   id: string;
@@ -31,7 +34,7 @@ games.set("tictactoe", {
   id: "tictactoe",
   name: "Tic Tac Toe",
   description: "Classic 3x3 grid game. Get three in a row to win!",
-  icon: Grid3x3, // Changed from Circle to Grid3x3 as Circle was not imported
+  icon: Circle,
   minPlayers: 1,
   maxPlayers: 2,
   isAvailable: true,
@@ -65,6 +68,32 @@ games.set("chess", {
   isAvailable: true,
   createGame: (roomId, socket, isHost, userId, players) => {
     return new ChessGame(roomId, socket, isHost, userId, players);
+  },
+});
+
+games.set("youtube", {
+  id: "youtube",
+  name: "YouTube Watch Party",
+  description: "Watch YouTube videos together with friends!",
+  icon: Tv,
+  minPlayers: 1,
+  maxPlayers: 100,
+  isAvailable: true,
+  createGame: (roomId, socket, isHost, userId, players) => {
+    return new YouTubeWatch(roomId, socket, isHost, userId, players);
+  },
+});
+
+games.set("canvas", {
+  id: "canvas",
+  name: "Draw Together",
+  description: "Collaborative whiteboard to draw with friends!",
+  icon: Palette,
+  minPlayers: 1,
+  maxPlayers: 10,
+  isAvailable: true,
+  createGame: (roomId, socket, isHost, userId, players) => {
+    return new CanvasGame(roomId, socket, isHost, userId, players);
   },
 });
 
