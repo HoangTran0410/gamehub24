@@ -1,0 +1,1 @@
+import{c as o}from"./zustand-DbB79pZ7.js";const e=o(o=>({isOpen:!1,message:"",type:"info",title:void 0,onConfirm:void 0,show:(e,i)=>o({isOpen:!0,message:e,type:i?.type||"info",title:i?.title,onConfirm:i?.onConfirm}),hide:()=>o({isOpen:!1,message:"",onConfirm:void 0})}));export{e as u};
