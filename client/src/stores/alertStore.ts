@@ -1,19 +1,24 @@
 import { create } from "zustand";
 
+type AlertType = "error" | "info" | "success" | "warning" | "loading";
+
 interface AlertState {
   isOpen: boolean;
   message: string;
-  type: "error" | "info" | "success" | "warning";
+  type: AlertType;
   title?: string;
   onConfirm?: () => void;
+  showCancelButton?: boolean;
+  resolveConfirm?: (value: boolean) => void;
   show: (
     message: string,
     options?: {
-      type?: "error" | "info" | "success" | "warning";
+      type?: AlertType;
       title?: string;
       onConfirm?: () => void;
     }
   ) => void;
+  confirm: (message: string, title?: string) => Promise<boolean>;
   hide: () => void;
 }
 
@@ -23,6 +28,8 @@ export const useAlertStore = create<AlertState>((set) => ({
   type: "info",
   title: undefined,
   onConfirm: undefined,
+  showCancelButton: false,
+  resolveConfirm: undefined,
   show: (message, options) =>
     set({
       isOpen: true,
@@ -30,6 +37,25 @@ export const useAlertStore = create<AlertState>((set) => ({
       type: options?.type || "info",
       title: options?.title,
       onConfirm: options?.onConfirm,
+      showCancelButton: false,
     }),
-  hide: () => set({ isOpen: false, message: "", onConfirm: undefined }),
+  confirm: (message, title) => {
+    return new Promise((resolve) => {
+      set({
+        isOpen: true,
+        message,
+        type: "warning",
+        title: title || "Confirm",
+        showCancelButton: true,
+        resolveConfirm: resolve,
+      });
+    });
+  },
+  hide: () =>
+    set({
+      isOpen: false,
+      message: "",
+      onConfirm: undefined,
+      resolveConfirm: undefined,
+    }),
 }));

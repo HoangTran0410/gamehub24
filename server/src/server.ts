@@ -10,7 +10,8 @@ import { ChatMessage, CreateRoomData, JoinRoomData } from "./types";
 dotenv.config();
 
 const PORT = process.env.PORT || 3001;
-const CLIENT_URL = "*"; // process.env.CLIENT_URL || "http://localhost:5173";
+const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:5173";
+const START_TIME = Date.now();
 
 // Initialize Express
 const app = express();
@@ -33,9 +34,37 @@ const io = new Server(httpServer, {
 const roomManager = new RoomManager();
 const chatHistory: Map<string, ChatMessage[]> = new Map();
 
+function formatUpTime(diff: number) {
+  const seconds = Math.floor(diff / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+  const hoursRemainder = hours % 24;
+  const minutesRemainder = minutes % 60;
+  const secondsRemainder = seconds % 60;
+  return `${days}d ${hoursRemainder}h ${minutesRemainder}m ${secondsRemainder}s`;
+}
+
 // Health check endpoint
 app.get("/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
+// Overview statistic
+app.get("/stats", (req, res) => {
+  const rooms = roomManager.getPublicRooms();
+  const playersInRooms = rooms.reduce(
+    (acc, room) => acc + room.players.length,
+    0
+  );
+  const stats = {
+    online: io.engine.clientsCount,
+    rooms: rooms.length,
+    players: playersInRooms,
+    startTime: new Date(START_TIME).toISOString(),
+    uptime: formatUpTime(Date.now() - START_TIME),
+  };
+  res.json(stats);
 });
 
 // Socket.IO connection handler

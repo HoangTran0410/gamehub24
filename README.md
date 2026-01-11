@@ -10,6 +10,9 @@ A real-time multiplayer game platform built with React, Socket.IO, and modern we
 - **Real-time Chat**: In-room messaging with player status indicators
 - **Host-Client Architecture**: First player becomes host and manages game state
 - **Live Updates**: Real-time room list updates and player presence
+- **AI Opponent**: Single-player mode vs Stockfish engine (100MB+ WASM integration)
+- **Settings System**: Dynamic server configuration and identity management
+- **Global Alerts**: Unified modal system for notifications and confirmations
 
 ### UI/UX
 - **Dark Mode OLED Design**: Eye-friendly gaming aesthetic
@@ -171,10 +174,10 @@ Full design system documentation available in `.gemini/antigravity/brain/*/desig
 ## 📝 Next Steps (Phase 2+)
 
 ### Game Modules
-- [ ] Implement Caro (Gomoku) game
-- [ ] Implement Chess game
-- [ ] Create BaseGame abstract class
-- [ ] Create game registry system
+- [x] Implement Caro (Gomoku) game
+- [x] Implement Chess game
+- [x] Create BaseGame abstract class
+- [x] Create game registry system
 - [ ] Implement host-client synchronization
 
 ### Features

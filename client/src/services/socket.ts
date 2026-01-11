@@ -5,11 +5,26 @@ import { useSocketStore } from "../stores/socketStore";
 let socket: Socket | null = null;
 
 // Get server URL from environment or localStorage
-const getServerUrl = (): string => {
+export const getServerUrl = (): string => {
   const savedUrl = localStorage.getItem("gamehub_server_url");
   if (savedUrl) return savedUrl;
 
   return import.meta.env.VITE_SOCKET_URL || "http://localhost:3001";
+};
+
+// Update server URL and reconnect
+export const setServerUrl = (url: string): void => {
+  localStorage.setItem("gamehub_server_url", url);
+
+  // Disconnect existing socket
+  if (socket) {
+    socket.disconnect();
+    socket = null;
+  }
+
+  // Reinitialize and connect
+  initSocket();
+  connectSocket();
 };
 
 // Initialize socket connection
@@ -65,21 +80,6 @@ export const disconnectSocket = (): void => {
   if (socket?.connected) {
     socket.disconnect();
   }
-};
-
-// Update server URL and reconnect
-export const setServerUrl = (url: string): void => {
-  localStorage.setItem("gamehub_server_url", url);
-
-  // Disconnect existing socket
-  if (socket) {
-    socket.disconnect();
-    socket = null;
-  }
-
-  // Reinitialize and connect
-  initSocket();
-  connectSocket();
 };
 
 // Export socket getter for use in components

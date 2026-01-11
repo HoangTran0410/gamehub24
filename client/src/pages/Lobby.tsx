@@ -8,13 +8,14 @@ import { useAlertStore } from "../stores/alertStore";
 import { getSocket } from "../services/socket";
 import { getAllGames } from "../games/registry";
 import type { Room } from "../stores/roomStore";
+import SettingsModal from "../components/SettingsModal";
 
 export default function Lobby() {
   const { username } = useUserStore();
   const { isConnected } = useSocketStore();
   const { publicRooms, setPublicRooms } = useRoomStore();
   const [showCreateModal, setShowCreateModal] = useState<string | null>(null);
-  const [showRegenerateModal, setShowRegenerateModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
 
   useEffect(() => {
     const socket = getSocket();
@@ -53,7 +54,7 @@ export default function Lobby() {
             </div>
 
             <div
-              onClick={() => setShowRegenerateModal(true)}
+              onClick={() => setShowSettingsModal(true)}
               className={`flex items-center gap-2 px-3 py-1.5 bg-white/5 rounded-full border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all cursor-pointer ${
                 !isConnected ? "opacity-50" : ""
               }`}
@@ -201,11 +202,9 @@ export default function Lobby() {
         />
       )}
 
-      {/* Regenerate Identity Modal */}
-      {showRegenerateModal && (
-        <RegenerateIdentityModal
-          onClose={() => setShowRegenerateModal(false)}
-        />
+      {/* Settings Modal */}
+      {showSettingsModal && (
+        <SettingsModal onClose={() => setShowSettingsModal(false)} />
       )}
     </div>
   );
@@ -216,7 +215,7 @@ function RoomListItem({ room }: { room: Room }) {
   const navigate = useNavigate();
   const { username } = useUserStore();
   const { setCurrentRoom } = useRoomStore();
-  const { show: showAlert } = useAlertStore();
+  const { show: showAlert, confirm: confirmAction } = useAlertStore();
 
   const handleJoin = () => {
     const socket = getSocket();
@@ -235,9 +234,10 @@ function RoomListItem({ room }: { room: Room }) {
     );
   };
 
-  const handleCloseRoom = (e: React.MouseEvent) => {
+  const handleCloseRoom = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm("Are you sure you want to close this room?")) return;
+    if (!(await confirmAction("Are you sure you want to close this room?")))
+      return;
 
     const socket = getSocket();
     socket.emit("room:leave", { roomId: room.id });
@@ -451,40 +451,3 @@ function CreateRoomModal({
 }
 
 // Regenerate Identity Modal Component
-function RegenerateIdentityModal({ onClose }: { onClose: () => void }) {
-  const { generateNewId } = useUserStore();
-
-  const handleConfirm = () => {
-    generateNewId();
-    window.location.reload();
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 animate-fadeIn">
-      <div className="glass-card border border-white/10 rounded-2xl p-8 max-w-md w-full shadow-2xl animate-slideUp mx-4">
-        <h2 className="font-display text-2xl text-text-primary mb-4">
-          New Identity
-        </h2>
-        <p className="text-text-secondary mb-8">
-          Are you sure you want to generate a new random identity? The page will
-          reload.
-        </p>
-
-        <div className="flex gap-3">
-          <button
-            onClick={onClose}
-            className="flex-1 px-4 py-2.5 bg-white/5 hover:bg-white/10 text-text-secondary rounded-lg transition-colors cursor-pointer font-medium"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleConfirm}
-            className="flex-1 px-4 py-2.5 bg-primary hover:bg-primary-light text-white rounded-lg shadow-lg shadow-primary/30 transition-all cursor-pointer font-medium"
-          >
-            Confirm
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}

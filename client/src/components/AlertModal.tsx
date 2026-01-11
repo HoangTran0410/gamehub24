@@ -1,14 +1,36 @@
-import { X, AlertCircle, CheckCircle, Info, AlertTriangle } from "lucide-react";
+import {
+  X,
+  AlertCircle,
+  CheckCircle,
+  Info,
+  AlertTriangle,
+  Loader,
+} from "lucide-react";
 import { useAlertStore } from "../stores/alertStore";
 
 export default function AlertModal() {
-  const { isOpen, message, type, title, hide, onConfirm } = useAlertStore();
+  const {
+    isOpen,
+    message,
+    type,
+    title,
+    hide,
+    onConfirm,
+    showCancelButton,
+    resolveConfirm,
+  } = useAlertStore();
 
   if (!isOpen) return null;
 
   const handleClose = () => {
     hide();
+    if (resolveConfirm) resolveConfirm(false);
+  };
+
+  const handleConfirmAction = () => {
     if (onConfirm) onConfirm();
+    if (resolveConfirm) resolveConfirm(true);
+    hide();
   };
 
   const getIcon = () => {
@@ -19,6 +41,8 @@ export default function AlertModal() {
         return <CheckCircle className="w-12 h-12 text-green-500" />;
       case "warning":
         return <AlertTriangle className="w-12 h-12 text-yellow-500" />;
+      case "loading":
+        return <Loader className="w-12 h-12 text-primary" />;
       default:
         return <Info className="w-12 h-12 text-primary" />;
     }
@@ -33,6 +57,8 @@ export default function AlertModal() {
         return "Success";
       case "warning":
         return "Warning";
+      case "loading":
+        return "Loading";
       default:
         return "Information";
     }
@@ -60,12 +86,24 @@ export default function AlertModal() {
             </p>
           </div>
 
-          <button
-            onClick={handleClose}
-            className="w-full py-2.5 bg-primary hover:bg-primary-light text-white font-medium rounded-xl transition-all shadow-lg shadow-primary/20 mt-2"
-          >
-            Okay
-          </button>
+          <div className="flex w-full gap-3 mt-2">
+            {showCancelButton && (
+              <button
+                onClick={handleClose}
+                className="flex-1 py-2.5 bg-white/5 hover:bg-white/10 text-text-secondary font-medium rounded-xl transition-colors"
+              >
+                Cancel
+              </button>
+            )}
+            <button
+              onClick={handleConfirmAction}
+              className={`flex-1 py-2.5 bg-primary hover:bg-primary-light text-white font-medium rounded-xl transition-all shadow-lg shadow-primary/20 ${
+                !showCancelButton ? "w-full" : ""
+              }`}
+            >
+              {showCancelButton ? "Confirm" : "Okay"}
+            </button>
+          </div>
         </div>
       </div>
     </div>

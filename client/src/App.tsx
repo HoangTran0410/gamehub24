@@ -1,16 +1,10 @@
 import { useEffect } from "react";
 import { HashRouter, Routes, Route, Navigate } from "react-router-dom";
 import { initSocket, connectSocket } from "./services/socket";
-import loadable from "@loadable/component";
+import AlertModal from "./components/AlertModal";
+import Lobby from "./pages/Lobby";
+import Room from "./pages/Room";
 import "./App.css";
-
-const Lobby = loadable(() => import("./pages/Lobby"), {
-  fallback: <div>Loading Lobby...</div>,
-});
-const Room = loadable(() => import("./pages/Room"), {
-  fallback: <div>Loading Room...</div>,
-});
-const AlertModal = loadable(() => import("./components/AlertModal"));
 
 function App() {
   useEffect(() => {
