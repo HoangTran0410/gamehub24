@@ -12,6 +12,7 @@ export interface DrawStroke {
   points: Point[];
   color: string;
   width: number;
+  duration: number; // How long it took to draw (ms)
 }
 
 export interface CanvasState {
@@ -19,7 +20,7 @@ export interface CanvasState {
 }
 
 export interface CanvasAction extends GameAction {
-  type: "DRAW" | "CLEAR" | "REQUEST_SYNC";
+  type: "DRAW" | "CLEAR" | "UNDO" | "REQUEST_SYNC";
   payload?: any;
 }
 
@@ -70,6 +71,8 @@ export default class CanvasGame extends BaseGame {
       this.handleDraw(action.payload);
     } else if (action.type === "CLEAR") {
       this.handleClear();
+    } else if (action.type === "UNDO") {
+      this.handleUndo(action.payload); // payload is playerId
     } else if (action.type === "REQUEST_SYNC") {
       if (this.isHost) {
         this.broadcastState();
@@ -81,7 +84,33 @@ export default class CanvasGame extends BaseGame {
     if (this.isHost) {
       if (action.type === "DRAW") this.handleDraw(action.payload);
       if (action.type === "CLEAR") this.handleClear();
+      if (action.type === "UNDO") this.handleUndo(action.payload);
     } else {
+      // Client-side prediction: apply locally immediately for instant feedback
+      if (action.type === "DRAW") {
+        this.state.strokes = [...this.state.strokes, action.payload];
+        this.setState({ ...this.state });
+      } else if (action.type === "CLEAR") {
+        this.state.strokes = [];
+        this.setState({ ...this.state });
+      } else if (action.type === "UNDO") {
+        // Find and remove last stroke by this player
+        const playerId = action.payload;
+        let lastIndex = -1;
+        for (let i = this.state.strokes.length - 1; i >= 0; i--) {
+          if (this.state.strokes[i].playerId === playerId) {
+            lastIndex = i;
+            break;
+          }
+        }
+        if (lastIndex !== -1) {
+          this.state.strokes = this.state.strokes.filter(
+            (_, i) => i !== lastIndex
+          );
+          this.setState({ ...this.state });
+        }
+      }
+      // Then send to host for authoritative state
       this.sendAction(action);
     }
   }
@@ -105,6 +134,25 @@ export default class CanvasGame extends BaseGame {
     this.setState({ ...this.state });
   }
 
+  private handleUndo(playerId: string) {
+    if (!this.isHost) return;
+
+    // Find last stroke by this player (reverse loop for compatibility)
+    let lastIndex = -1;
+    for (let i = this.state.strokes.length - 1; i >= 0; i--) {
+      if (this.state.strokes[i].playerId === playerId) {
+        lastIndex = i;
+        break;
+      }
+    }
+    if (lastIndex === -1) return;
+
+    this.state.strokes = this.state.strokes.filter((_, i) => i !== lastIndex);
+
+    this.broadcastState();
+    this.setState({ ...this.state });
+  }
+
   // Public methods
   public draw(stroke: DrawStroke) {
     const action: CanvasAction = {
@@ -117,6 +165,14 @@ export default class CanvasGame extends BaseGame {
   public clear() {
     const action: CanvasAction = {
       type: "CLEAR",
+    };
+    this.makeMove(action);
+  }
+
+  public undo() {
+    const action: CanvasAction = {
+      type: "UNDO",
+      payload: this.userId, // Remove last stroke by current user
     };
     this.makeMove(action);
   }

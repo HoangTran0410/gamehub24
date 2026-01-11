@@ -121,7 +121,7 @@ export default function RoomPage() {
       isHost
         ? "Room will be deleted if you (host) leave"
         : "Are you sure want to leave this room",
-      "Leave room?"
+      isHost ? "Close room?" : "Leave room?"
     );
     if (confirmed) {
       socket.emit("room:leave", { roomId });
