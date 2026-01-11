@@ -1,5 +1,13 @@
 import { Socket } from "socket.io-client";
-import { Grid3x3, Crown, Tv, Circle, Palette, Spade } from "lucide-react";
+import {
+  Grid3x3,
+  Tv,
+  Circle,
+  Palette,
+  Spade,
+  ChessKnight,
+  Grid2X2,
+} from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 import { BaseGame } from "./BaseGame";
@@ -9,6 +17,7 @@ import ChessGame from "./chess/Chess";
 import YouTubeWatch from "./youtube/YouTubeWatch";
 import CanvasGame from "./canvas/CanvasGame";
 import Thirteen from "./thirteen/Thirteen";
+import Reversi from "./reversi/Reversi";
 
 export interface GameModule {
   id: string;
@@ -44,6 +53,20 @@ games.set("tictactoe", {
   },
 });
 
+// Register Reversi
+games.set("reversi", {
+  id: "reversi",
+  name: "Reversi (Othello)",
+  description: "Classic strategy game. Flip your opponent's pieces!",
+  icon: Grid2X2,
+  minPlayers: 1,
+  maxPlayers: 2,
+  isAvailable: true,
+  createGame: (roomId, socket, isHost, userId, players) => {
+    return new Reversi(roomId, socket, isHost, userId, players);
+  },
+});
+
 // Register Caro (Gomoku)
 games.set("caro", {
   id: "caro",
@@ -63,7 +86,7 @@ games.set("chess", {
   id: "chess",
   name: "Chess",
   description: "Strategic board game. Checkmate your opponent!",
-  icon: Crown,
+  icon: ChessKnight,
   minPlayers: 1,
   maxPlayers: 2,
   isAvailable: true,

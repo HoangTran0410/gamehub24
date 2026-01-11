@@ -12,6 +12,7 @@ import ChessGame from "./chess/Chess";
 import YouTubeWatch from "./youtube/YouTubeWatch";
 import CanvasGame from "./canvas/CanvasGame";
 import Thirteen from "./thirteen/Thirteen";
+import Reversi from "./reversi/Reversi";
 
 const TicTacToeUI = loadable(() => import("./tictactoe/TicTacToeUI"), {
   fallback: <div>Loading TicTacToe...</div>,
@@ -30,6 +31,9 @@ const CanvasGameUI = loadable(() => import("./canvas/CanvasGameUI"), {
 });
 const ThirteenUI = loadable(() => import("./thirteen/ThirteenUI"), {
   fallback: <div>Loading Thirteen...</div>,
+});
+const ReversiUI = loadable(() => import("./reversi/ReversiUI"), {
+  fallback: <div>Loading Reversi...</div>,
 });
 
 export default function GameContainer() {
@@ -171,6 +175,10 @@ export default function GameContainer() {
 
   if (gameInstance instanceof Thirteen) {
     return <ThirteenUI game={gameInstance} />;
+  }
+
+  if (gameInstance instanceof Reversi) {
+    return <ReversiUI game={gameInstance} currentUserId={userId} />;
   }
 
   return (
