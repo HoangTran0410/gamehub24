@@ -40,3 +40,19 @@
 .read-the-docs {
   color: #888;
 }
+
+/* Card play animation for Tiến Lên */
+@keyframes cardPlay {
+  0% {
+    transform: translateY(-30px) scale(0.8);
+    opacity: 0;
+  }
+  60% {
+    transform: translateY(5px) scale(1.05);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}

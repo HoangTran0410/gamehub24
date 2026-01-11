@@ -11,6 +11,7 @@ import Caro from "./caro/Caro";
 import ChessGame from "./chess/Chess";
 import YouTubeWatch from "./youtube/YouTubeWatch";
 import CanvasGame from "./canvas/CanvasGame";
+import Thirteen from "./thirteen/Thirteen";
 
 const TicTacToeUI = loadable(() => import("./tictactoe/TicTacToeUI"), {
   fallback: <div>Loading TicTacToe...</div>,
@@ -26,6 +27,9 @@ const YouTubeWatchUI = loadable(() => import("./youtube/YouTubeWatchUI"), {
 });
 const CanvasGameUI = loadable(() => import("./canvas/CanvasGameUI"), {
   fallback: <div>Loading Canvas...</div>,
+});
+const ThirteenUI = loadable(() => import("./thirteen/ThirteenUI"), {
+  fallback: <div>Loading Thirteen...</div>,
 });
 
 export default function GameContainer() {
@@ -163,6 +167,10 @@ export default function GameContainer() {
 
   if (gameInstance instanceof CanvasGame) {
     return <CanvasGameUI game={gameInstance} currentUserId={userId} />;
+  }
+
+  if (gameInstance instanceof Thirteen) {
+    return <ThirteenUI game={gameInstance} />;
   }
 
   return (

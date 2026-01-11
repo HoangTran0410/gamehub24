@@ -1,5 +1,5 @@
 import { Socket } from "socket.io-client";
-import { Grid3x3, Crown, Tv, Circle, Palette } from "lucide-react";
+import { Grid3x3, Crown, Tv, Circle, Palette, Spade } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 import { BaseGame } from "./BaseGame";
@@ -8,6 +8,7 @@ import Caro from "./caro/Caro";
 import ChessGame from "./chess/Chess";
 import YouTubeWatch from "./youtube/YouTubeWatch";
 import CanvasGame from "./canvas/CanvasGame";
+import Thirteen from "./thirteen/Thirteen";
 
 export interface GameModule {
   id: string;
@@ -94,6 +95,20 @@ games.set("canvas", {
   isAvailable: true,
   createGame: (roomId, socket, isHost, userId, players) => {
     return new CanvasGame(roomId, socket, isHost, userId, players);
+  },
+});
+
+// Register Thirteen
+games.set("thirteen", {
+  id: "thirteen",
+  name: "Thirteen",
+  description: "Vietnamese card game (Tiến Lên Miền Nam)",
+  icon: Spade,
+  minPlayers: 1,
+  maxPlayers: 4,
+  isAvailable: true,
+  createGame: (roomId, socket, isHost, userId, players) => {
+    return new Thirteen(roomId, socket, isHost, userId, players);
   },
 });
 

@@ -15,7 +15,7 @@ export default function RoomPage() {
   const { currentRoom, setCurrentRoom, updatePlayers } = useRoomStore();
   const { clearMessages } = useChatStore();
   const { userId } = useUserStore();
-  const { show: showAlert } = useAlertStore();
+  const { show: showAlert, confirm: showConfirm } = useAlertStore();
   const socket = getSocket();
 
   // Effect for joining room via direct URL
@@ -114,11 +114,21 @@ export default function RoomPage() {
     };
   }, [roomId, socket, updatePlayers, setCurrentRoom, navigate, clearMessages]);
 
-  const handleLeaveRoom = () => {
-    socket.emit("room:leave", { roomId });
-    setCurrentRoom(null);
-    clearMessages();
-    navigate("/");
+  const isHost = currentRoom?.ownerId === userId;
+
+  const handleLeaveRoom = async () => {
+    const confirmed = await showConfirm(
+      isHost
+        ? "Room will be deleted if you (host) leave"
+        : "Are you sure want to leave this room",
+      "Leave room?"
+    );
+    if (confirmed) {
+      socket.emit("room:leave", { roomId });
+      setCurrentRoom(null);
+      clearMessages();
+      navigate("/");
+    }
   };
 
   if (!currentRoom) {
@@ -130,8 +140,6 @@ export default function RoomPage() {
       </div>
     );
   }
-
-  const isHost = currentRoom.ownerId === userId;
 
   return (
     <div className="min-h-screen bg-background-primary">

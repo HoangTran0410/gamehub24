@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Gamepad, Users, Plus, Trash2 } from "lucide-react";
+import { Gamepad, Users, Plus, Trash2, Settings } from "lucide-react";
 import { useRoomStore } from "../stores/roomStore";
 import { useUserStore } from "../stores/userStore";
 import { useSocketStore } from "../stores/socketStore";
@@ -68,6 +68,7 @@ export default function Lobby() {
               <span className="text-sm font-medium text-text-primary">
                 {username}
               </span>
+              <Settings className="w-4 h-4" />
             </div>
           </div>
         </div>
@@ -84,7 +85,7 @@ export default function Lobby() {
             <p className="text-xl text-text-secondary mb-8">
               Join multiplayer games with friends in real-time
             </p>
-            <div className="flex items-center justify-center gap-4">
+            <div className="flex items-center justify-center gap-2 md:gap-4 flex-col md:flex-row">
               <button
                 onClick={() => setShowCreateModal("")}
                 className="px-8 py-3 bg-primary hover:bg-primary-light text-white font-display rounded-xl shadow-lg shadow-primary/50 hover:shadow-xl hover:shadow-primary/70 transition-all duration-200 cursor-pointer flex items-center gap-2"
@@ -119,7 +120,7 @@ export default function Lobby() {
               </h3>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 md:gap-6 gap-3">
               {getAllGames().map((game) => {
                 const Icon = game.icon;
                 return (
