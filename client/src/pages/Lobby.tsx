@@ -320,6 +320,7 @@ function CreateRoomModal({
   onClose: () => void;
   gameId: string;
 }) {
+  const { username } = useUserStore();
   const [roomName, setRoomName] = useState("");
   const [gameType, setGameType] = useState(gameId);
   const [isPublic, setIsPublic] = useState(true);
@@ -329,11 +330,6 @@ function CreateRoomModal({
   const { show: showAlert } = useAlertStore();
 
   const handleCreate = () => {
-    if (!roomName.trim()) {
-      showAlert("Please enter a room name", { type: "warning" });
-      return;
-    }
-
     const socket = getSocket();
     if (!socket) return showAlert("Socket not connected", { type: "error" });
 
@@ -343,7 +339,7 @@ function CreateRoomModal({
     socket.emit(
       "room:create",
       {
-        name: roomName,
+        name: roomName.trim() || username,
         gameType,
         isPublic,
         password: isPublic ? undefined : password,
@@ -379,7 +375,7 @@ function CreateRoomModal({
               type="text"
               value={roomName}
               onChange={(e) => setRoomName(e.target.value)}
-              placeholder="Enter room name"
+              placeholder={"Enter room name (default: " + username + ")"}
               className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
             />
           </div>

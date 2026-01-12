@@ -134,6 +134,7 @@ function UserMessage({
   const time = new Date(message.timestamp).toLocaleTimeString("en-US", {
     hour: "2-digit",
     minute: "2-digit",
+    second: "2-digit",
   });
 
   return (
@@ -160,10 +161,15 @@ function UserMessage({
 }
 
 function SystemMessage({ message }: { message: ChatMessage }) {
+  const time = new Date(message.timestamp).toLocaleTimeString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
   return (
     <div className="flex items-center justify-center my-2">
       <div className="px-4 py-1.5 bg-white/5 border border-white/10 rounded-full text-xs text-text-muted">
-        {message.message}
+        {message.message} {time}
       </div>
     </div>
   );

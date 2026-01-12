@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Crown, ArrowLeft } from "lucide-react";
+import { Crown, ArrowLeft, Gamepad, User } from "lucide-react";
 import { useRoomStore } from "../stores/roomStore";
 import { useChatStore } from "../stores/chatStore";
 import { useUserStore } from "../stores/userStore";
@@ -14,7 +14,8 @@ export default function RoomPage() {
   const navigate = useNavigate();
   const { currentRoom, setCurrentRoom, updatePlayers } = useRoomStore();
   const { clearMessages } = useChatStore();
-  const { userId } = useUserStore();
+  const { userId, username } = useUserStore();
+
   const { show: showAlert, confirm: showConfirm } = useAlertStore();
   const socket = getSocket();
 
@@ -115,6 +116,9 @@ export default function RoomPage() {
   }, [roomId, socket, updatePlayers, setCurrentRoom, navigate, clearMessages]);
 
   const isHost = currentRoom?.ownerId === userId;
+  const hostUser = currentRoom?.players.find(
+    (p) => p.id === currentRoom.ownerId
+  );
 
   const handleLeaveRoom = async () => {
     const confirmed = await showConfirm(
@@ -144,7 +148,7 @@ export default function RoomPage() {
   return (
     <div className="min-h-screen bg-background-primary">
       {/* Room Header */}
-      <header className="md:sticky md:top-0 z-40 glass-card border-b border-white/10">
+      <header className="z-40 glass-card border-b border-white/10">
         <div className="max-w-7xl mx-auto px-2 md:px-4 py-2 md:py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -159,22 +163,26 @@ export default function RoomPage() {
                 <h1 className="text-xl font-display text-text-primary">
                   {currentRoom.name}
                 </h1>
-                <p className="text-sm text-text-muted capitalize">
-                  {currentRoom.gameType}
-                </p>
+                {hostUser?.username != currentRoom.name && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <Crown className="w-4 h-4 text-text-muted" />
+                    <span className="text-text-muted">
+                      {hostUser?.username} {isHost ? "(You)" : ""}
+                    </span>
+                  </div>
+                )}
+                <div className="flex items-center gap-2 text-sm">
+                  <Gamepad className="w-4 h-4 text-text-muted" />
+                  <p className="text-sm text-text-muted capitalize">
+                    {currentRoom.gameType}
+                  </p>
+                </div>
               </div>
             </div>
 
             <div className="flex items-center gap-2 text-sm">
-              <Crown className="w-4 h-4" />
-              <span>
-                Host:{" "}
-                {
-                  currentRoom.players.find((p) => p.id === currentRoom.ownerId)
-                    ?.username
-                }{" "}
-                {isHost ? "(You)" : ""}
-              </span>
+              <User className="w-4 h-4 text-text-muted" />
+              <span>{username}</span>
             </div>
           </div>
         </div>
