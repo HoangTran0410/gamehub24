@@ -14,7 +14,9 @@ import {
   SAFE_POSITIONS,
 } from "./types";
 
-const PLAYER_COLORS: PlayerColor[] = ["red", "blue", "green", "yellow"];
+// Player colors in clockwise order matching board layout:
+// Red (top-left) → Green (top-right) → Yellow (bottom-right) → Blue (bottom-left)
+const PLAYER_COLORS: PlayerColor[] = ["red", "green", "yellow", "blue"];
 
 export default class Ludo extends BaseGame {
   private state: LudoState;

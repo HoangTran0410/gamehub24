@@ -48,11 +48,12 @@ export const FINISH_LANE_SIZE = 6; // Final stretch before center
 export const TOKENS_PER_PLAYER = 4;
 
 // Starting positions for each color (where they enter the board)
+// Board layout: Red=top-left, Green=top-right, Yellow=bottom-right, Blue=bottom-left
 export const START_POSITIONS: Record<PlayerColor, number> = {
-  red: 0,
-  blue: 13,
-  green: 26,
-  yellow: 39,
+  red: 0, // Left arm, row 6 (enters from top-left home)
+  green: 13, // Top arm, col 8 (enters from top-right home)
+  yellow: 26, // Right arm, row 8 (enters from bottom-right home)
+  blue: 39, // Bottom arm, col 6 (enters from bottom-left home)
 };
 
 // Safe zone positions (can't be captured here)

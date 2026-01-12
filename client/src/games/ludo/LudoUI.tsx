@@ -5,8 +5,6 @@ import { SAFE_POSITIONS } from "./types";
 import { Play, RefreshCw, Dices } from "lucide-react";
 import { useAlertStore } from "../../stores/alertStore";
 
-const debugMode = false;
-
 // Color mappings for CSS
 const COLOR_CLASSES: Record<
   PlayerColor,
@@ -82,7 +80,11 @@ export default function LudoUI({ game, currentUserId }: LudoUIProps) {
   const [rolling, setRolling] = useState(false);
   const [displayDice, setDisplayDice] = useState<number>(1);
   const [showingResult, setShowingResult] = useState(false);
-  const [debugPosition, setDebugPosition] = useState<number>(0); // Debug slider position
+  const [tokenSelectPopup, setTokenSelectPopup] = useState<{
+    tokens: { token: Token; color: PlayerColor; playerIndex: number }[];
+    x: number;
+    y: number;
+  } | null>(null);
   const prevDiceValue = useRef<number | null>(null);
   const animationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
     null
@@ -172,11 +174,59 @@ export default function LudoUI({ game, currentUserId }: LudoUIProps) {
     game.requestRollDice();
   };
 
-  const handleTokenClick = (tokenId: number) => {
+  const handleTokenClick = (
+    tokenId: number,
+    event: React.MouseEvent,
+    token: Token,
+    color: PlayerColor,
+    playerIndex: number
+  ) => {
     if (!isMyTurn) return;
     if (!state.hasRolled) return;
-    if (rolling) return; // Don't allow moves during animation
+    if (rolling) return;
     if (!game.isTokenMovable(tokenId)) return;
+
+    // Find all movable tokens at the same position
+    const myPlayer = state.players[myIndex];
+    if (!myPlayer) return;
+
+    const tokensAtSamePosition = myPlayer.tokens.filter((t) => {
+      if (!game.isTokenMovable(t.id)) return false;
+      // Check if same position type and value
+      if (t.position.type !== token.position.type) return false;
+      if (t.position.type === "board" && token.position.type === "board") {
+        return t.position.position === token.position.position;
+      }
+      if (t.position.type === "home" && token.position.type === "home") {
+        return false; // All home tokens share the home base
+      }
+      if (t.position.type === "finish" && token.position.type === "finish") {
+        return t.position.position === token.position.position;
+      }
+      return false;
+    });
+
+    if (tokensAtSamePosition.length > 1) {
+      // Show popup to select which token to move
+      const rect = (event.target as HTMLElement).getBoundingClientRect();
+      setTokenSelectPopup({
+        tokens: tokensAtSamePosition.map((t) => ({
+          token: t,
+          color,
+          playerIndex,
+        })),
+        x: rect.left + rect.width / 2,
+        y: rect.top,
+      });
+    } else {
+      // Only one token, move it directly
+      setTokenSelectPopup(null);
+      game.requestMoveToken(tokenId);
+    }
+  };
+
+  const handleSelectToken = (tokenId: number) => {
+    setTokenSelectPopup(null);
     game.requestMoveToken(tokenId);
   };
 
@@ -360,7 +410,9 @@ export default function LudoUI({ game, currentUserId }: LudoUIProps) {
           zIndex: isMovable ? 20 : 10,
           animation: isMovable ? "pulse 1s ease-in-out infinite" : undefined,
         }}
-        onClick={() => isMovable && handleTokenClick(token.id)}
+        onClick={(e) =>
+          isMovable && handleTokenClick(token.id, e, token, color, playerIndex)
+        }
       >
         <span className="flex items-center justify-center w-full h-full text-white text-xs font-bold drop-shadow-lg">
           {token.id + 1}
@@ -450,6 +502,46 @@ export default function LudoUI({ game, currentUserId }: LudoUIProps) {
     <div className="flex flex-col items-center gap-4 p-4 w-full max-w-2xl mx-auto">
       <style dangerouslySetInnerHTML={{ __html: animationStyles }} />
 
+      {/* Token Selection Popup */}
+      {tokenSelectPopup && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          onClick={() => setTokenSelectPopup(null)}
+        >
+          <div
+            className="bg-slate-800 rounded-lg p-4 shadow-xl border border-slate-600"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="text-white text-sm mb-3 text-center">
+              Select which token to move:
+            </p>
+            <div className="flex gap-2 justify-center">
+              {tokenSelectPopup.tokens.map(({ token, color }) => {
+                const colors = COLOR_CLASSES[color];
+                return (
+                  <button
+                    key={token.id}
+                    onClick={() => handleSelectToken(token.id)}
+                    className={`
+                      w-10 h-10 rounded-full border-2 border-white shadow-lg
+                      ${colors.bg}
+                      hover:scale-110 transition-transform
+                      flex items-center justify-center
+                    `}
+                  >
+                    <span className="text-white font-bold text-sm">
+                      {token.id + 1}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-gray-400 text-xs mt-2 text-center">
+              Click outside to cancel
+            </p>
+          </div>
+        </div>
+      )}
       {/* Turn & Dice Display */}
       {state.gamePhase === "playing" && (
         <div className="flex flex-col items-center gap-3">
@@ -514,7 +606,10 @@ export default function LudoUI({ game, currentUserId }: LudoUIProps) {
       {/* Player List for waiting phase */}
       {state.gamePhase === "waiting" && (
         <div className="grid grid-cols-2 gap-2 w-full max-w-md">
-          {state.players.map((player, index) => {
+          {/* Render in board layout order: [Red, Green] top, [Blue, Yellow] bottom */}
+          {[0, 1, 3, 2].map((index) => {
+            const player = state.players[index];
+            if (!player) return null;
             const colors = COLOR_CLASSES[player.color];
             return (
               <div
@@ -929,35 +1024,6 @@ export default function LudoUI({ game, currentUserId }: LudoUIProps) {
             );
           })}
 
-          {/* Debug position highlight */}
-          {debugMode &&
-            (() => {
-              const debugPos = getBoardPosition(debugPosition);
-              return (
-                <g>
-                  <circle
-                    cx={debugPos.x}
-                    cy={debugPos.y}
-                    r="0.4"
-                    fill="#06b6d4"
-                    opacity="0.8"
-                    stroke="#fff"
-                    strokeWidth="0.05"
-                  />
-                  <text
-                    x={debugPos.x}
-                    y={debugPos.y + 0.12}
-                    fill="#fff"
-                    fontSize="0.4"
-                    textAnchor="middle"
-                    fontWeight="bold"
-                  >
-                    {debugPosition}
-                  </text>
-                </g>
-              );
-            })()}
-
           {/* Highlight current player's corner */}
           {state.gamePhase === "playing" &&
             (() => {
@@ -1044,31 +1110,6 @@ export default function LudoUI({ game, currentUserId }: LudoUIProps) {
         >
           <RefreshCw className="w-4 h-4" /> New Game
         </button>
-      )}
-
-      {/* Debug Slider for Board Position */}
-      {debugMode && (
-        <div className="w-full max-w-[450px] bg-slate-800 rounded-lg p-3">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-gray-400">Debug Position:</span>
-            <span className="text-cyan-400 font-bold">{debugPosition}</span>
-          </div>
-          <input
-            type="range"
-            min="0"
-            max="51"
-            value={debugPosition}
-            onChange={(e) => setDebugPosition(Number(e.target.value))}
-            className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-cyan-500"
-          />
-          <div className="flex justify-between text-xs text-gray-500 mt-1">
-            <span>0 (Red start)</span>
-            <span>13 (Blue)</span>
-            <span>26 (Green)</span>
-            <span>39 (Yellow)</span>
-            <span>51</span>
-          </div>
-        </div>
       )}
     </div>
   );
