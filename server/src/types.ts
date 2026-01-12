@@ -14,7 +14,7 @@ export interface Room {
   password?: string;
   players: Player[];
   maxPlayers: number;
-  createdAt: Date;
+  createdAt: number;
 }
 
 export interface ChatMessage {
@@ -23,7 +23,7 @@ export interface ChatMessage {
   userId: string;
   username: string;
   message: string;
-  timestamp: Date;
+  timestamp: number;
   type: "user" | "system";
 }
 

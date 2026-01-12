@@ -5,7 +5,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import { v4 as uuidv4 } from "uuid";
 import { RoomManager } from "./RoomManager";
-import { ChatMessage, CreateRoomData, JoinRoomData } from "./types";
+import type { ChatMessage, CreateRoomData, JoinRoomData } from "./types";
 
 dotenv.config();
 
@@ -125,7 +125,7 @@ io.on("connection", (socket: Socket) => {
           userId: "system",
           username: "System",
           message: `${username} joined the room`,
-          timestamp: new Date(),
+          timestamp: Date.now(),
           type: "system",
         };
         io.to(data.roomId).emit("chat:message", systemMessage);
@@ -162,7 +162,7 @@ io.on("connection", (socket: Socket) => {
             userId: "system",
             username: "System",
             message: `${username} left the room`,
-            timestamp: new Date(),
+            timestamp: Date.now(),
             type: "system",
           };
           io.to(result.roomId).emit("chat:message", systemMessage);
@@ -224,7 +224,7 @@ io.on("connection", (socket: Socket) => {
       const message: ChatMessage = {
         ...data,
         id: uuidv4(),
-        timestamp: new Date(),
+        timestamp: Date.now(),
       };
 
       // Store in history
@@ -277,13 +277,17 @@ io.on("connection", (socket: Socket) => {
           userId: "system",
           username: "System",
           message: `${username} disconnected`,
-          timestamp: new Date(),
+          timestamp: Date.now(),
           type: "system",
         };
         io.to(result.roomId).emit("chat:message", systemMessage);
       } else {
         // Room was deleted because host left/disconnected
         console.log(`🗑️  Room deleted (host disconnected): ${result.roomId}`);
+
+        // Delete chat for room
+        chatHistory.delete(result.roomId);
+
         if (result.wasHost) {
           io.to(result.roomId).emit("room:deleted", {
             reason: "Host disconnected",

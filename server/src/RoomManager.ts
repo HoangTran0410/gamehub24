@@ -28,7 +28,7 @@ export class RoomManager {
         },
       ],
       maxPlayers: data.maxPlayers,
-      createdAt: new Date(),
+      createdAt: Date.now(),
     };
 
     this.rooms.set(roomId, room);
@@ -113,6 +113,7 @@ export class RoomManager {
       this.rooms.delete(roomId);
       // Remove all players from this room
       room.players.forEach((p) => this.playerRoomMap.delete(p.id));
+      // Remove all chats from room
       console.log(
         `[RoomManager] Deleted room ${roomId} (Host Left: ${wasHost}, Empty: ${
           room.players.length === 0
