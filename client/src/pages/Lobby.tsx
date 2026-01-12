@@ -151,7 +151,7 @@ export default function Lobby() {
                     {game.isAvailable ? (
                       <button
                         onClick={() => handleSelectGame(game.id)}
-                        className="w-full px-4 py-2 bg-primary hover:bg-primary-light text-white font-semibold rounded-lg transition-colors cursor-pointer"
+                        className="w-full px-4 py-2 bg-white/5 hover:bg-white/10 text-white text-white font-semibold rounded-lg transition-colors cursor-pointer"
                       >
                         Create Room
                       </button>

@@ -14,6 +14,7 @@ import CanvasGame from "./canvas/CanvasGame";
 import Thirteen from "./thirteen/Thirteen";
 import Reversi from "./reversi/Reversi";
 import Connect4 from "./connect4/Connect4";
+import Ludo from "./ludo/Ludo";
 
 const TicTacToeUI = loadable(() => import("./tictactoe/TicTacToeUI"), {
   fallback: <div>Loading TicTacToe...</div>,
@@ -38,6 +39,9 @@ const ReversiUI = loadable(() => import("./reversi/ReversiUI"), {
 });
 const Connect4UI = loadable(() => import("./connect4/Connect4UI"), {
   fallback: <div>Loading Connect 4...</div>,
+});
+const LudoUI = loadable(() => import("./ludo/LudoUI"), {
+  fallback: <div>Loading Ludo...</div>,
 });
 
 export default function GameContainer() {
@@ -187,6 +191,10 @@ export default function GameContainer() {
 
   if (gameInstance instanceof Connect4) {
     return <Connect4UI game={gameInstance} currentUserId={userId} />;
+  }
+
+  if (gameInstance instanceof Ludo) {
+    return <LudoUI game={gameInstance} currentUserId={userId} />;
   }
 
   return (

@@ -8,6 +8,7 @@ import {
   ChessKnight,
   Grid2X2,
   Columns3,
+  Dices,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -20,6 +21,7 @@ import CanvasGame from "./canvas/CanvasGame";
 import Thirteen from "./thirteen/Thirteen";
 import Reversi from "./reversi/Reversi";
 import Connect4 from "./connect4/Connect4";
+import Ludo from "./ludo/Ludo";
 
 export interface GameModule {
   id: string;
@@ -80,6 +82,20 @@ games.set("connect4", {
   isAvailable: true,
   createGame: (roomId, socket, isHost, userId, players) => {
     return new Connect4(roomId, socket, isHost, userId, players);
+  },
+});
+
+// Register Ludo
+games.set("ludo", {
+  id: "ludo",
+  name: "Ludo",
+  description: "Classic board game! Roll dice and race your tokens home.",
+  icon: Dices,
+  minPlayers: 2,
+  maxPlayers: 4,
+  isAvailable: true,
+  createGame: (roomId, socket, isHost, userId, players) => {
+    return new Ludo(roomId, socket, isHost, userId, players);
   },
 });
 
