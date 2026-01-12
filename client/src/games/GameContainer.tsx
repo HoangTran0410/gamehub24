@@ -13,6 +13,7 @@ import YouTubeWatch from "./youtube/YouTubeWatch";
 import CanvasGame from "./canvas/CanvasGame";
 import Thirteen from "./thirteen/Thirteen";
 import Reversi from "./reversi/Reversi";
+import Connect4 from "./connect4/Connect4";
 
 const TicTacToeUI = loadable(() => import("./tictactoe/TicTacToeUI"), {
   fallback: <div>Loading TicTacToe...</div>,
@@ -34,6 +35,9 @@ const ThirteenUI = loadable(() => import("./thirteen/ThirteenUI"), {
 });
 const ReversiUI = loadable(() => import("./reversi/ReversiUI"), {
   fallback: <div>Loading Reversi...</div>,
+});
+const Connect4UI = loadable(() => import("./connect4/Connect4UI"), {
+  fallback: <div>Loading Connect 4...</div>,
 });
 
 export default function GameContainer() {
@@ -179,6 +183,10 @@ export default function GameContainer() {
 
   if (gameInstance instanceof Reversi) {
     return <ReversiUI game={gameInstance} currentUserId={userId} />;
+  }
+
+  if (gameInstance instanceof Connect4) {
+    return <Connect4UI game={gameInstance} currentUserId={userId} />;
   }
 
   return (

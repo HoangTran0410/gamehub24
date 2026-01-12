@@ -7,6 +7,7 @@ import {
   Spade,
   ChessKnight,
   Grid2X2,
+  Columns3,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -18,6 +19,7 @@ import YouTubeWatch from "./youtube/YouTubeWatch";
 import CanvasGame from "./canvas/CanvasGame";
 import Thirteen from "./thirteen/Thirteen";
 import Reversi from "./reversi/Reversi";
+import Connect4 from "./connect4/Connect4";
 
 export interface GameModule {
   id: string;
@@ -44,26 +46,12 @@ games.set("tictactoe", {
   id: "tictactoe",
   name: "Tic Tac Toe",
   description: "Classic 3x3 grid game. Get three in a row to win!",
-  icon: Circle,
-  minPlayers: 1,
-  maxPlayers: 2,
-  isAvailable: true,
-  createGame: (roomId, socket, isHost, userId, players) => {
-    return new TicTacToe(roomId, socket, isHost, userId, players);
-  },
-});
-
-// Register Reversi
-games.set("reversi", {
-  id: "reversi",
-  name: "Reversi (Othello)",
-  description: "Classic strategy game. Flip your opponent's pieces!",
   icon: Grid2X2,
   minPlayers: 1,
   maxPlayers: 2,
   isAvailable: true,
   createGame: (roomId, socket, isHost, userId, players) => {
-    return new Reversi(roomId, socket, isHost, userId, players);
+    return new TicTacToe(roomId, socket, isHost, userId, players);
   },
 });
 
@@ -78,6 +66,34 @@ games.set("caro", {
   isAvailable: true,
   createGame: (roomId, socket, isHost, userId, players) => {
     return new Caro(roomId, socket, isHost, userId, players);
+  },
+});
+
+// Register Connect 4
+games.set("connect4", {
+  id: "connect4",
+  name: "Connect 4",
+  description: "Classic 4-in-a-row! Drop discs and connect four to win.",
+  icon: Columns3,
+  minPlayers: 1,
+  maxPlayers: 2,
+  isAvailable: true,
+  createGame: (roomId, socket, isHost, userId, players) => {
+    return new Connect4(roomId, socket, isHost, userId, players);
+  },
+});
+
+// Register Reversi
+games.set("reversi", {
+  id: "reversi",
+  name: "Reversi (Othello)",
+  description: "Classic strategy game. Flip your opponent's pieces!",
+  icon: Circle,
+  minPlayers: 1,
+  maxPlayers: 2,
+  isAvailable: true,
+  createGame: (roomId, socket, isHost, userId, players) => {
+    return new Reversi(roomId, socket, isHost, userId, players);
   },
 });
 
