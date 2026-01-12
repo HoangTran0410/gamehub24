@@ -9,6 +9,7 @@ import {
   Grid2X2,
   Columns3,
   Dices,
+  LayoutGrid,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -22,6 +23,7 @@ import Thirteen from "./thirteen/Thirteen";
 import Reversi from "./reversi/Reversi";
 import Connect4 from "./connect4/Connect4";
 import Ludo from "./ludo/Ludo";
+import DotsAndBoxes from "./dotsandboxes/DotsAndBoxes";
 
 export interface GameModule {
   id: string;
@@ -164,6 +166,20 @@ games.set("thirteen", {
   isAvailable: true,
   createGame: (roomId, socket, isHost, userId, players) => {
     return new Thirteen(roomId, socket, isHost, userId, players);
+  },
+});
+
+// Register Dots and Boxes
+games.set("dotsandboxes", {
+  id: "dotsandboxes",
+  name: "Dots & Boxes",
+  description: "Classic strategy game. Connect dots to close boxes!",
+  icon: LayoutGrid,
+  minPlayers: 2,
+  maxPlayers: 2,
+  isAvailable: true,
+  createGame: (roomId, socket, isHost, userId, players) => {
+    return new DotsAndBoxes(roomId, socket, isHost, userId, players);
   },
 });
 
