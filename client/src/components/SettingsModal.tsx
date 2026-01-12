@@ -78,6 +78,20 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
               >
                 <Save className="w-4 h-4" />
               </button>
+              <button
+                onClick={() => {
+                  setUrl("https://game.fbaio.xyz");
+                  waitReConnectRef.current = true;
+                  setServerUrl("https://game.fbaio.xyz");
+                  showAlert("Reset to default server. Reconnecting...", {
+                    type: "loading",
+                  });
+                }}
+                className="px-3 py-2 bg-yellow-600 hover:bg-yellow-500 text-white rounded-lg transition-colors"
+                title="Reset to Default"
+              >
+                <RefreshCw className="w-4 h-4" />
+              </button>
             </div>
           </div>
 

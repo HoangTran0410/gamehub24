@@ -196,6 +196,41 @@ io.on("connection", (socket: Socket) => {
     }
   });
 
+  // Get online users count
+  socket.on("stats:online", (callback) => {
+    try {
+      callback({ online: io.engine.clientsCount });
+    } catch (error) {
+      console.error("Error getting online count:", error);
+      callback({ online: 0 });
+    }
+  });
+
+  // Update room (host only - e.g., change game type)
+  socket.on("room:update", (data: { roomId: string; gameType?: string }) => {
+    try {
+      const room = roomManager.getRoom(data.roomId);
+      if (!room) return;
+
+      // Only host can update room
+      if (room.ownerId !== userId) return;
+
+      // Update game type if provided
+      if (data.gameType) {
+        room.gameType = data.gameType;
+        console.log(`🔄 Room ${room.name} game changed to: ${data.gameType}`);
+      }
+
+      // Broadcast updated room to all players in the room
+      io.to(data.roomId).emit("room:update", room);
+
+      // Update public room list
+      io.emit("room:list:update", roomManager.getPublicRooms());
+    } catch (error) {
+      console.error("Error updating room:", error);
+    }
+  });
+
   // GAME EVENTS (Pure relay)
 
   // Relay game actions

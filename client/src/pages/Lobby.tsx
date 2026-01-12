@@ -16,6 +16,7 @@ export default function Lobby() {
   const { publicRooms, setPublicRooms } = useRoomStore();
   const [showCreateModal, setShowCreateModal] = useState<string | null>(null);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [onlineCount, setOnlineCount] = useState(0);
 
   useEffect(() => {
     const socket = getSocket();
@@ -25,13 +26,26 @@ export default function Lobby() {
       setPublicRooms(rooms);
     });
 
+    // Request online count
+    socket.emit("stats:online", (data: { online: number }) => {
+      setOnlineCount(data.online);
+    });
+
     // Listen for room list updates
     socket.on("room:list:update", (rooms: Room[]) => {
       setPublicRooms(rooms);
     });
 
+    // Periodically refresh online count
+    const interval = setInterval(() => {
+      socket.emit("stats:online", (data: { online: number }) => {
+        setOnlineCount(data.online);
+      });
+    }, 10000); // Every 10 seconds
+
     return () => {
       socket.off("room:list:update");
+      clearInterval(interval);
     };
   }, [setPublicRooms]);
 
@@ -108,6 +122,14 @@ export default function Lobby() {
                 <Users className="w-5 h-5" />
                 Public Rooms ({publicRooms.length})
               </button>
+            </div>
+
+            {/* Online Users Count */}
+            <div className="mt-6 flex items-center justify-center">
+              <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-green-500/10 border border-green-500/30 rounded-full text-green-400 text-sm font-medium">
+                <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                {onlineCount} player{onlineCount !== 1 ? "s" : ""} online
+              </div>
             </div>
           </div>
 
@@ -333,14 +355,17 @@ function CreateRoomModal({
     const socket = getSocket();
     if (!socket) return showAlert("Socket not connected", { type: "error" });
 
-    const game = getAllGames().find((g) => g.id === gameType);
+    const allGames = getAllGames();
+    const game = allGames.find((g) => g.id === gameType) || allGames[0];
     if (!game) return showAlert("Game not found", { type: "error" });
+
+    console.log(game);
 
     socket.emit(
       "room:create",
       {
         name: roomName.trim() || username,
-        gameType,
+        gameType: game.id,
         isPublic,
         password: isPublic ? undefined : password,
         maxPlayers: game.maxPlayers,

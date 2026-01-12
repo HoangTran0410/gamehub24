@@ -15,6 +15,7 @@ import { useChatStore } from "../stores/chatStore";
 import { useUserStore } from "../stores/userStore";
 import { useAlertStore } from "../stores/alertStore";
 import { getSocket } from "../services/socket";
+import { getAllGames } from "../games/registry";
 import ChatPanel from "../components/ChatPanel";
 import GameContainer from "../games/GameContainer";
 
@@ -146,9 +147,17 @@ export default function RoomPage() {
 
   // Share modal state
   const [showShareModal, setShowShareModal] = useState(false);
+  const [showChangeGameModal, setShowChangeGameModal] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showUserTooltip, setShowUserTooltip] = useState(false);
-  const roomLink = `${window.location.origin}/#/room/${roomId}`;
+  const roomLink = window.location.hash.includes("#")
+    ? `${window.location.origin}/${window.location.hash}`
+    : `${window.location.origin}/#/room/${roomId}`;
+
+  const handleChangeGame = (gameId: string) => {
+    socket.emit("room:update", { roomId, gameType: gameId });
+    setShowChangeGameModal(false);
+  };
 
   useEffect(() => {
     if (showUserTooltip) {
@@ -181,7 +190,6 @@ export default function RoomPage() {
     );
   }
 
-  // Share Modal Component
   const ShareModal = () => (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100] animate-fadeIn">
       <div className="bg-background-secondary border border-white/10 rounded-2xl p-6 max-w-md w-full shadow-2xl mx-4 animate-scaleIn relative">
@@ -242,9 +250,70 @@ export default function RoomPage() {
     </div>
   );
 
+  const ChangeGameModal = () => (
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100] animate-fadeIn">
+      <div className="bg-background-secondary border border-white/10 rounded-2xl p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto shadow-2xl mx-4 animate-scaleIn relative">
+        <button
+          onClick={() => setShowChangeGameModal(false)}
+          className="absolute top-4 right-4 p-1 hover:bg-white/10 rounded-lg transition-colors text-text-secondary z-10"
+        >
+          <X className="w-5 h-5" />
+        </button>
+
+        <h3 className="text-2xl font-display text-text-primary mb-6">
+          Change Game
+        </h3>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {getAllGames().map((game) => {
+            const Icon = game.icon;
+            const isSelected = currentRoom.gameType === game.id;
+            return (
+              <button
+                key={game.id}
+                onClick={() => handleChangeGame(game.id)}
+                disabled={!game.isAvailable || isSelected}
+                className={`flex items-center gap-4 p-4 rounded-xl border transition-all text-left ${
+                  isSelected
+                    ? "bg-primary/20 border-primary cursor-default"
+                    : !game.isAvailable
+                    ? "opacity-50 cursor-not-allowed border-white/5 bg-white/5"
+                    : "bg-white/5 border-white/10 hover:border-primary/50 hover:bg-white/10 cursor-pointer"
+                }`}
+              >
+                <div
+                  className={`p-3 rounded-lg ${
+                    isSelected
+                      ? "bg-primary text-white"
+                      : "bg-white/10 text-primary"
+                  }`}
+                >
+                  <Icon className="w-6 h-6" />
+                </div>
+                <div>
+                  <h4
+                    className={`font-bold ${
+                      isSelected ? "text-primary" : "text-text-primary"
+                    }`}
+                  >
+                    {game.name}
+                  </h4>
+                  <p className="text-xs text-text-secondary line-clamp-1">
+                    {game.description}
+                  </p>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <>
       {showShareModal && <ShareModal />}
+      {showChangeGameModal && <ChangeGameModal />}
       <div className="min-h-screen bg-background-primary">
         {/* Room Header */}
         <header className="z-40 glass-card border-b border-white/10">
@@ -284,10 +353,25 @@ export default function RoomPage() {
                   )}
                   {/* Game type - visible on all screens */}
                   <div className="flex items-center gap-1.5 text-xs md:text-sm">
-                    <Gamepad className="w-3.5 h-3.5 md:w-4 md:h-4 text-text-muted" />
-                    <p className="text-text-muted capitalize">
-                      {currentRoom.gameType}
-                    </p>
+                    <button
+                      onClick={
+                        isHost ? () => setShowChangeGameModal(true) : undefined
+                      }
+                      className={`flex items-center gap-1.5 ${
+                        isHost
+                          ? "bg-white/5 hover:bg-white/10 cursor-pointer px-2 py-0.5 rounded transition-colors text-primary"
+                          : "text-text-muted cursor-default"
+                      }`}
+                      title={isHost ? "Change game" : ""}
+                    >
+                      <Gamepad className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                      <p className="capitalize font-medium">
+                        {currentRoom.gameType}
+                      </p>
+                      {isHost && (
+                        <span className="text-[10px] opacity-70">▼</span>
+                      )}
+                    </button>
                   </div>
                 </div>
               </div>

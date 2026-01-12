@@ -87,6 +87,9 @@ export default function GameContainer() {
         currentRoom.players
       );
 
+      // Tag instance with game type for change detection
+      (game as any).assignedGameType = gameType;
+
       setGameInstance(game);
     };
 
@@ -107,7 +110,12 @@ export default function GameContainer() {
     // BUT we need to reference the SAME gameInstance.
     // Let's stick to one effect but use refs or smart checks.
 
-    if (!gameInstance || (gameInstance as any).roomId !== currentRoom.id) {
+    // If no game, or Room ID mismatch (switched rooms), or game type changed, create new
+    if (
+      !gameInstance ||
+      (gameInstance as any).roomId !== currentRoom.id ||
+      (gameInstance as any).assignedGameType !== currentRoom.gameType
+    ) {
       createNewGame();
     } else {
       // Same room, just update players
