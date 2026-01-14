@@ -8,6 +8,7 @@ import {
   Settings,
   Gamepad2,
   Filter,
+  LogIn,
 } from "lucide-react";
 import { useRoomStore } from "../stores/roomStore";
 import { useUserStore } from "../stores/userStore";
@@ -60,6 +61,7 @@ export default function Lobby() {
   const { isConnected } = useSocketStore();
   const { publicRooms, setPublicRooms } = useRoomStore();
   const [showCreateModal, setShowCreateModal] = useState<string | null>(null);
+  const [showJoinModal, setShowJoinModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [onlineCount, setOnlineCount] = useState(0);
   const [selectedCategory, setSelectedCategory] = useState<GameCategory | null>(
@@ -164,6 +166,14 @@ export default function Lobby() {
               >
                 <Plus className="w-5 h-5" />
                 Create Room
+              </button>
+
+              <button
+                onClick={() => setShowJoinModal(true)}
+                className="px-8 py-3 bg-white/5 hover:bg-white/10 text-white font-display rounded-xl border border-white/10 hover:border-white/20 transition-all duration-200 cursor-pointer flex items-center gap-2 backdrop-blur-sm"
+              >
+                <LogIn className="w-5 h-5" />
+                Join Room
               </button>
 
               <button
@@ -337,6 +347,11 @@ export default function Lobby() {
           gameId={showCreateModal}
           onClose={() => setShowCreateModal(null)}
         />
+      )}
+
+      {/* Join Room Modal */}
+      {showJoinModal && (
+        <JoinRoomModal onClose={() => setShowJoinModal(false)} />
       )}
 
       {/* Settings Modal */}
@@ -604,3 +619,91 @@ function CreateRoomModal({
 }
 
 // Regenerate Identity Modal Component
+// ... (omitted)
+
+function JoinRoomModal({ onClose }: { onClose: () => void }) {
+  const [roomId, setRoomId] = useState("");
+  const [password, setPassword] = useState("");
+  const navigate = useNavigate();
+  const { setCurrentRoom } = useRoomStore();
+  const { show: showAlert } = useAlertStore();
+  const { isConnected } = useSocketStore();
+
+  const handleJoin = () => {
+    const socket = getSocket();
+    if (!socket || !isConnected)
+      return showAlert("Socket not connected", { type: "error" });
+
+    if (!roomId.trim())
+      return showAlert("Please enter a room ID", { type: "error" });
+
+    socket.emit(
+      "room:join",
+      { roomId: roomId.trim(), password: password || undefined },
+      (response: { success: boolean; room?: Room; error?: string }) => {
+        if (response.success && response.room) {
+          setCurrentRoom(response.room);
+          navigate(`/room/${response.room.id}`);
+        } else {
+          showAlert(response.error || "Failed to join room", {
+            type: "error",
+          });
+        }
+      }
+    );
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 animate-fadeIn">
+      <div className="bg-background-secondary border border-white/10 rounded-2xl p-8 max-w-md w-full shadow-2xl mx-4">
+        <h2 className="font-display text-2xl text-text-primary mb-6">
+          Join Room
+        </h2>
+
+        <div className="space-y-4 mb-6">
+          <div>
+            <label className="block text-sm font-medium text-text-secondary mb-2">
+              Room ID
+            </label>
+            <input
+              type="text"
+              value={roomId}
+              onChange={(e) => setRoomId(e.target.value)}
+              placeholder="Enter room ID"
+              className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-text-secondary mb-2">
+              Password (Optional)
+            </label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Enter password if required"
+              className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+            />
+          </div>
+        </div>
+
+        <div className="flex gap-3">
+          <button
+            onClick={onClose}
+            className="flex-1 px-4 py-2.5 bg-white/5 hover:bg-white/10 text-text-secondary rounded-lg transition-colors cursor-pointer"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleJoin}
+            disabled={!roomId.trim()}
+            className="flex-1 px-4 py-2.5 bg-primary hover:bg-primary-light disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg shadow-lg shadow-primary/30 transition-all cursor-pointer"
+          >
+            Join
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

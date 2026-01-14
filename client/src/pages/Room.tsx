@@ -9,6 +9,7 @@ import {
   Copy,
   Check,
   X,
+  Lock,
 } from "lucide-react";
 import { useRoomStore } from "../stores/roomStore";
 import { useChatStore } from "../stores/chatStore";
@@ -59,7 +60,7 @@ export default function RoomPage() {
 
       socket.emit(
         "room:join",
-        { roomId },
+        { roomId, password: passwordInput || undefined },
         (response: { success: boolean; room?: any; error?: string }) => {
           console.log("room:join response:", response);
           if (timeoutId) clearTimeout(timeoutId);
@@ -68,10 +69,14 @@ export default function RoomPage() {
             setCurrentRoom(response.room);
           } else {
             isJoining = false;
-            showAlert(response.error || "Failed to join room", {
-              type: "error",
-            });
-            navigate("/");
+            if (response.error === "Incorrect password") {
+              setShowPasswordPrompt(true);
+            } else {
+              showAlert(response.error || "Failed to join room", {
+                type: "error",
+              });
+              navigate("/");
+            }
           }
         }
       );
@@ -148,6 +153,8 @@ export default function RoomPage() {
   // Share modal state
   const [showShareModal, setShowShareModal] = useState(false);
   const [showChangeGameModal, setShowChangeGameModal] = useState(false);
+  const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
+  const [passwordInput, setPasswordInput] = useState("");
   const [copied, setCopied] = useState(false);
   const [showUserTooltip, setShowUserTooltip] = useState(false);
   const roomLink = window.location.hash.includes("#")
@@ -179,16 +186,6 @@ export default function RoomPage() {
       console.error("Failed to copy:", err);
     }
   };
-
-  if (!currentRoom) {
-    return (
-      <div className="min-h-screen bg-background-primary flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-text-secondary">Loading room...</p>
-        </div>
-      </div>
-    );
-  }
 
   const ShareModal = () => (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100] animate-fadeIn">
@@ -267,7 +264,7 @@ export default function RoomPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {getAllGames().map((game) => {
             const Icon = game.icon;
-            const isSelected = currentRoom.gameType === game.id;
+            const isSelected = currentRoom?.gameType === game.id;
             return (
               <button
                 key={game.id}
@@ -310,10 +307,105 @@ export default function RoomPage() {
     </div>
   );
 
+  const PasswordPromptModal = () => (
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100] animate-fadeIn">
+      <div className="bg-background-secondary border border-white/10 rounded-2xl p-8 max-w-md w-full shadow-2xl mx-4 animate-scaleIn">
+        <div className="flex flex-col items-center text-center mb-6">
+          <div className="w-16 h-16 rounded-full bg-yellow-500/10 flex items-center justify-center mb-4 text-yellow-500">
+            <Lock className="w-8 h-8" />
+          </div>
+          <h2 className="text-2xl font-display text-text-primary">
+            Password Required
+          </h2>
+          <p className="text-text-secondary mt-2">
+            This room is private. Please enter the password to join.
+          </p>
+        </div>
+
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            setShowPasswordPrompt(false);
+            // Trigger join retry with new password
+            const socket = getSocket();
+            socket.emit(
+              "room:join",
+              { roomId, password: passwordInput },
+              (response: { success: boolean; room?: any; error?: string }) => {
+                if (response.success && response.room) {
+                  setCurrentRoom(response.room);
+                } else {
+                  if (response.error === "Incorrect password") {
+                    setPasswordInput("");
+                    setShowPasswordPrompt(true);
+                    showAlert("Incorrect password", { type: "error" });
+                  } else {
+                    showAlert(response.error || "Failed to join", {
+                      type: "error",
+                    });
+                    navigate("/");
+                  }
+                }
+              }
+            );
+          }}
+          className="space-y-4"
+        >
+          <input
+            type="password"
+            value={passwordInput}
+            onChange={(e) => setPasswordInput(e.target.value)}
+            placeholder="Enter room password"
+            autoFocus
+            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-center text-lg dating-tighter"
+          />
+
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setShowPasswordPrompt(false);
+                navigate("/");
+              }}
+              className="flex-1 px-4 py-3 bg-white/5 hover:bg-white/10 text-text-secondary font-medium rounded-xl transition-colors cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={!passwordInput}
+              className="flex-1 px-4 py-3 bg-primary hover:bg-primary-light disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl shadow-lg shadow-primary/20 transition-all cursor-pointer"
+            >
+              Join Room
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+
+  if (!currentRoom) {
+    if (showPasswordPrompt) {
+      return (
+        <div className="min-h-screen bg-background-primary flex items-center justify-center">
+          <PasswordPromptModal />
+        </div>
+      );
+    }
+    return (
+      <div className="min-h-screen bg-background-primary flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-text-secondary">Loading room...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
       {showShareModal && <ShareModal />}
       {showChangeGameModal && <ChangeGameModal />}
+      {showPasswordPrompt && <PasswordPromptModal />}
       <div className="min-h-screen bg-background-primary">
         {/* Room Header */}
         <header className="z-40 glass-card border-b border-white/10">
