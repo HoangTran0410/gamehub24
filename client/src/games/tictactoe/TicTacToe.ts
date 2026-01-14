@@ -28,6 +28,7 @@ export default class TicTacToe extends BaseGame {
       },
       gameOver: false,
       lastMoveIndex: null,
+      gamePhase: "waiting",
     };
 
     this.init();
@@ -63,6 +64,8 @@ export default class TicTacToe extends BaseGame {
       this.reset();
     } else if (action.type === "SWITCH_TURN" && this.isHost) {
       this.handleSwitchTurn();
+    } else if (action.type === "START_GAME" && this.isHost) {
+      this.handleStartGame();
     }
   }
 
@@ -72,6 +75,7 @@ export default class TicTacToe extends BaseGame {
     const { cellIndex, playerId } = action;
 
     // Validate move
+    if (this.state.gamePhase !== "playing") return;
     if (this.state.gameOver) return;
     if (this.state.board[cellIndex] !== null) return;
 
@@ -150,6 +154,7 @@ export default class TicTacToe extends BaseGame {
       players: this.state.players, // Keep same players
       gameOver: false,
       lastMoveIndex: null,
+      gamePhase: "waiting",
     };
 
     this.broadcastState();
@@ -218,11 +223,51 @@ export default class TicTacToe extends BaseGame {
   // Bot Management
   addBot(): void {
     if (!this.isHost) return;
+    if (this.state.gamePhase !== "waiting") return;
 
     // Assign BOT to O
     this.state.players.O = "BOT";
     this.broadcastState();
     this.setState({ ...this.state });
+  }
+
+  removeBot(): void {
+    if (!this.isHost) return;
+    if (this.state.gamePhase !== "waiting") return;
+    if (this.state.players.O !== "BOT") return;
+
+    this.state.players.O = null;
+    this.broadcastState();
+    this.setState({ ...this.state });
+  }
+
+  // Start Game
+  private handleStartGame(): void {
+    if (this.state.gamePhase !== "waiting") return;
+    if (!this.state.players.X || !this.state.players.O) return;
+
+    this.state.gamePhase = "playing";
+    this.broadcastState();
+    this.setState({ ...this.state });
+
+    // Check if bot goes first
+    this.checkBotTurn();
+  }
+
+  startGame(): void {
+    if (this.isHost) {
+      this.handleStartGame();
+    } else {
+      this.sendAction({ type: "START_GAME" });
+    }
+  }
+
+  canStartGame(): boolean {
+    return (
+      !!this.state.players.X &&
+      !!this.state.players.O &&
+      this.state.gamePhase === "waiting"
+    );
   }
 
   // Check if it's bot's turn and make move

@@ -9,6 +9,7 @@ import {
   RotateCcw,
   RefreshCcw,
   Bot,
+  Play,
 } from "lucide-react";
 import { useUserStore } from "../../stores/userStore";
 import type { GameUIProps } from "../types";
@@ -19,7 +20,7 @@ const CELL_SIZE = 40;
 export default function CaroUI({ game: baseGame }: GameUIProps) {
   const game = baseGame as Caro;
   const [state, setState] = useState<CaroState>(game.getState());
-  const { userId } = useUserStore();
+  const { userId, username: myUsername } = useUserStore();
 
   const { board, winningLine, pendingUndoRequest } = state;
   const mySymbol = game.getPlayerSymbol();
@@ -394,107 +395,182 @@ export default function CaroUI({ game: baseGame }: GameUIProps) {
 
   return (
     <div className="flex flex-col gap-3 p-2 md:p-4 w-full">
-      {/* Status Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="text-sm font-semibold">
-            {state.gameOver ? (
-              state.winner ? (
-                <span
-                  className={
-                    state.winner === mySymbol
-                      ? "text-green-400"
-                      : "text-red-400"
-                  }
-                >
-                  {state.winner === mySymbol ? "You Won!" : "Opponent Won!"}
+      {/* Player List */}
+      <div className="flex flex-col gap-2 p-3 bg-slate-800 rounded-lg w-full max-w-[400px] mx-auto">
+        <h3 className="text-sm font-medium text-gray-400 mb-1">Players</h3>
+        {(["X", "O"] as const).map((symbol) => {
+          const player = state.players[symbol];
+          const isCurrentTurn = state.currentTurn === symbol && !state.gameOver;
+          const isMe = symbol === mySymbol;
+          const isBot = player === "BOT";
+          const playerName = isBot
+            ? "Bot"
+            : isMe
+            ? myUsername
+            : player
+            ? "Opponent"
+            : null;
+
+          return (
+            <div
+              key={symbol}
+              className={`
+                flex items-center justify-between p-2 rounded-lg
+                ${
+                  isCurrentTurn
+                    ? "bg-slate-600 ring-2 ring-blue-400"
+                    : "bg-slate-700"
+                }
+              `}
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-6 h-6 flex items-center justify-center">
+                  {symbol === "X" ? (
+                    <X className="w-5 h-5 text-blue-400" strokeWidth={2.5} />
+                  ) : (
+                    <Circle
+                      className="w-5 h-5 text-red-400"
+                      strokeWidth={2.5}
+                    />
+                  )}
+                </div>
+                <span className="text-white">
+                  {playerName ? playerName : "(waiting...)"}
+                  {isBot && " 🤖"}
+                  {isMe && player && " (You)"}
                 </span>
-              ) : (
-                <span className="text-yellow-400">Draw!</span>
-              )
-            ) : (
-              <span
-                className={isMyTurn ? "text-primary-400" : "text-slate-400"}
-              >
-                {isMyTurn ? "Your Turn" : "Opponent's Turn"}
-              </span>
-            )}
-          </div>
-          <div className="text-xs text-slate-500 flex items-center gap-2">
-            <span className="flex items-center gap-1">
-              <X className="w-3 h-3 text-blue-400" />{" "}
-              {mySymbol === "X" ? "You" : "Opp"}
-            </span>
-            <span className="flex items-center gap-1">
-              <Circle className="w-3 h-3 text-red-400" />{" "}
-              {mySymbol === "O" ? "You" : "Opp"}
-            </span>
-          </div>
-        </div>
+              </div>
+              {isBot && game.isHostUser && !state.gameOver && (
+                <button
+                  onClick={() => game.removeBot()}
+                  className="text-xs px-2 py-1 bg-red-600 hover:bg-red-500 text-white rounded transition-colors"
+                >
+                  Remove
+                </button>
+              )}
+              {!player &&
+                game.isHostUser &&
+                !state.gameOver &&
+                symbol === "O" && (
+                  <button
+                    onClick={() => game.addBot()}
+                    className="text-xs px-2 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded transition-colors flex items-center gap-1"
+                  >
+                    <Bot className="w-3 h-3" /> Add Bot
+                  </button>
+                )}
+            </div>
+          );
+        })}
+      </div>
 
-        {/* Controls */}
-        <div className="flex gap-1 md:gap-2 text-xs">
-          {/* Bot Controls */}
-          {game.isHostUser && !state.players.O && !state.gameOver && (
+      {/* Start Game Button - only show when waiting and both players ready */}
+      {state.gamePhase === "waiting" && game.isHostUser && (
+        <div className="flex flex-col items-center gap-2">
+          {game.canStartGame() ? (
             <button
-              onClick={() => game.addBot()}
-              className="px-2 py-1 bg-slate-800 hover:bg-slate-700 rounded text-slate-300 flex items-center gap-1"
-              title="Play against Bot"
+              onClick={() => game.startGame()}
+              className="px-4 py-2 bg-green-600 hover:bg-green-500 rounded-lg text-white font-medium transition-colors flex items-center gap-2"
             >
-              <Bot className="w-3 h-3" />
-              <span>Vs Bot</span>
+              <Play className="w-4 h-4" />
+              Start Game
             </button>
+          ) : (
+            <span className="text-sm text-slate-400">
+              Waiting for opponent to join...
+            </span>
           )}
+        </div>
+      )}
 
-          {state.gameOver ? (
-            <button
-              onClick={() => game.requestReset()}
-              className="px-2 py-1 bg-primary-600 hover:bg-primary-500 rounded text-white flex items-center gap-1"
-              title="New game"
-            >
-              <RotateCcw className="w-3 h-3" />
-              <span>New Game</span>
-            </button>
-          ) : Object.keys(board).length > 0 ? (
-            <button
-              onClick={focusLastMove}
-              disabled={Object.keys(board).length === 0}
-              className="px-2 py-1 bg-slate-800 hover:bg-slate-700 rounded text-slate-300 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
-              title="Focus to last move"
-            >
-              <Target className="w-3 h-3" />
-              <span>Last</span>
-            </button>
-          ) : null}
+      {/* Start Game message for non-host */}
+      {state.gamePhase === "waiting" && !game.isHostUser && (
+        <div className="text-sm text-slate-400">
+          Waiting for host to start the game...
+        </div>
+      )}
 
-          {/* Request Undo button - only show when opponent just moved */}
-          {!state.gameOver &&
-            Object.keys(board).length > 0 &&
-            !isMyTurn &&
-            !pendingUndoRequest && (
+      {/* Game Status - only show during playing */}
+      {state.gamePhase === "playing" && (
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="text-sm font-semibold">
+              {state.gameOver ? (
+                state.winner ? (
+                  <span
+                    className={
+                      state.winner === mySymbol
+                        ? "text-green-400"
+                        : "text-red-400"
+                    }
+                  >
+                    {state.winner === mySymbol ? "You Won!" : "Opponent Won!"}
+                  </span>
+                ) : (
+                  <span className="text-yellow-400">Draw!</span>
+                )
+              ) : (
+                <span
+                  className={isMyTurn ? "text-primary-400" : "text-slate-400"}
+                >
+                  {isMyTurn ? "Your Turn" : "Opponent's Turn"}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Controls */}
+          <div className="flex gap-1 md:gap-2 text-xs">
+            {state.gameOver ? (
               <button
-                onClick={() => game.requestUndo()}
-                className="px-2 py-1 bg-slate-800 hover:bg-slate-700 rounded text-slate-300 flex items-center gap-1"
-                title="Request undo from opponent"
+                onClick={() => game.requestReset()}
+                className="px-2 py-1 bg-primary-600 hover:bg-primary-500 rounded text-white flex items-center gap-1"
+                title="New game"
               >
-                <Undo className="w-3 h-3" />
-                <span>Undo</span>
+                <RotateCcw className="w-3 h-3" />
+                <span>New Game</span>
+              </button>
+            ) : Object.keys(board).length > 0 ? (
+              <button
+                onClick={focusLastMove}
+                disabled={Object.keys(board).length === 0}
+                className="px-2 py-1 bg-slate-800 hover:bg-slate-700 rounded text-slate-300 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Focus to last move"
+              >
+                <Target className="w-3 h-3" />
+                <span>Last</span>
+              </button>
+            ) : null}
+
+            {/* Request Undo button - only show when opponent just moved */}
+            {!state.gameOver &&
+              Object.keys(board).length > 0 &&
+              !isMyTurn &&
+              !pendingUndoRequest && (
+                <button
+                  onClick={() => game.requestUndo()}
+                  className="px-2 py-1 bg-slate-800 hover:bg-slate-700 rounded text-slate-300 flex items-center gap-1"
+                  title="Request undo from opponent"
+                >
+                  <Undo className="w-3 h-3" />
+                  <span>Undo</span>
+                </button>
+              )}
+
+            {/* Switch Turn button - only show when board is empty */}
+            {!state.gameOver && Object.keys(board).length === 0 && isMyTurn && (
+              <button
+                onClick={() => game.switchTurn()}
+                className="px-2 py-1 bg-slate-800 hover:bg-slate-700 rounded text-slate-300 flex items-center gap-1"
+                title="Give first move to opponent"
+              >
+                <RefreshCcw className="w-3 h-3" />
+                <span>Give First Move</span>
               </button>
             )}
-
-          {/* Switch Turn button - only show when board is empty */}
-          {!state.gameOver && Object.keys(board).length === 0 && isMyTurn && (
-            <button
-              onClick={() => game.switchTurn()}
-              className="px-2 py-1 bg-slate-800 hover:bg-slate-700 rounded text-slate-300 flex items-center gap-1"
-              title="Give first move to opponent"
-            >
-              <RefreshCcw className="w-3 h-3" />
-              <span>Give First Move</span>
-            </button>
-          )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Undo Request Notification - separate section */}
       {pendingUndoRequest && (

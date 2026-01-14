@@ -12,6 +12,7 @@ export interface CaroState {
   history: string[]; // List of keys "row,col"
   lastMove: { row: number; col: number } | null; // Added lastMove
   pendingUndoRequest: string | null; // ID of player requesting undo
+  gamePhase: "waiting" | "playing";
 }
 
 // Actions
@@ -40,9 +41,14 @@ export interface CaroResetAction {
   type: "RESET_GAME";
 }
 
+export interface CaroStartGameAction {
+  type: "START_GAME";
+}
+
 export type CaroAction =
   | CaroMoveAction
   | CaroUndoRequestAction
   | CaroUndoResponseAction
   | CaroSwitchTurnAction
-  | CaroResetAction;
+  | CaroResetAction
+  | CaroStartGameAction;

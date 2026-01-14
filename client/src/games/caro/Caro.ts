@@ -29,8 +29,9 @@ export default class Caro extends BaseGame {
       },
       gameOver: false,
       history: [],
-      lastMove: null, // Added missing property
+      lastMove: null,
       pendingUndoRequest: null,
+      gamePhase: "waiting",
     };
 
     this.init();
@@ -39,7 +40,6 @@ export default class Caro extends BaseGame {
   init(): void {
     if (this.isHost) {
       this.broadcastState();
-      this.checkBotTurn();
     }
   }
 
@@ -76,6 +76,9 @@ export default class Caro extends BaseGame {
         case "RESET_GAME":
           this.reset();
           break;
+        case "START_GAME":
+          this.handleStartGame();
+          break;
       }
     }
   }
@@ -87,6 +90,7 @@ export default class Caro extends BaseGame {
       playerId: string;
     };
 
+    if (this.state.gamePhase !== "playing") return;
     if (this.state.gameOver) return;
     const key = `${row},${col}`;
     if (this.state.board[key]) return;
@@ -134,10 +138,10 @@ export default class Caro extends BaseGame {
       history: [],
       lastMove: null,
       pendingUndoRequest: null,
+      gamePhase: "waiting",
     };
     this.broadcastState();
     this.setState({ ...this.state });
-    this.checkBotTurn();
   }
 
   updatePlayers(players: { id: string; username: string }[]): void {
@@ -323,14 +327,54 @@ export default class Caro extends BaseGame {
 
   addBot(): void {
     if (!this.isHost) return;
+    if (this.state.gamePhase !== "waiting") return;
     this.state.players.O = "BOT";
     this.broadcastState();
     this.setState({ ...this.state });
+  }
+
+  removeBot(): void {
+    if (!this.isHost) return;
+    if (this.state.gamePhase !== "waiting") return;
+    if (this.state.players.O !== "BOT") return;
+
+    this.state.players.O = null;
+    this.broadcastState();
+    this.setState({ ...this.state });
+  }
+
+  // Start Game
+  private handleStartGame(): void {
+    if (this.state.gamePhase !== "waiting") return;
+    if (!this.state.players.X || !this.state.players.O) return;
+
+    this.state.gamePhase = "playing";
+    this.broadcastState();
+    this.setState({ ...this.state });
+
+    // Check if bot goes first
     this.checkBotTurn();
+  }
+
+  startGame(): void {
+    if (this.isHost) {
+      this.handleStartGame();
+    } else {
+      this.sendAction({ type: "START_GAME" });
+    }
+  }
+
+  canStartGame(): boolean {
+    return (
+      !!this.state.players.X &&
+      !!this.state.players.O &&
+      this.state.gamePhase === "waiting"
+    );
   }
 
   private checkBotTurn(): void {
     if (!this.isHost) return;
+    if (this.state.gamePhase !== "playing") return;
 
     const currentPlayerId =
       this.state.currentTurn === "X"

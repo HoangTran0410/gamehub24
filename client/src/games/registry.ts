@@ -57,7 +57,7 @@ games.set("tictactoe", {
   description: "Classic 3x3 grid game. Get three in a row to win!",
   icon: Grid2X2,
   categories: ["board", "classic", "puzzle"],
-  minPlayers: 1,
+  minPlayers: 2,
   maxPlayers: 2,
   isAvailable: true,
   createGame: async (roomId, socket, isHost, userId, players) => {
@@ -74,7 +74,7 @@ games.set("caro", {
   description: "Get 5 in a row on a larger board. More strategic!",
   icon: Grid3x3,
   categories: ["board", "strategy", "puzzle"],
-  minPlayers: 1,
+  minPlayers: 2,
   maxPlayers: 2,
   isAvailable: true,
   createGame: async (roomId, socket, isHost, userId, players) => {
@@ -91,7 +91,7 @@ games.set("connect4", {
   description: "Classic 4-in-a-row! Drop discs and connect four to win.",
   icon: Columns3,
   categories: ["board", "classic", "puzzle"],
-  minPlayers: 1,
+  minPlayers: 2,
   maxPlayers: 2,
   isAvailable: true,
   createGame: async (roomId, socket, isHost, userId, players) => {
@@ -125,7 +125,7 @@ games.set("reversi", {
   description: "Classic strategy game. Flip your opponent's pieces!",
   icon: Circle,
   categories: ["board", "strategy", "classic"],
-  minPlayers: 1,
+  minPlayers: 2,
   maxPlayers: 2,
   isAvailable: true,
   createGame: async (roomId, socket, isHost, userId, players) => {
@@ -142,7 +142,7 @@ games.set("chess", {
   description: "Strategic board game. Checkmate your opponent!",
   icon: ChessKnight,
   categories: ["board", "strategy", "classic"],
-  minPlayers: 1,
+  minPlayers: 2,
   maxPlayers: 2,
   isAvailable: true,
   createGame: async (roomId, socket, isHost, userId, players) => {
@@ -191,7 +191,7 @@ games.set("thirteen", {
   description: "Vietnamese card game (Tiến Lên Miền Nam)",
   icon: Spade,
   categories: ["card", "strategy"],
-  minPlayers: 1,
+  minPlayers: 2,
   maxPlayers: 4,
   isAvailable: true,
   createGame: async (roomId, socket, isHost, userId, players) => {
@@ -208,7 +208,7 @@ games.set("dotsandboxes", {
   description: "Classic strategy game. Connect dots to close boxes!",
   icon: LayoutGrid,
   categories: ["puzzle", "strategy", "classic"],
-  minPlayers: 1,
+  minPlayers: 2,
   maxPlayers: 2,
   isAvailable: true,
   createGame: async (roomId, socket, isHost, userId, players) => {

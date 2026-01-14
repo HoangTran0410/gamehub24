@@ -2,9 +2,10 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import TicTacToe from "./TicTacToe";
 import type { TicTacToeState } from "./types";
-import { RefreshCcw, X, Circle, LogOut, Bot } from "lucide-react";
+import { RefreshCcw, X, Circle, LogOut, Bot, Play } from "lucide-react";
 import { useRoomStore } from "../../stores/roomStore";
 import { useChatStore } from "../../stores/chatStore";
+import { useUserStore } from "../../stores/userStore";
 import { getSocket } from "../../services/socket";
 import type { GameUIProps } from "../types";
 
@@ -16,6 +17,7 @@ export default function TicTacToeUI({ game: baseGame }: GameUIProps) {
   // Use stores needed for leave game logic
   const { setCurrentRoom } = useRoomStore();
   const { clearMessages } = useChatStore();
+  const { username: myUsername } = useUserStore();
 
   const mySymbol = game.getPlayerSymbol();
   const isMyTurn = state.currentTurn === mySymbol;
@@ -42,74 +44,128 @@ export default function TicTacToeUI({ game: baseGame }: GameUIProps) {
     game.switchTurn();
   };
 
-  const leaveGame = () => {
-    if (roomId) {
-      getSocket().emit("room:leave", { roomId });
-    }
-    setCurrentRoom(null);
-    clearMessages();
-    navigate("/");
-  };
-
   return (
-    <div className="flex flex-col items-center gap-6 p-4 w-full max-w-sm mx-auto">
-      {/* Status Header */}
-      <div className="flex flex-col items-center gap-2">
-        <div className="text-xl font-bold flex items-center gap-2">
-          {state.gameOver ? (
-            state.winner ? (
-              <span
-                className={
-                  state.winner === mySymbol ? "text-green-400" : "text-red-400"
+    <div className="flex flex-col items-center gap-3 md:p-4 w-full max-w-sm mx-auto">
+      {/* Player List */}
+      <div className="flex flex-col gap-2 p-4 bg-slate-800 rounded-lg w-full max-w-[400px] mx-auto">
+        <h3 className="text-sm font-medium text-gray-400 mb-1">Players</h3>
+        {(["X", "O"] as const).map((symbol) => {
+          const player = state.players[symbol];
+          const isCurrentTurn = state.currentTurn === symbol && !state.gameOver;
+          const isMe = symbol === mySymbol;
+          const isBot = player === "BOT";
+          const playerName = isBot
+            ? "Bot"
+            : isMe
+            ? myUsername
+            : player
+            ? "Opponent"
+            : null;
+
+          return (
+            <div
+              key={symbol}
+              className={`
+                flex items-center justify-between p-2 rounded-lg
+                ${
+                  isCurrentTurn
+                    ? "bg-slate-600 ring-2 ring-blue-400"
+                    : "bg-slate-700"
                 }
-              >
-                {state.winner === mySymbol ? "You Won!" : "Opponent Won!"}
-              </span>
-            ) : (
-              <span className="text-yellow-400">Draw!</span>
-            )
+              `}
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-6 h-6 flex items-center justify-center">
+                  {symbol === "X" ? (
+                    <X className="w-5 h-5 text-blue-400" strokeWidth={2.5} />
+                  ) : (
+                    <Circle
+                      className="w-5 h-5 text-red-400"
+                      strokeWidth={2.5}
+                    />
+                  )}
+                </div>
+                <span className="text-white">
+                  {playerName ? playerName : "(waiting...)"}
+                  {isBot && " 🤖"}
+                  {isMe && player && " (You)"}
+                </span>
+              </div>
+              {isBot && game.isHostUser && !state.gameOver && (
+                <button
+                  onClick={() => game.removeBot()}
+                  className="text-xs px-2 py-1 bg-red-600 hover:bg-red-500 text-white rounded transition-colors"
+                >
+                  Remove
+                </button>
+              )}
+              {!player &&
+                game.isHostUser &&
+                !state.gameOver &&
+                symbol === "O" && (
+                  <button
+                    onClick={() => game.addBot()}
+                    className="text-xs px-2 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded transition-colors flex items-center gap-1"
+                  >
+                    <Bot className="w-3 h-3" /> Add Bot
+                  </button>
+                )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Start Game Button - only show when waiting and both players ready */}
+      {state.gamePhase === "waiting" && game.isHostUser && (
+        <div className="flex flex-col items-center gap-2">
+          {game.canStartGame() ? (
+            <button
+              onClick={() => game.startGame()}
+              className="px-6 py-3 bg-green-600 hover:bg-green-500 rounded-lg text-white font-medium transition-colors flex items-center gap-2"
+            >
+              <Play className="w-5 h-5" />
+              Start Game
+            </button>
           ) : (
-            <span className={isMyTurn ? "text-primary-400" : "text-slate-400"}>
-              {isMyTurn ? "Your Turn" : "Opponent's Turn"}
+            <span className="text-sm text-slate-400">
+              Waiting for opponent to join...
             </span>
           )}
         </div>
-        <div className="text-sm text-slate-500 flex items-center gap-4">
-          <span className="flex items-center gap-1">
-            <X className="w-4 h-4 text-blue-400" /> You: {mySymbol}
-          </span>
-          <span className="flex items-center gap-1">
-            <Circle className="w-4 h-4 text-red-400" /> Opponent:{" "}
-            {mySymbol === "X" ? "O" : "X"}
-          </span>
-        </div>
-
-        {/* Switch Turn button - only show when board is empty */}
-        {!state.gameOver &&
-          state.players.O &&
-          board.every((cell) => cell === null) &&
-          isMyTurn && (
-            <button
-              onClick={onSwitchTurn}
-              className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-slate-300 text-sm font-medium transition-colors flex items-center gap-2"
-              title="Give first move to opponent"
-            >
-              <RefreshCcw className="w-4 h-4" />
-              Give First Move
-            </button>
-          )}
-      </div>
-
-      {/* Bot Controls */}
-      {game.isHostUser && !state.players.O && !state.gameOver && (
-        <button
-          onClick={() => game.addBot()}
-          className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-slate-300 text-sm font-medium transition-colors flex items-center gap-2"
-        >
-          <Bot className="w-4 h-4" />
-          Play vs Bot
-        </button>
       )}
+
+      {/* Start Game message for non-host */}
+      {state.gamePhase === "waiting" && !game.isHostUser && (
+        <div className="text-sm text-slate-400">
+          Waiting for host to start the game...
+        </div>
+      )}
+
+      {/* Turn Indicator */}
+      {state.gamePhase === "playing" && !state.gameOver && (
+        <div className="text-lg text-gray-400">
+          {isMyTurn ? (
+            <span className="text-green-400">Your turn! Click a cell.</span>
+          ) : (
+            <span>Waiting for opponent...</span>
+          )}
+        </div>
+      )}
+
+      {/* Switch Turn button - only show when board is empty and playing */}
+      {state.gamePhase === "playing" &&
+        !state.gameOver &&
+        board.every((cell) => cell === null) &&
+        isMyTurn && (
+          <button
+            onClick={onSwitchTurn}
+            className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-slate-300 text-sm font-medium transition-colors flex items-center gap-2"
+            title="Give first move to opponent"
+          >
+            <RefreshCcw className="w-4 h-4" />
+            Give First Move
+          </button>
+        )}
 
       {/* Game Board */}
       <div className="grid grid-cols-3 gap-2 bg-slate-800 p-3 rounded-xl relative">
@@ -173,13 +229,6 @@ export default function TicTacToeUI({ game: baseGame }: GameUIProps) {
             className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-300 font-medium transition-colors flex items-center justify-center gap-2"
           >
             Play Again
-          </button>
-          <button
-            onClick={leaveGame}
-            className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-300 font-medium transition-colors flex items-center justify-center gap-2"
-          >
-            <LogOut className="w-4 h-4" />
-            Close Game
           </button>
         </div>
       )}

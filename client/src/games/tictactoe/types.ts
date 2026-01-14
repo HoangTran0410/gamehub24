@@ -12,6 +12,8 @@ export interface TicTacToeState {
   gameOver: boolean;
   /** Index of the last move made */
   lastMoveIndex: number | null;
+  /** Game phase: waiting for players or playing */
+  gamePhase: "waiting" | "playing";
 }
 
 export type CellValue = "X" | "O" | null;
@@ -30,7 +32,12 @@ export interface SwitchTurnAction {
   type: "SWITCH_TURN";
 }
 
+export interface StartGameAction {
+  type: "START_GAME";
+}
+
 export type TicTacToeAction =
   | MakeMoveAction
   | ResetGameAction
-  | SwitchTurnAction;
+  | SwitchTurnAction
+  | StartGameAction;
