@@ -24,6 +24,17 @@ export default function BilliardUI({ game: baseGame }: GameUIProps) {
   // Store balls in a ref for 60fps drawing without React re-renders
   const ballsRef = useRef<Ball[]>(game.getState().balls);
 
+  // Ripple animation for pocketed balls
+  interface RippleEffect {
+    x: number;
+    y: number;
+    color: string;
+    startTime: number;
+    duration: number;
+  }
+  const ripplesRef = useRef<RippleEffect[]>([]);
+  const prevPocketedRef = useRef<Set<number>>(new Set());
+
   // Aim state
   const [isAiming, setIsAiming] = useState(false);
   const [aimAngle, setAimAngle] = useState(0);
@@ -101,22 +112,17 @@ export default function BilliardUI({ game: baseGame }: GameUIProps) {
 
       // Stripe pattern for striped balls
       if (ball.id >= 9 && ball.id <= 15) {
+        // render white circle at center
         ctx.fillStyle = "white";
         ctx.beginPath();
         ctx.arc(ball.x, ball.y, BALL_RADIUS * 0.7, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Colored stripe
-        ctx.fillStyle = color;
-        ctx.beginPath();
-        ctx.arc(ball.x, ball.y, BALL_RADIUS * 0.5, 0, Math.PI * 2);
         ctx.fill();
       }
 
       // Ball number (except cue ball)
       if (ball.id !== 0) {
-        ctx.fillStyle = ball.id === 8 ? "white" : "black";
-        ctx.font = `bold ${BALL_RADIUS * 0.9}px Arial`;
+        ctx.fillStyle = ball.id >= 9 && ball.id <= 15 ? "black" : "white";
+        ctx.font = `bold ${BALL_RADIUS}px Arial`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillText(ball.id.toString(), ball.x, ball.y);
@@ -269,6 +275,39 @@ export default function BilliardUI({ game: baseGame }: GameUIProps) {
       ctx.fill();
     }
 
+    // Draw ripple effects for pocketed balls
+    const now = performance.now();
+    const activeRipples: RippleEffect[] = [];
+
+    for (const ripple of ripplesRef.current) {
+      const elapsed = now - ripple.startTime;
+      const progress = elapsed / ripple.duration;
+
+      if (progress < 1) {
+        activeRipples.push(ripple);
+
+        // Draw multiple concentric ripples
+        for (let i = 0; i < 3; i++) {
+          const rippleProgress = Math.max(0, progress - i * 0.15);
+          if (rippleProgress > 0 && rippleProgress < 1) {
+            const radius = POCKET_RADIUS + rippleProgress * 40;
+            const alpha = (1 - rippleProgress) * 0.6;
+
+            ctx.strokeStyle = ripple.color;
+            ctx.globalAlpha = alpha;
+            ctx.lineWidth = 3 - rippleProgress * 2;
+            ctx.beginPath();
+            ctx.arc(ripple.x, ripple.y, radius, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+        }
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    // Update ripples ref to only keep active ones
+    ripplesRef.current = activeRipples;
+
     ctx.restore();
   }, [drawBall]);
 
@@ -290,6 +329,36 @@ export default function BilliardUI({ game: baseGame }: GameUIProps) {
 
     // Subscribe to frame updates for smooth 60fps animation
     game.onFrame((balls) => {
+      // Detect newly pocketed balls and create ripple effects
+      const currentPocketed = new Set(
+        balls.filter((b) => b.pocketed).map((b) => b.id)
+      );
+
+      for (const ball of balls) {
+        if (ball.pocketed && !prevPocketedRef.current.has(ball.id)) {
+          // Find which pocket this ball went into
+          for (const pocket of POCKETS) {
+            const dx = ball.x - pocket.x;
+            const dy = ball.y - pocket.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+
+            if (dist < POCKET_RADIUS * 2) {
+              // Create ripple at this pocket
+              const color = BALL_COLORS[ball.id] || "#FFF";
+              ripplesRef.current.push({
+                x: pocket.x,
+                y: pocket.y,
+                color: color,
+                startTime: performance.now(),
+                duration: 2000, // 600ms ripple animation
+              });
+              break;
+            }
+          }
+        }
+      }
+
+      prevPocketedRef.current = currentPocketed;
       ballsRef.current = balls;
       drawCanvasRef.current();
     });

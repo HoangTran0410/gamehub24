@@ -188,18 +188,47 @@ export default class Billiard extends BaseGame {
     cueBall.vy = Math.sin(angle) * velocity;
   }
 
+  private lastPhysicsTime: number = 0;
+  private physicsAccumulator: number = 0;
+  private readonly PHYSICS_TIMESTEP: number = 1000 / 60; // 16.67ms for 60 FPS
+
   private runPhysicsLoop(): void {
     if (this.animationFrameId) {
       cancelAnimationFrame(this.animationFrameId);
     }
 
-    const step = () => {
-      const allStopped = this.updatePhysics();
+    this.lastPhysicsTime = performance.now();
+    this.physicsAccumulator = 0;
+
+    const step = (currentTime: number) => {
+      const deltaTime = currentTime - this.lastPhysicsTime;
+      this.lastPhysicsTime = currentTime;
+
+      // Cap delta time to prevent spiral of death on slow devices
+      const cappedDelta = Math.min(deltaTime, this.PHYSICS_TIMESTEP * 5);
+      this.physicsAccumulator += cappedDelta;
+
+      let allStopped = false;
+      let physicsRan = false;
+
+      // Run physics updates at fixed 60 FPS timestep
+      while (this.physicsAccumulator >= this.PHYSICS_TIMESTEP) {
+        allStopped = this.updatePhysics();
+        physicsRan = true;
+        this.physicsAccumulator -= this.PHYSICS_TIMESTEP;
+
+        // Early exit if simulation ended
+        if (allStopped) {
+          this.physicsAccumulator = 0;
+          break;
+        }
+      }
 
       // Call frame callback for smooth canvas animation (no React re-render)
       this.onFrameUpdate?.(this.state.balls);
 
-      if (!allStopped) {
+      // Continue loop if physics hasn't run yet OR balls are still moving
+      if (!physicsRan || !allStopped) {
         this.animationFrameId = requestAnimationFrame(step);
       } else {
         this.animationFrameId = null;
