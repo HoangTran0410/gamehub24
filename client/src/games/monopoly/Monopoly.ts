@@ -54,6 +54,7 @@ export default class Monopoly extends BaseGame {
         jailTurns: 0,
         isBankrupt: false,
         isBot: false,
+        moneyHistory: [START_MONEY],
       });
     }
 
@@ -100,10 +101,29 @@ export default class Monopoly extends BaseGame {
 
   // Notify UI and broadcast - creates new state reference for React
   private notifyAndBroadcast(): void {
+    // Sync money history before broadcasting
+    this.state.players.forEach((p) => {
+      // Ensure history exists
+      if (!p.moneyHistory) p.moneyHistory = [];
+
+      // Add current money if different from last entry or empty
+      const lastEntry = p.moneyHistory[p.moneyHistory.length - 1];
+      if (lastEntry !== p.money) {
+        p.moneyHistory.push(p.money);
+        // Cap at 50 items
+        if (p.moneyHistory.length > 50) {
+          p.moneyHistory.shift();
+        }
+      }
+    });
+
     // Create new state object to trigger React re-render
     this.state = {
       ...this.state,
-      players: this.state.players.map((p) => ({ ...p })),
+      players: this.state.players.map((p) => ({
+        ...p,
+        moneyHistory: [...(p.moneyHistory || [])],
+      })),
       properties: this.state.properties.map((p) => ({ ...p })),
       logs: [...this.state.logs],
       tradeOffers: this.state.tradeOffers.map((t) => ({ ...t })),
@@ -398,10 +418,15 @@ export default class Monopoly extends BaseGame {
         if (canAfford && isGoodPrice) {
           this.handleRespondTrade(offer.id, true);
         } else {
-          offer.responseMessage = {
-            en: `I only pay up to ${maxPrice.toLocaleString()}đ`,
-            vi: `Tôi chỉ trả tối đa ${maxPrice.toLocaleString()}đ`,
-          };
+          offer.responseMessage = canAfford
+            ? {
+                en: `I only pay up to ${maxPrice.toLocaleString()}đ`,
+                vi: `Tôi chỉ trả tối đa ${maxPrice.toLocaleString()}đ`,
+              }
+            : {
+                en: `I don't have enough money`,
+                vi: `Tôi không đủ tiền`,
+              };
           this.handleRespondTrade(offer.id, false);
         }
       }
@@ -976,7 +1001,9 @@ export default class Monopoly extends BaseGame {
       ).length;
       const diceTotal =
         (this.state.diceValues?.[0] || 1) + (this.state.diceValues?.[1] || 1);
-      return utilityCount === 2 ? diceTotal * 10 : diceTotal * 4;
+      return (
+        space.baseRent + (utilityCount === 2 ? diceTotal * 10 : diceTotal * 4)
+      );
     }
 
     // Regular property
@@ -1874,6 +1901,7 @@ export default class Monopoly extends BaseGame {
         p.inJail = false;
         p.jailTurns = 0;
         p.isBankrupt = false;
+        p.moneyHistory = [START_MONEY];
       }
     });
     this.state.properties = [];

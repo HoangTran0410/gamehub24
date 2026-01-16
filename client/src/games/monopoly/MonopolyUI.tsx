@@ -89,6 +89,72 @@ export default function MonopolyUI({
   const [expandedPlayerId, setExpandedPlayerId] = useState<
     Record<string, boolean>
   >({});
+  const [tradePlayerId, setTradePlayerId] = useState<string | null>(null);
+
+  // Hover state for visual connection
+  const [hoveredPropertyId, setHoveredPropertyId] = useState<number | null>(
+    null
+  );
+
+  const [lineCoords, setLineCoords] = useState<{
+    x1: number;
+    y1: number;
+    x2: number;
+    y2: number;
+  } | null>(null);
+
+  const gameContainerRef = useRef<HTMLDivElement>(null);
+
+  // Update line coordinates when hovered item changes or property is selected
+  useEffect(() => {
+    let rafId: number;
+    const updateCoords = () => {
+      // Prioritize selected property (modal), then hovered property
+      const targetId = selectedProperty
+        ? selectedProperty.id
+        : hoveredPropertyId;
+      const sourceId = selectedProperty
+        ? "monopoly-property-detail-modal"
+        : `monopoly-property-item-${targetId}`;
+
+      if (targetId === null || !gameContainerRef.current) {
+        setLineCoords(null);
+        return;
+      }
+
+      const boardEl = document.getElementById(
+        `monopoly-board-space-${targetId}`
+      );
+      const sourceEl = document.getElementById(sourceId);
+      const containerEl = gameContainerRef.current;
+
+      if (boardEl && sourceEl && containerEl) {
+        const boardRect = boardEl.getBoundingClientRect();
+        const sourceRect = sourceEl.getBoundingClientRect();
+        const containerRect = containerEl.getBoundingClientRect();
+
+        setLineCoords({
+          x1: sourceRect.left - containerRect.left + sourceRect.width / 2,
+          y1: sourceRect.top - containerRect.top + sourceRect.height / 2,
+          x2: boardRect.left - containerRect.left + boardRect.width / 2,
+          y2: boardRect.top - containerRect.top + boardRect.height / 2,
+        });
+        rafId = requestAnimationFrame(updateCoords);
+      } else {
+        setLineCoords(null);
+      }
+    };
+
+    if (hoveredPropertyId !== null || selectedProperty !== null) {
+      updateCoords();
+    } else {
+      setLineCoords(null);
+    }
+
+    return () => {
+      if (rafId) cancelAnimationFrame(rafId);
+    };
+  }, [hoveredPropertyId, selectedProperty]);
 
   const isRollingRef = useRef(false);
   const lastDiceRef = useRef<number[] | undefined>(game.getState().diceValues);
@@ -177,9 +243,14 @@ export default function MonopolyUI({
       // Update local history logs (accumulate unique logs)
       setHistoryLogs((prevLogs) => {
         const newLogs = newState.logs || [];
+        // Detect reset: if newLogs are empty but we had logs before
+        if (newLogs.length === 0 && prevLogs.length > 0) {
+          return [];
+        }
         const existingIds = new Set(prevLogs.map((l) => l.id));
         const uniqueNewLogs = newLogs.filter((l) => !existingIds.has(l.id));
         if (uniqueNewLogs.length === 0) return prevLogs;
+        // If logs were reset (e.g. game restart), handle gracefully (though line 247 handles it)
         return [...prevLogs, ...uniqueNewLogs];
       });
     });
@@ -275,7 +346,12 @@ export default function MonopolyUI({
     return (
       <div
         key={space.id}
-        className="bg-slate-700 border border-slate-600 relative flex flex-col overflow-hidden cursor-pointer hover:bg-slate-600 transition-colors"
+        id={`monopoly-board-space-${space.id}`}
+        className={`relative flex flex-col overflow-hidden cursor-pointer transition-all duration-300 ${
+          space.id === hoveredPropertyId || space.id === selectedProperty?.id
+            ? "z-[49] scale-110 ring-4 ring-yellow-400 shadow-[0_0_20px_rgba(250,204,21,0.6)] bg-slate-600"
+            : "bg-slate-700 border border-slate-600 hover:bg-slate-600"
+        }`}
         style={{
           gridRow: pos.row + 1,
           gridColumn: pos.col + 1,
@@ -363,7 +439,14 @@ export default function MonopolyUI({
           return (
             <div
               key={prop.spaceId}
-              className="flex items-center gap-1.5 text-[10px] font-medium text-white bg-slate-800/80 px-2 py-1 rounded-md cursor-pointer hover:bg-slate-700 transition-colors border border-slate-600/50 shadow-sm"
+              id={`monopoly-property-item-${space.id}`}
+              onMouseEnter={() => setHoveredPropertyId(space.id)}
+              onMouseLeave={() => setHoveredPropertyId(null)}
+              className={`flex items-center gap-1.5 text-[10px] font-medium text-white px-2 py-1 rounded-md cursor-pointer transition-colors border border-slate-600/50 shadow-sm ${
+                hoveredPropertyId === space.id
+                  ? "bg-slate-600 ring-2 ring-yellow-400"
+                  : "bg-slate-800/80 hover:bg-slate-700"
+              }`}
               onClick={(e) => {
                 e.stopPropagation();
                 setSelectedProperty(space);
@@ -392,6 +475,78 @@ export default function MonopolyUI({
           );
         })}
       </div>
+    );
+  };
+
+  const RenderSparkline = ({
+    data,
+    color,
+    width = 100,
+    height = 30,
+  }: {
+    data: number[];
+    color: string;
+    width?: number;
+    height?: number;
+  }) => {
+    if (!data || data.length < 2) return null;
+
+    const min = Math.min(...data);
+    const max = Math.max(...data);
+    const range = max - min || 1; // Prevent division by zero
+
+    // Use a small padding so points aren't cut off
+    const padding = 2;
+    // Internal coordinate system
+    const effectiveHeight = height - padding * 2;
+    const effectiveWidth = width;
+
+    // Calculate points based on internal width/height (0-100 default)
+    const points = data
+      .map((val, i) => {
+        const x = (i / (data.length - 1)) * effectiveWidth;
+        const y = height - padding - ((val - min) / range) * effectiveHeight;
+        return `${x},${y}`;
+      })
+      .join(" ");
+
+    return (
+      <svg
+        width="100%"
+        height={height}
+        viewBox={`0 0 ${width} ${height}`}
+        preserveAspectRatio="none"
+        className="overflow-visible mt-1"
+      >
+        <polyline
+          fill="none"
+          stroke={color}
+          strokeWidth="2"
+          points={points}
+          vectorEffect="non-scaling-stroke"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        {/* Draw dots at start and end */}
+        <circle
+          cx="0"
+          cy={height - padding - ((data[0] - min) / range) * effectiveHeight}
+          r="2"
+          fill={color}
+          vectorEffect="non-scaling-stroke"
+        />
+        <circle
+          cx={effectiveWidth}
+          cy={
+            height -
+            padding -
+            ((data[data.length - 1] - min) / range) * effectiveHeight
+          }
+          r="2"
+          fill={color}
+          vectorEffect="non-scaling-stroke"
+        />
+      </svg>
     );
   };
 
@@ -451,6 +606,17 @@ export default function MonopolyUI({
                 <span>{myProps.length}</span>
               </div>
 
+              {/* Money History Chart */}
+              <div className="h-8 w-full opacity-70 hover:opacity-100 transition-opacity mt-1">
+                {player.moneyHistory && (
+                  <RenderSparkline
+                    data={player.moneyHistory}
+                    color={player.color}
+                    height={30}
+                  />
+                )}
+              </div>
+
               {/* Property List */}
               {isExpanded && (
                 <div className="mt-2 pt-2 border-t border-slate-500">
@@ -463,6 +629,52 @@ export default function MonopolyUI({
       </div>
     </div>
   );
+
+  const renderBankruptcyWarning = () => {
+    if (!state.pendingAction) return null;
+
+    let requiredAmount = 0;
+    if (state.pendingAction.type === "BUY_DECISION") {
+      const s = BOARD_SPACES[state.pendingAction.spaceId];
+      if (
+        s &&
+        (s.type === "property" || s.type === "railroad" || s.type === "utility")
+      ) {
+        requiredAmount = s.price;
+      }
+    } else if (
+      state.pendingAction.type === "PAY_RENT" ||
+      state.pendingAction.type === "PAY_TAX"
+    ) {
+      requiredAmount = state.pendingAction.amount;
+    }
+
+    if (requiredAmount > (currentPlayer?.money || 0)) {
+      return (
+        <div className="bg-red-900/50 border border-red-500 rounded p-2 mb-3 flex items-center gap-2">
+          <span className="text-xl">⚠️</span>
+          <p className="text-red-200 text-xs text-left">
+            <strong className="block text-red-100">
+              {ti({
+                en: "Insufficient Funds!",
+                vi: "Không đủ tiền!",
+              })}
+            </strong>
+            {ti({
+              en: "Proceeding will result in BANKRUPTCY and LOSS.",
+              vi: "Thực hiện hành động này sẽ dẫn đến PHÁ SẢN và THUA.",
+            })}
+            <br />
+            {ti({
+              en: "Sell or mortgage assets to get money.",
+              vi: "Hãy bán hoặc thế chấp tài sản để có tiền.",
+            })}
+          </p>
+        </div>
+      );
+    }
+    return null;
+  };
 
   const renderGameControls = () => {
     if (state.gamePhase === "waiting") {
@@ -622,6 +834,8 @@ export default function MonopolyUI({
         {/* Pending action modal */}
         {state.pendingAction && isMyTurn && (
           <div className="w-full p-3 bg-slate-700 rounded-lg animate-slide-in">
+            {/* Bankruptcy Warning */}
+            {renderBankruptcyWarning()}
             {state.pendingAction.type === "BUY_DECISION" && (
               <div className="flex flex-col gap-2">
                 <p className="text-white text-center">
@@ -755,12 +969,24 @@ export default function MonopolyUI({
       : null;
     const isMyProperty = ownership?.ownerId === currentUserId;
 
+    const utilitiesCount = state.properties.filter(
+      (p) =>
+        p.ownerId === currentUserId &&
+        BOARD_SPACES[p.spaceId].type === "utility"
+    ).length;
+    const railwaysCount = state.properties.filter(
+      (p) =>
+        p.ownerId === currentUserId &&
+        BOARD_SPACES[p.spaceId].type === "railroad"
+    ).length;
+
     return (
       <div
         className="fixed inset-0 z-50 flex md:items-center items-start justify-center justify-start bg-black/60 p-4"
         onClick={() => setSelectedProperty(null)}
       >
         <div
+          id="monopoly-property-detail-modal"
           className="bg-slate-800 rounded-xl p-4 max-w-sm w-full shadow-2xl"
           onClick={(e) => e.stopPropagation()}
         >
@@ -815,22 +1041,15 @@ export default function MonopolyUI({
                 {selectedProperty.taxAmount.toLocaleString()}đ
               </p>
             )}
-            {(selectedProperty.type === "railroad" ||
-              selectedProperty.type === "utility") &&
+            {selectedProperty.type === "railroad" &&
               selectedProperty.baseRent && (
                 <p className="mt-3 pt-3">
                   💵 {ti({ en: "Rent", vi: "Thuê" })}:{" "}
                   {selectedProperty.baseRent.toLocaleString()}
-                  {selectedProperty.type === "utility" ? "x 🎲" : "đ"}
+                  {/* {selectedProperty.type === "utility" ? "x 🎲" : "đ"} */}
                   {selectedProperty.type === "railroad"
                     ? " x" +
-                      state.properties.filter(
-                        (p) =>
-                          state.properties.find(
-                            (p) => p.spaceId === selectedProperty.id
-                          )?.ownerId === p.ownerId &&
-                          BOARD_SPACES[p.spaceId].type === "railroad"
-                      ).length +
+                      railwaysCount +
                       ts({
                         en: " (multiplied by railroad count)",
                         vi: " (nhân số ga sở hữu)",
@@ -838,6 +1057,62 @@ export default function MonopolyUI({
                     : ""}
                 </p>
               )}
+
+            {selectedProperty.type === "railroad" && (
+              <p>
+                💵 {ti({ en: "Rent", vi: "Thuê" })}:{" "}
+                {selectedProperty.baseRent.toLocaleString()}
+              </p>
+            )}
+
+            {selectedProperty.type === "utility" && (
+              <>
+                <p>
+                  💵 {ti({ en: "Rent", vi: "Thuê" })}:{" "}
+                  {selectedProperty.baseRent.toLocaleString()}
+                </p>
+                <div className="mt-2 text-xs flex flex-col gap-1">
+                  {/* Base Rent (0 utilities) */}
+                  <div
+                    className={`flex justify-between px-2 py-1 rounded ${
+                      !ownership || utilitiesCount === 0
+                        ? "bg-green-900/40 text-green-300 font-bold border border-green-700/50"
+                        : ""
+                    }`}
+                  >
+                    <span>{ti({ en: "Base Rent", vi: "Thuê cơ bản" })}</span>
+                    <span>{selectedProperty.baseRent.toLocaleString()}đ</span>
+                  </div>
+                  {/* Base Rent (1 utilities) */}
+                  <div
+                    className={`flex justify-between px-2 py-1 rounded ${
+                      !ownership || utilitiesCount === 1
+                        ? "bg-green-900/40 text-green-300 font-bold border border-green-700/50"
+                        : ""
+                    }`}
+                  >
+                    <span>{ti({ en: "1 Utility", vi: "1 Cụm" })}</span>
+                    <span>
+                      {selectedProperty.baseRent.toLocaleString()}đ + 4x 🎲
+                    </span>
+                  </div>
+                  {/* Base Rent (2 utilities) */}
+                  <div
+                    className={`flex justify-between px-2 py-1 rounded ${
+                      !ownership || utilitiesCount === 2
+                        ? "bg-green-900/40 text-green-300 font-bold border border-green-700/50"
+                        : ""
+                    }`}
+                  >
+                    <span>{ti({ en: "2 Utilities", vi: "2 Cụm" })}</span>
+                    <span>
+                      {selectedProperty.baseRent.toLocaleString()}đ + 10x 🎲
+                    </span>
+                  </div>
+                </div>
+              </>
+            )}
+
             {selectedProperty.type === "property" && selectedProperty.rent && (
               <div className="mt-2 text-xs flex flex-col gap-1">
                 {/* Base Rent (0 houses) */}
@@ -1024,9 +1299,13 @@ export default function MonopolyUI({
                   <select
                     className="flex-1 bg-slate-700 text-white text-xs rounded p-1 outline-none"
                     id="trade-player-select"
+                    value={tradePlayerId || ""}
+                    onChange={(e) => setTradePlayerId(e.target.value)}
                   >
                     {state.players
-                      .filter((p) => p.id && p.id !== currentUserId)
+                      .filter(
+                        (p) => p.id && p.id !== currentUserId && !p.isBankrupt
+                      )
                       .map((p) => (
                         <option key={p.id} value={p.id!}>
                           {p.username}
@@ -1768,7 +2047,10 @@ export default function MonopolyUI({
   };
 
   return (
-    <div className="flex flex-col lg:flex-row gap-2 p-0 w-full max-w-6xl mx-auto">
+    <div
+      className="relative flex flex-col lg:flex-row gap-2 p-0 w-full max-w-6xl mx-auto"
+      ref={gameContainerRef}
+    >
       {renderTradeOffers()}
       <style dangerouslySetInnerHTML={{ __html: animationStyles }} />
 
@@ -1829,6 +2111,51 @@ export default function MonopolyUI({
       >
         <BookOpen className="w-6 h-6 text-yellow-500" />
       </button>
+
+      {/* Hover Connection Line Layer */}
+      {lineCoords && (
+        <svg className="absolute inset-0 pointer-events-none z-[49] overflow-visible w-full h-full">
+          <defs>
+            <marker
+              id="arrowhead"
+              markerWidth="10"
+              markerHeight="7"
+              refX="9"
+              refY="3.5"
+              orient="auto"
+            >
+              <polygon points="0 0, 10 3.5, 0 7" fill="#FACC15" />
+            </marker>
+          </defs>
+          <line
+            x1={lineCoords.x1}
+            y1={lineCoords.y1}
+            x2={lineCoords.x2}
+            y2={lineCoords.y2}
+            stroke="#FACC15"
+            strokeWidth="3"
+            strokeDasharray="5,5"
+            markerEnd="url(#arrowhead)"
+            className="drop-shadow-md"
+          >
+            <animate
+              attributeName="stroke-dashoffset"
+              from="100"
+              to="0"
+              dur="1s"
+              repeatCount="indefinite"
+            />
+          </line>
+          <circle cx={lineCoords.x1} cy={lineCoords.y1} r="4" fill="#FACC15">
+            <animate
+              attributeName="opacity"
+              values="0.5;1;0.5"
+              dur="1s"
+              repeatCount="indefinite"
+            />
+          </circle>
+        </svg>
+      )}
     </div>
   );
 }

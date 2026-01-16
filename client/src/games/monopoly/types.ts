@@ -93,6 +93,7 @@ export interface MonopolyPlayer {
   jailTurns: number;
   isBankrupt: boolean;
   isBot: boolean;
+  moneyHistory: number[];
 }
 
 // Chance/Community Chest cards
