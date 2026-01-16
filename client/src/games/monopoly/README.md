@@ -90,7 +90,7 @@ flowchart LR
     IsMyOwn -- Yes --> Relax[Relax / Build Houses]
     IsMyOwn -- No --> Mortgaged{Mortgaged?}
 
-    Mortgaged -- Yes --> Free[No Rent (Free)]
+    Mortgaged -- Yes --> Free[No Rent]
     Mortgaged -- No --> Rent[Calculate & Pay Rent]
 ```
 
