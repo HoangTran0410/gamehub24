@@ -25,20 +25,54 @@ export type SpaceType =
   | "gotojail";
 
 // Board space interface
-export interface BoardSpace {
+// Base interface for all spaces
+interface BaseSpace {
   id: number;
   name: string | { en: string; vi: string };
+  description?: string | { en: string; vi: string };
   type: SpaceType;
-  // Property-specific fields
-  color?: PropertyColor;
-  price?: number;
-  rent?: number[]; // [base, 1house, 2house, 3house, 4house, hotel]
-  houseCost?: number;
-  // Railroad/Utility specific
-  baseRent?: number;
-  // Tax specific
-  taxAmount?: number;
 }
+
+// 1. Color Property
+export interface PropertySpace extends BaseSpace {
+  type: "property";
+  color: PropertyColor;
+  price: number;
+  rent: number[]; // [base, 1house, 2house, 3house, 4house, hotel]
+  houseCost: number;
+}
+
+// 2. Railroad
+export interface RailroadSpace extends BaseSpace {
+  type: "railroad";
+  price: number;
+  baseRent: number;
+}
+
+// 3. Utility
+export interface UtilitySpace extends BaseSpace {
+  type: "utility";
+  price: number;
+  baseRent: number; // multiplier
+}
+
+// 4. Tax
+export interface TaxSpace extends BaseSpace {
+  type: "tax";
+  taxAmount: number;
+}
+
+// 5. Action/Corner Spaces (Go, Jail, etc)
+export interface OtherSpace extends BaseSpace {
+  type: "go" | "chance" | "chest" | "jail" | "parking" | "gotojail";
+}
+
+export type BoardSpace =
+  | PropertySpace
+  | RailroadSpace
+  | UtilitySpace
+  | TaxSpace
+  | OtherSpace;
 
 // Property ownership
 export interface OwnedProperty {
@@ -242,11 +276,16 @@ export type MonopolyAction =
   | RequestSyncAction
   | OfferTradeAction
   | RespondTradeAction
-  | CancelTradeAction;
+  | CancelTradeAction
+  | ResetGameAction;
+
+export interface ResetGameAction {
+  type: "RESET_GAME";
+}
 
 // === Constants ===
-export const START_MONEY = 15000; // 15,000đ
-export const SALARY = 2000; // Passing GO
+export const START_MONEY = 30000;
+export const SALARY = 2000;
 export const JAIL_FINE = 500;
 export const MAX_JAIL_TURNS = 3;
 export const MAX_HOUSES = 4;
@@ -258,7 +297,15 @@ export const PLAYER_COLORS = ["#ef4444", "#3b82f6", "#22c55e", "#f59e0b"];
 // === Board Spaces (40 spaces, clockwise from GO) ===
 export const BOARD_SPACES: BoardSpace[] = [
   // Bottom row (right to left when viewing)
-  { id: 0, name: { en: "GO", vi: "KHỞI HÀNH" }, type: "go" },
+  {
+    id: 0,
+    name: { en: "GO", vi: "KHỞI HÀNH" },
+    type: "go",
+    description: {
+      en: "Passing here earns you " + SALARY,
+      vi: "Đi qua đây bạn sẽ nhận được " + SALARY,
+    },
+  },
   {
     id: 1,
     name: { en: "Hang Bai", vi: "Hàng Bài" },
@@ -320,7 +367,25 @@ export const BOARD_SPACES: BoardSpace[] = [
     houseCost: 500,
   },
   // Left column (bottom to top)
-  { id: 10, name: { en: "Jail", vi: "Thăm Tù" }, type: "jail" },
+  {
+    id: 10,
+    name: { en: "Jail", vi: "Nhà Tù" },
+    type: "jail",
+    description: {
+      en:
+        "If you pass it: Nothing happen.\nIf you are in jail: Pay " +
+        JAIL_FINE +
+        "đ, or roll double, or use a card, or wait " +
+        MAX_JAIL_TURNS +
+        " turns to leave jail",
+      vi:
+        "Nếu đi qua (thăm tù): Không sao.\nNếu trong tù: Nộp tiền " +
+        JAIL_FINE +
+        "đ, hoặc đổ đôi, hoặc dùng thẻ, hoặc chờ " +
+        MAX_JAIL_TURNS +
+        " lượt để ra tù.",
+    },
+  },
   {
     id: 11,
     name: { en: "Pho Hue", vi: "Phố Huế" },
@@ -394,6 +459,10 @@ export const BOARD_SPACES: BoardSpace[] = [
   {
     id: 20,
     name: { en: "Free Parking", vi: "Đỗ Xe Miễn Phí" },
+    description: {
+      en: "Nothing happens here.",
+      vi: "Chỉ là chỗ nghỉ, không có tác dụng",
+    },
     type: "parking",
   },
   {
@@ -466,7 +535,15 @@ export const BOARD_SPACES: BoardSpace[] = [
     houseCost: 1500,
   },
   // Right column (top to bottom)
-  { id: 30, name: { en: "Go To Jail", vi: "Vào Tù" }, type: "gotojail" },
+  {
+    id: 30,
+    name: { en: "Go To Jail", vi: "Vào Tù" },
+    type: "gotojail",
+    description: {
+      en: "Move to Jail cell",
+      vi: "Được chuyển đến ô Nhà Tù",
+    },
+  },
   {
     id: 31,
     name: { en: "Tran Hung Dao", vi: "Trần Hưng Đạo" },
@@ -596,6 +673,37 @@ export const CHANCE_CARDS: Card[] = [
     },
     action: { type: "REPAIRS", perHouse: 250, perHotel: 1000 },
   },
+  {
+    id: 11,
+    text: { en: "Advance to Ham Nghi", vi: "Đi đến Hàm Nghi" },
+    action: { type: "MOVE", position: 18 },
+  },
+  {
+    id: 12,
+    text: { en: "Advance to Tran Hung Dao", vi: "Đi đến Trần Hưng Đạo" },
+    action: { type: "MOVE", position: 31 },
+  },
+  {
+    id: 13,
+    text: { en: "Advance to Thu Thiem", vi: "Đi đến Thủ Thiêm" },
+    action: { type: "MOVE", position: 39 },
+  },
+  {
+    id: 14,
+    text: {
+      en: "Drunk driving fine. Pay 200đ",
+      vi: "Phạt lái xe khi say. Trả 200đ",
+    },
+    action: { type: "PAY", amount: 200 },
+  },
+  {
+    id: 15,
+    text: {
+      en: "Won crossword competition. Collect 1000đ",
+      vi: "Thắng giải ô chữ. Nhận 1000đ",
+    },
+    action: { type: "COLLECT", amount: 1000 },
+  },
 ];
 
 // Community Chest cards
@@ -652,5 +760,34 @@ export const CHEST_CARDS: Card[] = [
     id: 10,
     text: { en: "Inherit 1000đ", vi: "Thừa kế 1000đ" },
     action: { type: "COLLECT", amount: 1000 },
+  },
+  {
+    id: 11,
+    text: {
+      en: "Life insurance matures. Collect 1000đ",
+      vi: "Đáo hạn bảo hiểm nhân thọ. Nhận 1000đ",
+    },
+    action: { type: "COLLECT", amount: 1000 },
+  },
+  {
+    id: 12,
+    text: { en: "Pay school fees 1500đ", vi: "Nộp học phí 1500đ" },
+    action: { type: "PAY", amount: 1500 },
+  },
+  {
+    id: 13,
+    text: {
+      en: "Receive consultancy fee. Collect 250đ",
+      vi: "Nhận tiền tư vấn. Nhận 250đ",
+    },
+    action: { type: "COLLECT", amount: 250 },
+  },
+  {
+    id: 14,
+    text: {
+      en: "Street repairs: 400đ/house, 1150đ/hotel",
+      vi: "Tu sửa đường phố: 400đ/nhà, 1150đ/khách sạn",
+    },
+    action: { type: "REPAIRS", perHouse: 400, perHotel: 1150 },
   },
 ];

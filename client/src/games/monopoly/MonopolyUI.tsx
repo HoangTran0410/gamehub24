@@ -5,6 +5,7 @@ import {
   type BoardSpace,
   type PropertyColor,
   type GameLog,
+  type OwnedProperty,
   BOARD_SPACES,
   PROPERTY_COLORS,
   CHANCE_CARDS,
@@ -12,6 +13,7 @@ import {
 } from "./types";
 import {
   Play,
+  RotateCcw,
   RefreshCw,
   Dices,
   Home,
@@ -84,6 +86,9 @@ export default function MonopolyUI({
   const [dismissedOffers, setDismissedOffers] = useState<string[]>([]);
   const [decliningOfferId, setDecliningOfferId] = useState<string | null>(null);
   const [declineMessage, setDeclineMessage] = useState("");
+  const [expandedPlayerId, setExpandedPlayerId] = useState<
+    Record<string, boolean>
+  >({});
 
   const isRollingRef = useRef(false);
   const lastDiceRef = useRef<number[] | undefined>(game.getState().diceValues);
@@ -284,7 +289,7 @@ export default function MonopolyUI({
         onClick={() => setSelectedProperty(space)}
       >
         {/* Property color bar */}
-        {space.color && (
+        {space.type === "property" && space.color && (
           <div
             className="w-full h-[15%] min-h-[2px] flex-shrink-0"
             style={{ backgroundColor: getPropertyColorStyle(space.color) }}
@@ -305,14 +310,18 @@ export default function MonopolyUI({
               <div
                 className="w-2 h-1.5 sm:w-3 sm:h-2 bg-red-500 rounded-sm"
                 title="Hotel"
-              />
+              >
+                {/* 🏨 */}
+              </div>
             ) : (
               Array.from({ length: ownership.houses }).map((_, i) => (
                 <div
                   key={i}
                   className="w-1 h-1 sm:w-1.5 sm:h-1.5 bg-green-500 rounded-sm"
                   title="House"
-                />
+                >
+                  {/* 🏠 */}
+                </div>
               ))
             )}
           </div>
@@ -337,6 +346,55 @@ export default function MonopolyUI({
     );
   };
 
+  const renderPropertyList = (properties: OwnedProperty[]) => {
+    if (properties.length === 0) {
+      return (
+        <p className="text-gray-400 text-xs italic pl-1">
+          {ti({ en: "No properties", vi: "Chưa có tài sản" })}
+        </p>
+      );
+    }
+
+    return (
+      <div className="flex flex-wrap gap-1 mt-1">
+        {properties.map((prop) => {
+          const space = BOARD_SPACES[prop.spaceId];
+          if (!space) return null;
+          return (
+            <div
+              key={prop.spaceId}
+              className="flex items-center gap-1.5 text-[10px] font-medium text-white bg-slate-800/80 px-2 py-1 rounded-md cursor-pointer hover:bg-slate-700 transition-colors border border-slate-600/50 shadow-sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                setSelectedProperty(space);
+              }}
+            >
+              <div
+                className="w-2 h-2 rounded-full shadow-sm"
+                style={{
+                  backgroundColor:
+                    space.type === "property" && space.color
+                      ? getPropertyColorStyle(space.color)
+                      : "#666",
+                }}
+              />
+              <span className="truncate max-w-[80px]">{ti(space.name)}</span>
+              {prop.houses > 0 && (
+                <span className="text-yellow-400 text-[9px] ml-0.5">
+                  {prop.houses === 5 ? "🏨" : `🏠${prop.houses}`}
+                </span>
+              )}
+
+              {prop.mortgaged && (
+                <Lock className="w-2.5 h-2.5 text-red-400 ml-0.5" />
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   const renderPlayerPanel = () => (
     <div className="bg-slate-800 rounded-lg p-3 w-full">
       <h3 className="text-white font-bold mb-2 text-sm">
@@ -349,16 +407,23 @@ export default function MonopolyUI({
           const myProps = state.properties.filter(
             (p) => p.ownerId === player.id
           );
+          const isExpanded = expandedPlayerId[player.id || ""];
 
           return (
             <div
               key={index}
-              className={`p-2 rounded-lg ${
+              className={`p-2 rounded-lg transition-colors cursor-pointer ${
                 isActive
                   ? "bg-slate-600 ring-2 ring-yellow-400"
-                  : "bg-slate-700"
+                  : "bg-slate-700 hover:bg-slate-600"
               }
                 ${player.isBankrupt ? "opacity-50" : ""}`}
+              onClick={() =>
+                setExpandedPlayerId((prev) => ({
+                  ...prev,
+                  [player.id || ""]: !isExpanded,
+                }))
+              }
             >
               <div className="flex items-center gap-2 mb-1">
                 <div
@@ -385,6 +450,13 @@ export default function MonopolyUI({
                 <Home className="w-3 h-3 ml-2" />
                 <span>{myProps.length}</span>
               </div>
+
+              {/* Property List */}
+              {isExpanded && (
+                <div className="mt-2 pt-2 border-t border-slate-500">
+                  {renderPropertyList(myProps)}
+                </div>
+              )}
             </div>
           );
         })}
@@ -465,10 +537,11 @@ export default function MonopolyUI({
           </p>
           {isHost && (
             <button
-              onClick={() => game.reset()}
+              onClick={() => game.requestResetGame()}
               className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg"
             >
-              <RefreshCw className="w-4 h-4" /> Play Again
+              <RefreshCw className="w-4 h-4" />{" "}
+              {ti({ en: "Play Again", vi: "Chơi lại" })}
             </button>
           )}
         </div>
@@ -535,7 +608,8 @@ export default function MonopolyUI({
           {isMyTurn &&
             state.hasRolled &&
             !state.canRollAgain &&
-            !state.pendingAction && (
+            !state.pendingAction &&
+            !rolling && (
               <button
                 onClick={() => game.requestEndTurn()}
                 className="px-4 py-2 bg-gray-600 hover:bg-gray-500 text-white rounded-lg transition-colors"
@@ -554,9 +628,19 @@ export default function MonopolyUI({
                   {ti({ en: "Buy", vi: "Mua" })}{" "}
                   {ti(BOARD_SPACES[state.pendingAction.spaceId]?.name)}{" "}
                   {ti({ en: "for", vi: "giá" })}{" "}
-                  {BOARD_SPACES[
-                    state.pendingAction.spaceId
-                  ]?.price?.toLocaleString()}
+                  {(() => {
+                    const s = BOARD_SPACES[state.pendingAction.spaceId];
+                    if (
+                      s &&
+                      (s.type === "property" ||
+                        s.type === "railroad" ||
+                        s.type === "utility") &&
+                      s.price
+                    ) {
+                      return s.price.toLocaleString();
+                    }
+                    return "";
+                  })()}
                   đ?
                 </p>
                 <div className="flex gap-2 justify-center">
@@ -634,6 +718,28 @@ export default function MonopolyUI({
             {ti(state.lastAction)}
           </p>
         )}
+
+        {isHost && (
+          <button
+            onClick={async () => {
+              if (
+                await showConfirm(
+                  ts({
+                    en: "Start a new game? Current progress will be lost.",
+                    vi: "Bắt đầu ván mới? Tiến trình hiện tại sẽ bị mất.",
+                  }),
+                  ts({ en: "New Game", vi: "Ván mới" })
+                )
+              ) {
+                game.requestResetGame();
+              }
+            }}
+            className="px-4 py-2 bg-slate-600 hover:bg-slate-500 text-white rounded-lg transition-colors flex items-center gap-2"
+            title={ti({ en: "New Game", vi: "Ván mới" }) as string}
+          >
+            <RotateCcw className="w-4 h-4" />{" "}
+          </button>
+        )}
       </div>
     );
   };
@@ -659,7 +765,7 @@ export default function MonopolyUI({
           onClick={(e) => e.stopPropagation()}
         >
           {/* Color header */}
-          {selectedProperty.color && (
+          {selectedProperty.type === "property" && selectedProperty.color && (
             <div
               className="h-8 rounded-t-lg -mx-4 -mt-4 mb-3"
               style={{
@@ -671,44 +777,143 @@ export default function MonopolyUI({
           <h3 className="text-white font-bold text-xl mb-2">
             {ti(selectedProperty.name)}
           </h3>
-          <p className="text-gray-400 text-sm mb-3">
-            {ti(selectedProperty.name)}
-          </p>
 
-          {selectedProperty.price && (
-            <div className="text-gray-300 space-y-1 text-sm">
-              <p>
-                💰 {ti({ en: "Price", vi: "Giá" })}:{" "}
-                {selectedProperty.price.toLocaleString()}đ
-              </p>
-              {selectedProperty.rent && (
-                <>
-                  <p>
-                    🏠 {ti({ en: "Rent", vi: "Thuê" })}:{" "}
-                    {selectedProperty.rent[0].toLocaleString()}đ
-                  </p>
-                  <p>
-                    {ti({ en: "With houses:", vi: "Với nhà:" })}{" "}
-                    {selectedProperty.rent
-                      .slice(1, 5)
-                      .map((r) => r.toLocaleString())
-                      .join(" / ")}
-                    đ
-                  </p>
-                  <p>
-                    🏨 {ti({ en: "Hotel", vi: "Khách sạn" })}:{" "}
-                    {selectedProperty.rent[5]?.toLocaleString()}đ
-                  </p>
-                </>
-              )}
-              {selectedProperty.houseCost && (
+          {selectedProperty.description && (
+            <ul className="text-gray-300 text-sm">
+              {ts(selectedProperty.description)
+                .split("\n")
+                .map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+            </ul>
+          )}
+
+          {selectedProperty.type === "chest" && renderChestCards()}
+
+          {selectedProperty.type === "chance" && renderChanceCards()}
+
+          <div className="text-gray-300 space-y-1 text-sm">
+            {(selectedProperty.type === "property" ||
+              selectedProperty.type === "railroad" ||
+              selectedProperty.type === "utility") &&
+              selectedProperty.price && (
                 <p>
-                  🔨 {ti({ en: "House cost", vi: "Giá nhà" })}:{" "}
+                  💰 {ti({ en: "Price", vi: "Giá mua" })}:{" "}
+                  {selectedProperty.price.toLocaleString()}đ
+                </p>
+              )}
+            {selectedProperty.type === "property" &&
+              selectedProperty.houseCost && (
+                <p>
+                  🔨 {ti({ en: "Build house", vi: "Giá xây nhà" })}:{" "}
                   {selectedProperty.houseCost.toLocaleString()}đ
                 </p>
               )}
-            </div>
-          )}
+            {selectedProperty.type === "tax" && selectedProperty.taxAmount && (
+              <p>
+                💰 {ti({ en: "Tax", vi: "Thuế" })}:{" "}
+                {selectedProperty.taxAmount.toLocaleString()}đ
+              </p>
+            )}
+            {(selectedProperty.type === "railroad" ||
+              selectedProperty.type === "utility") &&
+              selectedProperty.baseRent && (
+                <p className="mt-3 pt-3">
+                  💵 {ti({ en: "Rent", vi: "Thuê" })}:{" "}
+                  {selectedProperty.baseRent.toLocaleString()}
+                  {selectedProperty.type === "utility" ? "x 🎲" : "đ"}
+                  {selectedProperty.type === "railroad"
+                    ? " x" +
+                      state.properties.filter(
+                        (p) =>
+                          state.properties.find(
+                            (p) => p.spaceId === selectedProperty.id
+                          )?.ownerId === p.ownerId &&
+                          BOARD_SPACES[p.spaceId].type === "railroad"
+                      ).length +
+                      ts({
+                        en: " (multiplied by railroad count)",
+                        vi: " (nhân số ga sở hữu)",
+                      })
+                    : ""}
+                </p>
+              )}
+            {selectedProperty.type === "property" && selectedProperty.rent && (
+              <div className="mt-2 text-xs flex flex-col gap-1">
+                {/* Base Rent (0 houses) */}
+                <div
+                  className={`flex justify-between px-2 py-1 rounded ${
+                    !ownership || ownership.houses === 0
+                      ? "bg-green-900/40 text-green-300 font-bold border border-green-700/50"
+                      : ""
+                  }`}
+                >
+                  <span>{ti({ en: "Rent", vi: "Thuê" })}</span>
+                  <span>{selectedProperty.rent[0].toLocaleString()}đ</span>
+                </div>
+
+                {/* 1 House */}
+                <div
+                  className={`flex justify-between px-2 py-1 rounded ${
+                    ownership?.houses === 1
+                      ? "bg-green-900/40 text-green-300 font-bold border border-green-700/50"
+                      : ""
+                  }`}
+                >
+                  <span>{ti({ en: "With 1 House", vi: "Với 1 Nhà" })}</span>
+                  <span>{selectedProperty.rent[1].toLocaleString()}đ</span>
+                </div>
+
+                {/* 2 Houses */}
+                <div
+                  className={`flex justify-between px-2 py-1 rounded ${
+                    ownership?.houses === 2
+                      ? "bg-green-900/40 text-green-300 font-bold border border-green-700/50"
+                      : ""
+                  }`}
+                >
+                  <span>{ti({ en: "With 2 Houses", vi: "Với 2 Nhà" })}</span>
+                  <span>{selectedProperty.rent[2].toLocaleString()}đ</span>
+                </div>
+
+                {/* 3 Houses */}
+                <div
+                  className={`flex justify-between px-2 py-1 rounded ${
+                    ownership?.houses === 3
+                      ? "bg-green-900/40 text-green-300 font-bold border border-green-700/50"
+                      : ""
+                  }`}
+                >
+                  <span>{ti({ en: "With 3 Houses", vi: "Với 3 Nhà" })}</span>
+                  <span>{selectedProperty.rent[3].toLocaleString()}đ</span>
+                </div>
+
+                {/* 4 Houses */}
+                <div
+                  className={`flex justify-between px-2 py-1 rounded ${
+                    ownership?.houses === 4
+                      ? "bg-green-900/40 text-green-300 font-bold border border-green-700/50"
+                      : ""
+                  }`}
+                >
+                  <span>{ti({ en: "With 4 Houses", vi: "Với 4 Nhà" })}</span>
+                  <span>{selectedProperty.rent[4].toLocaleString()}đ</span>
+                </div>
+
+                {/* Hotel */}
+                <div
+                  className={`flex justify-between px-2 py-1 rounded ${
+                    ownership?.houses === 5
+                      ? "bg-green-900/40 text-green-300 font-bold border border-green-700/50"
+                      : ""
+                  }`}
+                >
+                  <span>{ti({ en: "With Hotel", vi: "Với Khách sạn" })}</span>
+                  <span>{selectedProperty.rent[5]?.toLocaleString()}đ</span>
+                </div>
+              </div>
+            )}
+          </div>
 
           {owner && (
             <div className="mt-3 pt-3 border-t border-slate-600">
@@ -745,13 +950,17 @@ export default function MonopolyUI({
               {/* Sell House */}
               {ownership &&
                 ownership.houses > 0 &&
+                selectedProperty.type === "property" &&
                 selectedProperty.houseCost && (
                   <button
                     onClick={() => game.requestSellHouse(selectedProperty.id)}
                     className="w-full px-3 py-1.5 bg-orange-700 hover:bg-orange-600 text-white rounded text-xs"
                   >
                     {ti({ en: "Sell House", vi: "Bán nhà" })} (+
-                    {(selectedProperty.houseCost / 2).toLocaleString()}đ)
+                    {selectedProperty.houseCost
+                      ? (selectedProperty.houseCost / 2).toLocaleString()
+                      : 0}
+                    đ)
                   </button>
                 )}
 
@@ -759,6 +968,9 @@ export default function MonopolyUI({
               {ownership &&
                 !ownership.mortgaged &&
                 ownership.houses === 0 &&
+                (selectedProperty.type === "property" ||
+                  selectedProperty.type === "railroad" ||
+                  selectedProperty.type === "utility") &&
                 selectedProperty.price && (
                   <button
                     onClick={async () => {
@@ -768,8 +980,12 @@ export default function MonopolyUI({
                       if (
                         await showConfirm(
                           ts({
-                            en: `Mortgage ${selectedProperty.name} for ${price}?`,
-                            vi: `Bạn có chắc chắn muốn thế chấp ${selectedProperty.name} với giá ${price}?`,
+                            en: `Mortgage ${ts(
+                              selectedProperty.name
+                            )} for ${price}?`,
+                            vi: `Bạn có chắc chắn muốn thế chấp ${ts(
+                              selectedProperty.name
+                            )} với giá ${price}?`,
                           }),
                           ts({ en: "Mortgage", vi: "Thế chấp" })
                         )
@@ -784,15 +1000,20 @@ export default function MonopolyUI({
                   </button>
                 )}
 
-              {ownership && ownership.mortgaged && selectedProperty.price && (
-                <button
-                  onClick={() => game.requestUnmortgage(selectedProperty.id)}
-                  className="w-full px-3 py-1.5 bg-blue-700 hover:bg-blue-600 text-white rounded text-xs"
-                >
-                  {ti({ en: "Unmortgage", vi: "Chuộc lại" })} (-
-                  {((selectedProperty.price / 2) * 1.1).toLocaleString()}đ)
-                </button>
-              )}
+              {ownership &&
+                ownership.mortgaged &&
+                (selectedProperty.type === "property" ||
+                  selectedProperty.type === "railroad" ||
+                  selectedProperty.type === "utility") &&
+                selectedProperty.price && (
+                  <button
+                    onClick={() => game.requestUnmortgage(selectedProperty.id)}
+                    className="w-full px-3 py-1.5 bg-blue-700 hover:bg-blue-600 text-white rounded text-xs"
+                  >
+                    {ti({ en: "Unmortgage", vi: "Chuộc lại" })} (-
+                    {((selectedProperty.price / 2) * 1.1).toLocaleString()}đ)
+                  </button>
+                )}
 
               {/* Trade With Player */}
               <div className="pt-2">
@@ -855,7 +1076,7 @@ export default function MonopolyUI({
               <div className="flex gap-1">
                 <input
                   type="number"
-                  placeholder="Price"
+                  placeholder={ts({ en: "Price", vi: "Giá" })}
                   className="flex-1 bg-slate-700 text-white text-xs rounded p-1 outline-none"
                   id="buy-price-input"
                 />
@@ -885,6 +1106,7 @@ export default function MonopolyUI({
 
           <div className="flex gap-2 mt-4">
             {isMyProperty &&
+              selectedProperty.type === "property" &&
               selectedProperty.color &&
               selectedProperty.houseCost && (
                 <div className="flex-1">
@@ -910,7 +1132,10 @@ export default function MonopolyUI({
                           }`}
                         >
                           {ti({ en: "Build House", vi: "Xây nhà" })} (
-                          {selectedProperty.houseCost?.toLocaleString()}đ)
+                          {selectedProperty.houseCost
+                            ? selectedProperty.houseCost.toLocaleString()
+                            : 0}
+                          đ)
                         </button>
                         {(!validation.allowed || !isMyTurn) && (
                           <p className="text-[10px] text-red-400 text-center leading-tight">
@@ -949,39 +1174,7 @@ export default function MonopolyUI({
           <h3 className="text-white font-bold mb-2 text-sm">
             {ti({ en: "My Properties", vi: "Tài sản của tôi" })}
           </h3>
-          <div className="flex flex-wrap gap-1">
-            {game.getPlayerProperties(currentUserId).map((prop) => {
-              const space = BOARD_SPACES[prop.spaceId];
-              return (
-                <div
-                  key={prop.spaceId}
-                  className="px-2 py-1 rounded text-xs text-white cursor-pointer hover:brightness-110 transition-all"
-                  style={{
-                    backgroundColor: space?.color
-                      ? getPropertyColorStyle(space.color)
-                      : "#4B5563",
-                  }}
-                  onClick={() => setSelectedProperty(space || null)}
-                  title={(ti(space?.name) as string) || ""}
-                >
-                  {(ti(space?.name) as string) || ""}
-                  {prop.houses > 0 && (
-                    <span className="ml-1">
-                      {prop.houses === 5 ? "🏨" : "🏠".repeat(prop.houses)}
-                    </span>
-                  )}
-                </div>
-              );
-            })}
-            {game.getPlayerProperties(currentUserId).length === 0 && (
-              <p className="text-gray-400 text-xs">
-                {ti({
-                  en: "No properties yet",
-                  vi: "Chưa có tài sản nào",
-                })}
-              </p>
-            )}
-          </div>
+          {renderPropertyList(game.getPlayerProperties(currentUserId))}
         </div>
       )
     );
@@ -1046,6 +1239,52 @@ export default function MonopolyUI({
     );
   };
 
+  const renderChanceCards = () => {
+    return (
+      <div className="mb-8">
+        <h3 className="text-lg font-bold text-orange-400 mb-4 border-b border-orange-400/30 pb-2">
+          {ti({ en: "Chance Cards", vi: "Thẻ Cơ Hội" })} (?)
+        </h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+          {CHANCE_CARDS.map((card) => (
+            <div
+              key={card.id}
+              className="bg-slate-700 border-l-2 border-orange-500 p-2 rounded text-xs flex flex-col justify-between h-full"
+            >
+              <p className="text-white font-medium">{ti(card.text)}</p>
+              <p className="text-[10px] text-gray-400 uppercase">
+                {card.action.type.replace(/_/g, " ")}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  const renderChestCards = () => {
+    return (
+      <div className="mb-4">
+        <h3 className="text-lg font-bold text-yellow-400 mb-4 border-b border-yellow-400/30 pb-2">
+          {ti({ en: "Community Chest Cards", vi: "Thẻ Khí Vận" })} (chest)
+        </h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+          {CHEST_CARDS.map((card) => (
+            <div
+              key={card.id}
+              className="bg-slate-700 border-l-2 border-yellow-500 p-2 rounded text-xs flex flex-col justify-between h-full"
+            >
+              <p className="text-white font-medium">{ti(card.text)}</p>
+              <p className="text-[10px] text-gray-400 uppercase">
+                {card.action.type.replace(/_/g, " ")}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   const renderGameRules = () => {
     if (!showRules) return null;
 
@@ -1077,7 +1316,7 @@ export default function MonopolyUI({
             {/* 1. Basic Rules */}
             <div className="mb-8">
               <h3 className="text-lg font-bold text-green-400 mb-4 border-b border-green-400/30 pb-2">
-                {ti({ en: "1. Basic Rules", vi: "1. Luật Cơ Bản" })}
+                {ti({ en: "Basic Rules", vi: "Luật Cơ Bản" })}
               </h3>
               <ul className="list-disc pl-5 text-gray-300 space-y-2 text-sm">
                 <li>
@@ -1119,39 +1358,125 @@ export default function MonopolyUI({
               </ul>
             </div>
 
-            {/* 2. Special Actions */}
+            {/* 2. Special Spaces */}
             <div className="mb-8">
               <h3 className="text-lg font-bold text-blue-400 mb-4 border-b border-blue-400/30 pb-2">
-                {ti({ en: "2. Special Rules", vi: "2. Luật Đặc Biệt" })}
+                {ti({ en: "Special Spaces", vi: "Ô Đặc Biệt" })}
               </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-4">
                 <div className="bg-slate-700/50 p-3 rounded-lg">
                   <h4 className="font-bold text-white mb-1">
-                    {ti({ en: "Repairs Card", vi: "Thẻ Sửa Chữa" })}
+                    {ti({
+                      en: "Utilities (Water / Electricity)",
+                      vi: "Công Ty (Điện/Nước)",
+                    })}
                   </h4>
                   <p className="text-xs text-gray-300">
                     {ti({
-                      en: "If you draw a 'Repairs' card, you must pay for every building you own.",
-                      vi: "Nếu rút phải thẻ 'Sửa chữa', bạn phải trả tiền cho mỗi công trình bạn sở hữu.",
+                      en: "Rent depends on the dice roll.",
+                      vi: "Tiền thuê phụ thuộc vào số đổ xí ngầu.",
+                    })}
+                    <br />-{" "}
+                    {ti({
+                      en: "Own 1 Utility: Rent = 4x dice roll",
+                      vi: "Sở hữu 1 Công ty: Thuê = 4x số đổ xí ngầu",
+                    })}
+                    <br />-{" "}
+                    {ti({
+                      en: "Own 2 Utilities: Rent = 10x dice roll",
+                      vi: "Sở hữu 2 Công ty: Thuê = 10x số đổ xí ngầu",
+                    })}
+                  </p>
+                </div>
+                {/* railroad */}
+                <div className="bg-slate-700/50 p-3 rounded-lg">
+                  <h4 className="font-bold text-white mb-1">
+                    {ti({ en: "Railroads", vi: "Nhà Ga" })}
+                  </h4>
+                  <p className="text-xs text-gray-300">
+                    {ti({
+                      en: "Rent depends on the railroad count.",
+                      vi: "Tiền thuê phụ thuộc vào số ga sở hữu.",
                     })}
                     <br />
-                    <span className="text-yellow-400">
-                      250đ / {ti({ en: "House", vi: "Nhà" })}
-                    </span>
-                    ,{" "}
-                    <span className="text-red-400">
-                      1000đ / {ti({ en: "Hotel", vi: "Khách Sạn" })}
-                    </span>
+                    {ti({
+                      en: "The more you own, the higher the rent.",
+                      vi: "Sở hữu càng nhiều, giá thuê càng cao.",
+                    })}
+                    <br />-{" "}
+                    {ti({
+                      en: "Own 1 Railroad: Rent = Original Rent",
+                      vi: "Sở hữu 1 Ga: Thuê = Giá thuê ban đầu",
+                    })}
+                    <br />-{" "}
+                    {ti({
+                      en: "Own 2 Railroads: Rent = 2x Original Rent",
+                      vi: "Sở hữu 2 Ga: Thuê = 2x Giá thuê ban đầu",
+                    })}
+                    <br />-{" "}
+                    {ti({
+                      en: "Own 3 Railroads: Rent = 3x Original Rent",
+                      vi: "Sở hữu 3 Ga: Thuê = 3x Giá thuê ban đầu",
+                    })}
+                    <br />-{" "}
+                    {ti({
+                      en: "Own 4 Railroads: Rent = 4x Original Rent",
+                      vi: "Sở hữu 4 Ga: Thuê = 4x Giá thuê ban đầu",
+                    })}
                   </p>
                 </div>
                 <div className="bg-slate-700/50 p-3 rounded-lg">
                   <h4 className="font-bold text-white mb-1">
-                    {ti({ en: "Bankruptcy", vi: "Phá Sản" })}
+                    {ti({ en: "Taxes", vi: "Thuế" })}
                   </h4>
                   <p className="text-xs text-gray-300">
                     {ti({
-                      en: "If you owe more money than you can pay, you go bankrupt and leave the game. Your properties return to the bank.",
-                      vi: "Nếu bạn nợ nhiều hơn số tiền có thể trả, bạn sẽ phá sản và rời cuộc chơi. Tài sản sẽ bị tịch thu.",
+                      en: "Pay a fixed amount to the bank.",
+                      vi: "Trả một khoản cố định cho ngân hàng.",
+                    })}
+                    <br />-{" "}
+                    <span className="text-red-400">
+                      {ti({ en: "Income Tax", vi: "Thuế Thu Nhập" })}
+                    </span>
+                    : 2000đ
+                    <br />-{" "}
+                    <span className="text-red-400">
+                      {ti({ en: "Luxury Tax", vi: "Thuế Xa Xỉ" })}
+                    </span>
+                    : 1000đ
+                  </p>
+                </div>
+                <div className="bg-slate-700/50 p-3 rounded-lg">
+                  <h4 className="font-bold text-white mb-1">
+                    {ti({ en: "Jail", vi: "Nhà Tù" })}
+                  </h4>
+                  <p className="text-xs text-gray-300">
+                    -{" "}
+                    <strong className="text-orange-400">
+                      {ti({ en: "Go to Jail", vi: "Vào Tù" })}
+                    </strong>
+                    :{" "}
+                    {ti({
+                      en: "Move directly to Jail. Do not pass GO, do not collect salary. Turn ends.",
+                      vi: "Đi thẳng vào tù. Không qua Khởi Hành, không nhận lương. Kết thúc lượt.",
+                    })}
+                    <br />-{" "}
+                    <strong className="text-green-400">
+                      {ti({ en: "Just Visiting", vi: "Thăm Tù" })}
+                    </strong>
+                    :{" "}
+                    {ti({
+                      en: "If you land here normally, nothing happens.",
+                      vi: "Nếu bạn đi vào ô này bình thường, không có gì xảy ra.",
+                    })}
+                    <br />-{" "}
+                    <strong className="text-red-400">
+                      {ti({ en: "In Jail", vi: "Trong Tù" })}
+                    </strong>
+                    :{" "}
+                    {ti({
+                      en: "You can still collect rent! To leave: roll doubles, pay 500đ, or use card.",
+                      vi: "Vẫn được thu tiền thuê! Để ra: đổ đôi, trả 500đ, hoặc dùng thẻ.",
                     })}
                   </p>
                 </div>
@@ -1159,49 +1484,10 @@ export default function MonopolyUI({
             </div>
 
             {/* 3. Chance Cards */}
-            <div className="mb-8">
-              <h3 className="text-lg font-bold text-orange-400 mb-4 border-b border-orange-400/30 pb-2">
-                {ti({ en: "3. Chance Cards", vi: "3. Thẻ Cơ Hội" })} (?)
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {CHANCE_CARDS.map((card) => (
-                  <div
-                    key={card.id}
-                    className="bg-slate-700 border-l-2 border-orange-500 p-2 rounded text-xs flex flex-col justify-between h-full"
-                  >
-                    <p className="text-white font-medium mb-1">
-                      {ti(card.text)}
-                    </p>
-                    <p className="text-[10px] text-gray-400 mt-1 uppercase">
-                      Action: {card.action.type.replace(/_/g, " ")}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
+            {renderChanceCards()}
 
             {/* 4. Community Chest Cards */}
-            <div className="mb-4">
-              <h3 className="text-lg font-bold text-yellow-400 mb-4 border-b border-yellow-400/30 pb-2">
-                {ti({ en: "4. Community Chest Cards", vi: "4. Thẻ Khí Vận" })}{" "}
-                (chest)
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {CHEST_CARDS.map((card) => (
-                  <div
-                    key={card.id}
-                    className="bg-slate-700 border-l-2 border-yellow-500 p-2 rounded text-xs flex flex-col justify-between h-full"
-                  >
-                    <p className="text-white font-medium mb-1">
-                      {ti(card.text)}
-                    </p>
-                    <p className="text-[10px] text-gray-400 mt-1 uppercase">
-                      Action: {card.action.type.replace(/_/g, " ")}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
+            {renderChestCards()}
           </div>
         </div>
       </div>
@@ -1417,6 +1703,70 @@ export default function MonopolyUI({
     );
   };
 
+  const renderTokenOverlay = () => {
+    return (
+      <div className="absolute inset-0 pointer-events-none z-20">
+        {state.players.map((player, index) => {
+          if (!player.id || player.isBankrupt) return null;
+          const isCurrentPlayer = player.id === currentPlayer?.id;
+
+          // Use cached position if rolling (prevent premature jump)
+          let position = player.position;
+          if (
+            rolling &&
+            isCurrentPlayer &&
+            lastPositionsRef.current[player.id] !== undefined
+          ) {
+            position = lastPositionsRef.current[player.id];
+          }
+
+          const pos = getSpacePosition(position);
+
+          // Calculate position percentage
+          // Grid is 11x11. Each cell is ~9.09%
+          // Center of cell is ~4.54%
+          // We add small offsets based on player index to prevent overlap
+
+          // Base center position
+          let topPct = (pos.row / 11) * 100 + 4.54;
+          let leftPct = (pos.col / 11) * 100 + 4.54;
+
+          // Offset based on player index (2x2 grid within cell)
+          // 0: top-left, 1: top-right, 2: bottom-left, 3: bottom-right
+          const offsetX = ((index % 2) - 0.5) * 3;
+          const offsetY = (Math.floor(index / 2) - 0.5) * 3;
+
+          return (
+            <div
+              key={player.id}
+              className={`absolute w-3 h-3 sm:w-5 sm:h-5 rounded-full border-2 border-white shadow-lg flex items-center justify-center transform -translate-x-1/2 -translate-y-1/2 transition-all duration-700 cubic-bezier(0.34, 1.56, 0.64, 1) ${
+                isCurrentPlayer
+                  ? "z-50 ring-4 ring-yellow-400 ring-offset-2 ring-offset-slate-700 scale-150 shadow-[0_0_20px_rgba(250,204,21,0.8)]"
+                  : "z-30"
+              }`}
+              style={{
+                top: `${topPct + offsetY}%`,
+                left: `${leftPct + offsetX}%`,
+                backgroundColor: player.color,
+              }}
+              title={player.username}
+            >
+              {/* Helper avatar icon */}
+              <span className="text-[6px] sm:text-[9px] font-bold text-white drop-shadow-md select-none">
+                {player.username.charAt(0).toUpperCase()}
+              </span>
+
+              {/* Active Player Glow Effect */}
+              {isCurrentPlayer && (
+                <div className="absolute inset-0 rounded-full animate-ping opacity-75 bg-white" />
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   return (
     <div className="flex flex-col lg:flex-row gap-2 p-0 w-full max-w-6xl mx-auto">
       {renderTradeOffers()}
@@ -1454,65 +1804,7 @@ export default function MonopolyUI({
           </div>
 
           {/* Token Overlay - Smooth Movement Animation */}
-          <div className="absolute inset-0 pointer-events-none z-20">
-            {state.players.map((player, index) => {
-              if (!player.id || player.isBankrupt) return null;
-              const isCurrentPlayer = player.id === currentPlayer?.id;
-
-              // Use cached position if rolling (prevent premature jump)
-              let position = player.position;
-              if (
-                rolling &&
-                isCurrentPlayer &&
-                lastPositionsRef.current[player.id] !== undefined
-              ) {
-                position = lastPositionsRef.current[player.id];
-              }
-
-              const pos = getSpacePosition(position);
-
-              // Calculate position percentage
-              // Grid is 11x11. Each cell is ~9.09%
-              // Center of cell is ~4.54%
-              // We add small offsets based on player index to prevent overlap
-
-              // Base center position
-              let topPct = (pos.row / 11) * 100 + 4.54;
-              let leftPct = (pos.col / 11) * 100 + 4.54;
-
-              // Offset based on player index (2x2 grid within cell)
-              // 0: top-left, 1: top-right, 2: bottom-left, 3: bottom-right
-              const offsetX = ((index % 2) - 0.5) * 3;
-              const offsetY = (Math.floor(index / 2) - 0.5) * 3;
-
-              return (
-                <div
-                  key={player.id}
-                  className={`absolute w-3 h-3 sm:w-5 sm:h-5 rounded-full border-2 border-white shadow-lg flex items-center justify-center transform -translate-x-1/2 -translate-y-1/2 transition-all duration-700 cubic-bezier(0.34, 1.56, 0.64, 1) ${
-                    isCurrentPlayer
-                      ? "z-50 ring-2 ring-yellow-400 ring-offset-1 ring-offset-slate-700"
-                      : "z-30"
-                  }`}
-                  style={{
-                    top: `${topPct + offsetY}%`,
-                    left: `${leftPct + offsetX}%`,
-                    backgroundColor: player.color,
-                  }}
-                  title={player.username}
-                >
-                  {/* Helper avatar icon */}
-                  <span className="text-[6px] sm:text-[9px] font-bold text-white drop-shadow-md select-none">
-                    {player.username.charAt(0).toUpperCase()}
-                  </span>
-
-                  {/* Active Player Glow Effect */}
-                  {isCurrentPlayer && (
-                    <div className="absolute inset-0 rounded-full animate-ping opacity-75 bg-white" />
-                  )}
-                </div>
-              );
-            })}
-          </div>
+          {renderTokenOverlay()}
         </div>
       </div>
 

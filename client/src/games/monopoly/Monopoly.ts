@@ -315,11 +315,21 @@ export default class Monopoly extends BaseGame {
       const isBotOwner = property?.ownerId === bot.id;
 
       // Calculate Land Value
-      let landValue = space.price || 0;
+      let landValue = 0;
+      if (
+        space.type === "property" ||
+        space.type === "railroad" ||
+        space.type === "utility"
+      ) {
+        landValue = space.price;
+      }
 
       // Monopoly Check
       const colorGroup = BOARD_SPACES.filter(
-        (s) => s.color === space.color && s.type === "property"
+        (s) =>
+          s.type === "property" &&
+          space.type === "property" &&
+          s.color === space.color
       );
       const botOwnedInColor = this.state.properties.filter(
         (p) =>
@@ -407,7 +417,13 @@ export default class Monopoly extends BaseGame {
       (p) => p.spaceId === spaceId && p.ownerId === playerId
     );
 
-    if (!space || !ownership || ownership.houses <= 0 || !space.houseCost)
+    if (
+      !space ||
+      !ownership ||
+      ownership.houses <= 0 ||
+      space.type !== "property" ||
+      !space.houseCost
+    )
       return;
 
     // Check even build rule (simplified: allow selling from max properties)
@@ -446,7 +462,9 @@ export default class Monopoly extends BaseGame {
       !ownership ||
       ownership.mortgaged ||
       ownership.houses > 0 ||
-      !space.price
+      (space.type !== "property" &&
+        space.type !== "railroad" &&
+        space.type !== "utility")
     )
       return;
 
@@ -478,7 +496,15 @@ export default class Monopoly extends BaseGame {
       (p) => p.spaceId === spaceId && p.ownerId === playerId
     );
 
-    if (!space || !ownership || !ownership.mortgaged || !space.price) return;
+    if (
+      !space ||
+      !ownership ||
+      !ownership.mortgaged ||
+      (space.type !== "property" &&
+        space.type !== "railroad" &&
+        space.type !== "utility")
+    )
+      return;
 
     const mortgageValue = Math.floor(space.price * 0.5);
     const interest = Math.floor(mortgageValue * 0.1);
@@ -572,6 +598,9 @@ export default class Monopoly extends BaseGame {
         break;
       case "UNMORTGAGE":
         this.handleUnmortgage(action.playerId, action.spaceId);
+        break;
+      case "RESET_GAME":
+        this.reset();
         break;
     }
   }
@@ -851,7 +880,13 @@ export default class Monopoly extends BaseGame {
 
     if (!ownership) {
       // Unowned - offer to buy
-      if (space.price && player.money >= space.price) {
+      if (
+        (space.type === "property" ||
+          space.type === "railroad" ||
+          space.type === "utility") &&
+        space.price &&
+        player.money >= space.price
+      ) {
         this.state.pendingAction = { type: "BUY_DECISION", spaceId };
         this.addLog(
           {
@@ -873,23 +908,39 @@ export default class Monopoly extends BaseGame {
           "alert"
         );
       }
-    } else if (ownership.ownerId !== player.id && !ownership.mortgaged) {
-      // Pay rent
-      const rent = this.calculateRent(spaceId, ownership);
-      const owner = this.state.players.find((p) => p.id === ownership.ownerId);
-      if (owner && !owner.isBankrupt) {
-        this.state.pendingAction = {
-          type: "PAY_RENT",
-          amount: rent,
-          toPlayerId: ownership.ownerId,
-        };
+    } else if (ownership.ownerId !== player.id) {
+      if (ownership.mortgaged) {
         this.addLog(
           {
-            en: `${player.username} owes ${rent}đ rent to ${owner.username}`,
-            vi: `${player.username} trả ${rent}đ tiền thuê cho ${owner.username}`,
+            en: `${player.username} landed on ${trans(
+              space.name
+            )} which is mortgaged. No rent!`,
+            vi: `${player.username} vào ${trans(
+              space.name
+            )} đang thế chấp. Không cần trả tiền thuê!`,
           },
-          "alert"
+          "info"
         );
+      } else {
+        // Pay rent
+        const rent = this.calculateRent(spaceId, ownership);
+        const owner = this.state.players.find(
+          (p) => p.id === ownership.ownerId
+        );
+        if (owner && !owner.isBankrupt) {
+          this.state.pendingAction = {
+            type: "PAY_RENT",
+            amount: rent,
+            toPlayerId: ownership.ownerId,
+          };
+          this.addLog(
+            {
+              en: `${player.username} owes ${rent}đ rent to ${owner.username}`,
+              vi: `${player.username} trả ${rent}đ tiền thuê cho ${owner.username}`,
+            },
+            "alert"
+          );
+        }
       }
     } else {
       this.addLog(
@@ -929,11 +980,11 @@ export default class Monopoly extends BaseGame {
     }
 
     // Regular property
-    if (!space.rent) return 0;
+    if (space.type !== "property" || !space.rent) return 0;
 
     // Check if player owns full color set
     const colorProperties = BOARD_SPACES.filter(
-      (s) => s.color === space.color && s.type === "property"
+      (s) => s.type === "property" && s.color === space.color
     );
     const ownedInColor = colorProperties.filter((s) =>
       this.state.properties.some(
@@ -995,7 +1046,14 @@ export default class Monopoly extends BaseGame {
       return;
 
     const space = BOARD_SPACES[spaceId];
-    if (!space || !space.price || player.money < space.price) return;
+    if (
+      !space ||
+      (space.type !== "property" &&
+        space.type !== "railroad" &&
+        space.type !== "utility") ||
+      player.money < space.price
+    )
+      return;
 
     player.money -= space.price;
     this.state.properties.push({
@@ -1063,7 +1121,7 @@ export default class Monopoly extends BaseGame {
       (p) => p.spaceId === spaceId && p.ownerId === playerId
     );
 
-    if (!space || !ownership || !space.houseCost)
+    if (!space || !ownership || space.type !== "property" || !space.houseCost)
       return {
         allowed: false,
         reason: { en: "Cannot build here", vi: "Không thể xây ở đây" },
@@ -1086,7 +1144,7 @@ export default class Monopoly extends BaseGame {
 
     // Check if owns full color set
     const colorProperties = BOARD_SPACES.filter(
-      (s) => s.color === space.color && s.type === "property"
+      (s) => s.type === "property" && s.color === space.color
     );
     const ownedInColor = this.state.properties.filter(
       (p) =>
@@ -1118,6 +1176,8 @@ export default class Monopoly extends BaseGame {
 
     const player = this.state.players.find((p) => p.id === playerId)!;
     const space = BOARD_SPACES[spaceId];
+    if (space.type !== "property" || !space.houseCost) return;
+
     const ownership = this.state.properties.find(
       (p) => p.spaceId === spaceId && p.ownerId === playerId
     )!;
@@ -1386,6 +1446,12 @@ export default class Monopoly extends BaseGame {
         },
         "alert"
       );
+    } else {
+      // If the current player went bankrupt and game is not over, pass the turn
+      const currentPlayer = this.state.players[this.state.currentPlayerIndex];
+      if (currentPlayer?.id === player.id) {
+        this.endTurn();
+      }
     }
   }
 
@@ -1478,7 +1544,12 @@ export default class Monopoly extends BaseGame {
     if (this.state.gamePhase !== "playing") return;
 
     const currentPlayer = this.state.players[this.state.currentPlayerIndex];
-    if (!currentPlayer?.isBot || currentPlayer.isBankrupt) return;
+    if (!currentPlayer?.isBot) return;
+
+    if (currentPlayer.isBankrupt) {
+      this.endTurn();
+      return;
+    }
 
     // Delay bot actions for readability
     setTimeout(() => this.executeBotTurn(currentPlayer), 1000);
@@ -1487,66 +1558,186 @@ export default class Monopoly extends BaseGame {
   private executeBotTurn(bot: MonopolyPlayer): void {
     if (!this.isHost || this.state.gamePhase !== "playing") return;
 
+    // RE-FETCH bot to ensure fresh state (money, position, etc.)
+    const currentBot = this.state.players.find((p) => p.id === bot.id);
+    if (!currentBot || currentBot.isBankrupt) return;
+
+    // Helper to raise funds
+    const tryToRaiseFunds = (amountNeeded: number) => {
+      let currentMoney = currentBot.money;
+      if (currentMoney >= amountNeeded) return;
+
+      const myProperties = this.state.properties.filter(
+        (p) => p.ownerId === currentBot.id
+      );
+
+      // 1. Sell Houses first
+      // Find properties with houses
+      const propsWithHouses = myProperties.filter((p) => p.houses > 0);
+      for (const prop of propsWithHouses) {
+        if (currentMoney >= amountNeeded) break;
+        // Sell until 0
+        while (prop.houses > 0 && currentMoney < amountNeeded) {
+          const space = BOARD_SPACES[prop.spaceId];
+          this.handleSellHouse(currentBot.id!, prop.spaceId);
+          currentMoney +=
+            space.type === "property" && space.houseCost
+              ? space.houseCost / 2
+              : 0;
+        }
+      }
+
+      // 2. Mortgage Properties
+      if (currentMoney < amountNeeded) {
+        const unmortgaged = myProperties.filter(
+          (p) => !p.mortgaged && p.houses === 0
+        );
+        // Sort by least price to mortgage small stuff first? Or expensive?
+        // Usually mortgage expensive gives more money.
+        // Let's sort by price descending to get money fast.
+        unmortgaged.sort((a, b) => {
+          const spaceA = BOARD_SPACES[a.spaceId];
+          const spaceB = BOARD_SPACES[b.spaceId];
+          const priceA =
+            (spaceA.type === "property" ||
+              spaceA.type === "railroad" ||
+              spaceA.type === "utility") &&
+            spaceA.price
+              ? spaceA.price
+              : 0;
+          const priceB =
+            (spaceB.type === "property" ||
+              spaceB.type === "railroad" ||
+              spaceB.type === "utility") &&
+            spaceB.price
+              ? spaceB.price
+              : 0;
+          return priceB - priceA;
+        });
+
+        for (const prop of unmortgaged) {
+          if (currentMoney >= amountNeeded) break;
+          const space = BOARD_SPACES[prop.spaceId];
+          this.handleMortgage(currentBot.id!, prop.spaceId);
+          currentMoney +=
+            (space.type === "property" ||
+              space.type === "railroad" ||
+              space.type === "utility") &&
+            space.price
+              ? space.price / 2
+              : 0;
+        }
+      }
+    };
+
     // Handle pending actions first
     if (this.state.pendingAction) {
       switch (this.state.pendingAction.type) {
         case "BUY_DECISION":
           const space = BOARD_SPACES[this.state.pendingAction.spaceId];
           // Bot buys if it has enough money and some buffer
-          if (space?.price && bot.money >= space.price + 1000) {
-            this.handleBuyProperty(bot.id!, this.state.pendingAction.spaceId);
+          // Buffer calculation: Keep at least 500 or 10% of current money
+          const buyBuffer = 1000;
+          if (
+            space.type === "property" &&
+            space?.price &&
+            currentBot.money >= space.price + buyBuffer
+          ) {
+            this.handleBuyProperty(
+              currentBot.id!,
+              this.state.pendingAction.spaceId
+            );
           } else {
-            this.handleDeclineProperty(bot.id!);
+            this.handleDeclineProperty(currentBot.id!);
           }
           return;
+
         case "PAY_RENT":
-          this.handlePayRent(bot.id!);
+          tryToRaiseFunds(this.state.pendingAction.amount);
+          this.handlePayRent(currentBot.id!);
           return;
+
         case "PAY_TAX":
-          this.handlePayTax(bot.id!);
+          tryToRaiseFunds(this.state.pendingAction.amount);
+          this.handlePayTax(currentBot.id!);
           return;
+
         case "CARD":
-          this.handleUseCard(bot.id!);
+          // Some cards require payment, but handleUseCard internal logic checks money.
+          // However, handleUseCard calls handleBankruptcy if strict payment fails.
+          // We can't easily predict amount here unless we parse card.
+          // For now, let handleUseCard do its thing, or improve it later.
+          // Actually, if it's a PAY card, we might want to check.
+          // But card action details are in the card object.
+          const card = this.state.pendingAction.card;
+          if (card.action.type === "PAY") {
+            tryToRaiseFunds(card.action.amount);
+          } else if (card.action.type === "PAY_EACH_PLAYER") {
+            const count = this.state.players.filter(
+              (p) => p.id && !p.isBankrupt && p.id !== currentBot.id
+            ).length;
+            tryToRaiseFunds(card.action.amount * count);
+          } else if (card.action.type === "REPAIRS") {
+            // Complex calc, skip for now or implementing would be good.
+          }
+          this.handleUseCard(currentBot.id!);
           return;
       }
     }
 
     // Pay jail fine if in jail and has money
-    if (bot.inJail && bot.money >= JAIL_FINE && !this.state.hasRolled) {
-      this.handlePayJailFine(bot.id!);
-      setTimeout(() => this.executeBotTurn(bot), 500);
+    if (
+      currentBot.inJail &&
+      currentBot.money >= JAIL_FINE + 500 &&
+      !this.state.hasRolled
+    ) {
+      this.handlePayJailFine(currentBot.id!);
+      setTimeout(() => this.executeBotTurn(currentBot), 500);
       return;
     }
 
     // Roll dice if can
     if (!this.state.hasRolled || this.state.canRollAgain) {
-      this.handleRollDice(bot.id!);
-      setTimeout(() => this.executeBotTurn(bot), 1500);
+      this.handleRollDice(currentBot.id!);
+      setTimeout(() => this.executeBotTurn(currentBot), 1500);
       return;
     }
 
     // Try to build houses
     const myProperties = this.state.properties.filter(
-      (p) => p.ownerId === bot.id
+      (p) => p.ownerId === currentBot.id
     );
+    // Shuffle properties to build randomly or iterate? Standard iteration is fine.
     for (const prop of myProperties) {
       const space = BOARD_SPACES[prop.spaceId];
-      if (space?.houseCost && space.color && prop.houses < 5) {
-        const colorProps = BOARD_SPACES.filter((s) => s.color === space.color);
+      if (
+        space &&
+        space.type === "property" &&
+        space.houseCost &&
+        space.color &&
+        prop.houses < 5 &&
+        !prop.mortgaged
+      ) {
+        const colorProps = BOARD_SPACES.filter(
+          (s) => s.type === "property" && s.color === space.color
+        );
         const ownedInColor = myProperties.filter((p) =>
           colorProps.some((c) => c.id === p.spaceId)
         );
 
         // Check local validation first
-        const validation = this.canBuildHouse(bot.id!, prop.spaceId);
+        const validation = this.canBuildHouse(currentBot.id!, prop.spaceId);
 
+        // STRICTER BUFFER: House Cost + 3000 buffer
         if (
           ownedInColor.length === colorProps.length &&
-          bot.money >= space.houseCost + 2000 &&
-          validation.allowed // Check validation!
+          space.type === "property" &&
+          space.houseCost &&
+          currentBot.money >= space.houseCost + 3000 &&
+          validation.allowed
         ) {
-          this.handleBuildHouse(bot.id!, prop.spaceId);
-          setTimeout(() => this.executeBotTurn(bot), 500);
+          this.handleBuildHouse(currentBot.id!, prop.spaceId);
+          setTimeout(() => this.executeBotTurn(currentBot), 500);
           return;
         }
       }
@@ -1554,7 +1745,7 @@ export default class Monopoly extends BaseGame {
 
     // End turn
     if (!this.state.pendingAction && !this.state.canRollAgain) {
-      this.handleEndTurn(bot.id!);
+      this.handleEndTurn(currentBot.id!);
     }
   }
 
@@ -1639,6 +1830,12 @@ export default class Monopoly extends BaseGame {
     });
   }
 
+  requestResetGame(): void {
+    if (this.isHost) {
+      this.makeMove({ type: "RESET_GAME" });
+    }
+  }
+
   requestCancelTrade(offerId: string): void {
     this.makeMove({ type: "CANCEL_TRADE", offerId });
   }
@@ -1685,7 +1882,7 @@ export default class Monopoly extends BaseGame {
     this.state.doublesCount = 0;
     this.state.hasRolled = false;
     this.state.canRollAgain = false;
-    this.state.gamePhase = "playing";
+    this.state.gamePhase = "waiting";
     this.state.winner = null;
     this.state.pendingAction = null;
     this.state.logs = [];

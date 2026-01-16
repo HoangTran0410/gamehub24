@@ -182,7 +182,7 @@ export default function UserList() {
 
                 {/* Actions */}
                 {isHost && p.id !== userId && (
-                  <div className="flex items-center gap-1 md:opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex items-center gap-1">
                     <button
                       onClick={() => handleMoveToSpectator(p.id, p.username)}
                       className="p-1.5 text-orange-400 hover:bg-orange-400/10 rounded-lg transition-colors"
@@ -258,7 +258,7 @@ export default function UserList() {
 
                 {/* Actions */}
                 {isHost && (
-                  <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                  <div className="flex items-center gap-1">
                     <button
                       onClick={() => handleAddToGame(s.id, s.username)}
                       className="p-1.5 text-green-400 hover:bg-green-400/10 rounded-lg transition-colors"
