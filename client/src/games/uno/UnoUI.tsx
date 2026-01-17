@@ -18,9 +18,11 @@ import {
   Sparkle,
   Layers,
   Hand,
+  BookOpen,
 } from "lucide-react";
 import { useUserStore } from "../../stores/userStore";
 import { useAlertStore } from "../../stores/alertStore";
+import useLanguage from "../../stores/languageStore";
 import type { GameUIProps } from "../types";
 
 export default function UnoUI({ game: baseGame }: GameUIProps) {
@@ -29,7 +31,9 @@ export default function UnoUI({ game: baseGame }: GameUIProps) {
   const [selectedCard, setSelectedCard] = useState<UnoCard | null>(null);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showDiscardHistory, setShowDiscardHistory] = useState(false);
+  const [showRules, setShowRules] = useState(false);
   const { username } = useUserStore();
+  const { ti, ts } = useLanguage();
 
   // Flying card animation state
   const [flyingCard, setFlyingCard] = useState<{
@@ -389,11 +393,145 @@ export default function UnoUI({ game: baseGame }: GameUIProps) {
     );
   };
 
+  const renderGameRules = () => {
+    if (!showRules) return null;
+
+    return (
+      <div
+        className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4"
+        onClick={() => setShowRules(false)}
+      >
+        <div
+          className="bg-slate-800 rounded-xl max-w-2xl w-full max-h-[90%] flex flex-col shadow-2xl border border-slate-600"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between p-4 border-b border-slate-700">
+            <h2 className="text-xl font-bold text-white flex items-center gap-2">
+              <BookOpen className="w-6 h-6 text-yellow-500" />
+              {ti({ en: "Game Rules", vi: "Luật Chơi" })}
+            </h2>
+            <button
+              onClick={() => setShowRules(false)}
+              className="p-1 hover:bg-slate-700 rounded transition-colors text-white"
+            >
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 overflow-y-auto p-6 custom-scrollbar text-slate-300">
+            <div className="space-y-4">
+              <p>
+                {ti({
+                  en: "Uno is a shedding-type card game. The goal is to be the first player to get rid of all your cards.",
+                  vi: "Uno là trò chơi bài với mục tiêu là người đầu tiên đánh hết bài trên tay.",
+                })}
+              </p>
+
+              <h3 className="text-lg font-bold text-yellow-400 mt-4">
+                {ti({ en: "Gameplay", vi: "Luật chơi" })}
+              </h3>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>
+                  {ti({
+                    en: "Match the top card on the discard pile by color or number.",
+                    vi: "Đánh bài cùng màu hoặc cùng số với lá bài trên cùng.",
+                  })}
+                </li>
+                <li>
+                  {ti({
+                    en: "Play Action cards to change the game:",
+                    vi: "Sử dụng các lá bài chức năng để thay đổi cục diện:",
+                  })}
+                  <ul className="list-disc pl-5 mt-1 text-slate-400">
+                    <li>
+                      <strong>Skip</strong>:{" "}
+                      {ti({
+                        en: "Next player loses turn",
+                        vi: "Người tiếp theo mất lượt",
+                      })}
+                    </li>
+                    <li>
+                      <strong>Reverse</strong>:{" "}
+                      {ti({
+                        en: "Reverses play direction",
+                        vi: "Đảo chiều vòng đánh",
+                      })}
+                    </li>
+                    <li>
+                      <strong>Draw +2</strong>:{" "}
+                      {ti({
+                        en: "Next player draws 2 cards and skips turn",
+                        vi: "Người sau phải bốc 2 lá và mất lượt",
+                      })}
+                    </li>
+                    <li>
+                      <strong>Wild</strong>:{" "}
+                      {ti({
+                        en: "Change current color",
+                        vi: "Đổi màu đang đánh",
+                      })}
+                    </li>
+                    <li>
+                      <strong>Wild +4</strong>:{" "}
+                      {ti({
+                        en: "Change color + next player draws 4",
+                        vi: "Đổi màu + người sau bốc 4 lá",
+                      })}
+                    </li>
+                  </ul>
+                </li>
+                <li>
+                  {ti({
+                    en: "If you can't play, you must draw a card.",
+                    vi: "Nếu không đánh được, bạn phải bốc 1 lá bài.",
+                  })}
+                </li>
+              </ul>
+
+              <h3 className="text-lg font-bold text-yellow-400 mt-4">
+                {ti({ en: "UNO!", vi: "UNO!" })}
+              </h3>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>
+                  {ti({
+                    en: "When you have 1 card left, you MUST yell call 'UNO!'.",
+                    vi: "Khi còn 1 lá bài, bạn BẮT BUỘC phải hô 'UNO!'.",
+                  })}
+                </li>
+                {/* <li>
+                  {ti({
+                    en: "If you fail to call UNO and get caught, you must draw 2 penalty cards.",
+                    vi: "Nếu quên hô UNO và bị bắt lỗi, bạn phải bốc phạt 2 lá.",
+                  })}
+                </li> */}
+              </ul>
+
+              <h3 className="text-lg font-bold text-yellow-400 mt-4">
+                {ti({ en: "Winning", vi: "Chiến thắng" })}
+              </h3>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>
+                  {ti({
+                    en: "The first player to play their last card wins the round.",
+                    vi: "Người đầu tiên đánh hết bài sẽ thắng.",
+                  })}
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div
       ref={containerRef}
       className="relative flex flex-col h-full p-2 md:p-4 gap-2 md:gap-4 overflow-hidden"
     >
+      {renderGameRules()}
       {/* Mobile: Top row with 3 opponents */}
       <div className="flex md:hidden justify-center gap-2">
         {renderPlayerSlot(1, true, mobileSlotRefs)}
@@ -612,6 +750,15 @@ export default function UnoUI({ game: baseGame }: GameUIProps) {
           </div>
         </div>
       )}
+
+      {/* Rules Button */}
+      <button
+        onClick={() => setShowRules(true)}
+        className="fixed bottom-4 right-4 p-3 bg-slate-700 hover:bg-slate-600 rounded-full text-yellow-500 transition-colors z-40 shadow-lg border border-slate-500"
+        title={ts({ en: "Rules", vi: "Luật chơi" })}
+      >
+        <BookOpen size={24} />
+      </button>
 
       {/* Flying Card Animation */}
       {flyingCard && (

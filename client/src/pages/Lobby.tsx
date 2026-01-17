@@ -7,8 +7,8 @@ import {
   Trash2,
   Settings,
   Gamepad2,
-  Filter,
   LogIn,
+  Star,
 } from "lucide-react";
 import { useRoomStore } from "../stores/roomStore";
 import { useUserStore } from "../stores/userStore";
@@ -18,59 +18,27 @@ import useLanguage from "../stores/languageStore";
 import { getSocket } from "../services/socket";
 import {
   getAllGames,
-  getAllCategories,
   type GameCategory,
+  CATEGORY_CONFIG,
 } from "../games/registry";
 import type { Room } from "../stores/roomStore";
 import SettingsModal from "../components/SettingsModal";
-
-// Category display names and colors
-const CATEGORY_CONFIG: Record<
-  GameCategory,
-  { label: { en: string; vi: string }; color: string }
-> = {
-  board: {
-    label: { en: "Board", vi: "Bàn cờ" },
-    color: "bg-blue-500/20 text-blue-400 border-blue-500/30",
-  },
-  strategy: {
-    label: { en: "Strategy", vi: "Chiến thuật" },
-    color: "bg-purple-500/20 text-purple-400 border-purple-500/30",
-  },
-  puzzle: {
-    label: { en: "Puzzle", vi: "Giải đố" },
-    color: "bg-green-500/20 text-green-400 border-green-500/30",
-  },
-  card: {
-    label: { en: "Card", vi: "Bài" },
-    color: "bg-red-500/20 text-red-400 border-red-500/30",
-  },
-  party: {
-    label: { en: "Party", vi: "Tiệc tùng" },
-    color: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
-  },
-  relax: {
-    label: { en: "Relax", vi: "Thư giãn" },
-    color: "bg-cyan-500/20 text-cyan-400 border-cyan-500/30",
-  },
-  classic: {
-    label: { en: "Classic", vi: "Cổ điển" },
-    color: "bg-orange-500/20 text-orange-400 border-orange-500/30",
-  },
-};
+import { useGameFavorites } from "../hooks/useGameFavorites";
+import GameCategoryFilter from "../components/GameCategoryFilter";
 
 export default function Lobby() {
   const { username } = useUserStore();
   const { isConnected } = useSocketStore();
   const { publicRooms, setPublicRooms } = useRoomStore();
-  const { ti } = useLanguage();
+  const { ti, ts } = useLanguage();
   const [showCreateModal, setShowCreateModal] = useState<string | null>(null);
   const [showJoinModal, setShowJoinModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [onlineCount, setOnlineCount] = useState(0);
-  const [selectedCategory, setSelectedCategory] = useState<GameCategory | null>(
-    null,
-  );
+  const [selectedCategory, setSelectedCategory] = useState<
+    GameCategory | "favorites" | null
+  >(null);
+  const { favorites, toggleFavorite, favoritesCount } = useGameFavorites();
   const [isAnimating, setIsAnimating] = useState(false);
 
   useEffect(() => {
@@ -109,7 +77,9 @@ export default function Lobby() {
     setShowCreateModal(gameId);
   };
 
-  const handleCategoryChange = (category: GameCategory | null) => {
+  const handleCategoryChange = (
+    category: GameCategory | "favorites" | null,
+  ) => {
     if (selectedCategory === category) return;
     setIsAnimating(true);
     setTimeout(() => {
@@ -227,37 +197,11 @@ export default function Lobby() {
               </div>
 
               {/* Category Filter */}
-              <div className="flex items-center gap-2 flex-wrap">
-                <Filter className="w-4 h-4 text-text-muted" />
-                <button
-                  onClick={() => handleCategoryChange(null)}
-                  className={`px-3 py-1.5 text-sm rounded-full border transition-all ${
-                    selectedCategory === null
-                      ? "bg-primary/20 text-primary border-primary/30"
-                      : "bg-white/5 text-text-secondary border-white/10 hover:bg-white/10"
-                  }`}
-                >
-                  {ti({ en: "All", vi: "Tất cả" })} ({getAllGames().length})
-                </button>
-                {getAllCategories().map((category) => {
-                  const count = getAllGames().filter((g) =>
-                    g.categories.includes(category),
-                  ).length;
-                  return (
-                    <button
-                      key={category}
-                      onClick={() => handleCategoryChange(category)}
-                      className={`px-3 py-1.5 text-sm rounded-full border transition-all ${
-                        selectedCategory === category
-                          ? CATEGORY_CONFIG[category].color
-                          : "bg-white/5 text-text-secondary border-white/10 hover:bg-white/10"
-                      }`}
-                    >
-                      {ti(CATEGORY_CONFIG[category].label)} ({count})
-                    </button>
-                  );
-                })}
-              </div>
+              <GameCategoryFilter
+                selectedCategory={selectedCategory}
+                onSelectCategory={handleCategoryChange}
+                favoritesCount={favoritesCount}
+              />
             </div>
 
             <div
@@ -267,9 +211,11 @@ export default function Lobby() {
             >
               {getAllGames()
                 .filter((game) =>
-                  selectedCategory
-                    ? game.categories.includes(selectedCategory)
-                    : true,
+                  selectedCategory === "favorites"
+                    ? favorites.includes(game.id)
+                    : selectedCategory
+                      ? game.categories.includes(selectedCategory)
+                      : true,
                 )
                 .map((game) => {
                   const Icon = game.icon;
@@ -278,8 +224,26 @@ export default function Lobby() {
                       key={game.id}
                       className={`glass-card rounded-2xl p-6 hover:border-primary/30 transition-all duration-200 ${
                         !game.isAvailable ? "opacity-50" : ""
-                      }`}
+                      } relative group`}
                     >
+                      {/* Favorite Button */}
+                      <button
+                        onClick={(e) => toggleFavorite(game.id, e)}
+                        className={`absolute top-4 right-4 p-2 rounded-full transition-all duration-200 z-10 ${
+                          favorites.includes(game.id)
+                            ? "text-yellow-500 bg-yellow-500/10 hover:bg-yellow-500/20"
+                            : "text-text-muted hover:text-yellow-500 hover:bg-white/5 md:opacity-0 group-hover:opacity-100"
+                        }`}
+                        title={ts({
+                          en: "Toggle Favorite",
+                          vi: "Đánh dấu yêu thích",
+                        })}
+                      >
+                        <Star
+                          className={`w-5 h-5 ${favorites.includes(game.id) ? "fill-current" : ""}`}
+                        />
+                      </button>
+
                       {/* align center */}
                       <div className="mb-4 flex items-center justify-center">
                         <Icon className="w-12 h-12 text-primary" />

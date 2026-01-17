@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import DotsAndBoxes from "./DotsAndBoxes";
 import type { DotsAndBoxesState, PlayerColor } from "./types";
-import { Play, RefreshCw } from "lucide-react";
+import { Play, RefreshCw, BookOpen, X } from "lucide-react";
 import useLanguage from "../../stores/languageStore";
 import type { GameUIProps } from "../types";
 
@@ -21,7 +21,8 @@ export default function DotsAndBoxesUI({
 }: GameUIProps) {
   const game = baseGame as DotsAndBoxes;
   const [state, setState] = useState<DotsAndBoxesState>(game.getState());
-  const { ti } = useLanguage();
+  const [showRules, setShowRules] = useState(false);
+  const { ti, ts } = useLanguage();
 
   useEffect(() => {
     game.onUpdate(setState);
@@ -36,7 +37,7 @@ export default function DotsAndBoxesUI({
   const handleLineClick = (
     type: "horizontal" | "vertical",
     row: number,
-    col: number
+    col: number,
   ) => {
     if (!isMyTurn || isGameEnded || state.gamePhase !== "playing") return;
 
@@ -50,8 +51,105 @@ export default function DotsAndBoxesUI({
   const gridSize = state.gridSize;
   const gridPercentage = 100 / (gridSize - 1);
 
+  const renderGameRules = () => {
+    if (!showRules) return null;
+
+    return (
+      <div
+        className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4"
+        onClick={() => setShowRules(false)}
+      >
+        <div
+          className="bg-slate-800 rounded-xl max-w-2xl w-full max-h-[90%] flex flex-col shadow-2xl border border-slate-600"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between p-4 border-b border-slate-700">
+            <h2 className="text-xl font-bold text-white flex items-center gap-2">
+              <BookOpen className="w-6 h-6 text-yellow-500" />
+              {ti({ en: "Game Rules", vi: "Luật Chơi" })}
+            </h2>
+            <button
+              onClick={() => setShowRules(false)}
+              className="p-1 hover:bg-slate-700 rounded transition-colors text-white"
+            >
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 overflow-y-auto p-6 custom-scrollbar text-slate-300">
+            <div className="space-y-4">
+              <p>
+                {ti({
+                  en: "Dots and Boxes is a pencil-and-paper game for two players. The game starts with an empty grid of dots.",
+                  vi: "Dots and Boxes (Nối điểm) là trò chơi dành cho 2 người. Trò chơi bắt đầu với một lưới các điểm.",
+                })}
+              </p>
+
+              <h3 className="text-lg font-bold text-yellow-400 mt-4">
+                {ti({ en: "Objective", vi: "Mục tiêu" })}
+              </h3>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>
+                  {ti({
+                    en: "Complete more boxes (squares) than your opponent.",
+                    vi: "Hoàn thành (đóng) được nhiều ô vuông hơn đối thủ.",
+                  })}
+                </li>
+              </ul>
+
+              <h3 className="text-lg font-bold text-yellow-400 mt-4">
+                {ti({ en: "Gameplay", vi: "Luật chơi" })}
+              </h3>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>
+                  {ti({
+                    en: "Players take turns adding a single horizontal or vertical line between two unjoined adjacent dots.",
+                    vi: "Người chơi lần lượt thêm một đoạn thẳng ngang hoặc dọc giữa 2 điểm chưa được nối.",
+                  })}
+                </li>
+                <li>
+                  {ti({
+                    en: "A player who completes the fourth side of a 1x1 box earns one point and MUST take another turn.",
+                    vi: "Người vẽ cạnh thứ 4 của một ô vuông 1x1 sẽ được điểm và PHẢI đi thêm lượt nữa.",
+                  })}
+                </li>
+                <li>
+                  {ti({
+                    en: "If you complete multiple boxes in one move, you keep playing until you fail to complete a box.",
+                    vi: "Nếu bạn đóng được nhiều ô trong một lượt, bạn tiếp tục đi cho đến khi không đóng được ô nào nữa.",
+                  })}
+                </li>
+              </ul>
+
+              <h3 className="text-lg font-bold text-yellow-400 mt-4">
+                {ti({ en: "Winning", vi: "Chiến thắng" })}
+              </h3>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>
+                  {ti({
+                    en: "The game ends when no more lines can be placed.",
+                    vi: "Trò chơi kết thúc khi không còn đường nào để vẽ.",
+                  })}
+                </li>
+                <li>
+                  {ti({
+                    en: "The player with the most boxes wins.",
+                    vi: "Người có nhiều ô nhất sẽ thắng.",
+                  })}
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="flex flex-col items-center gap-6 p-4 w-full max-w-2xl mx-auto">
+      {renderGameRules()}
       {/* Header Info */}
       <div className="flex flex-col items-center gap-2">
         <h2 className="text-3xl font-bold text-white">Dots & Boxes</h2>
@@ -205,7 +303,7 @@ export default function DotsAndBoxesUI({
             <p className="text-white">
               {
                 state.players.find(
-                  (p) => p.id === state.undoRequest?.requesterId
+                  (p) => p.id === state.undoRequest?.requesterId,
                 )?.username
               }{" "}
               {ti({
@@ -230,6 +328,15 @@ export default function DotsAndBoxesUI({
           </div>
         </div>
       )}
+
+      {/* Rules Button */}
+      <button
+        onClick={() => setShowRules(true)}
+        className="fixed bottom-4 right-4 p-3 bg-slate-700 hover:bg-slate-600 rounded-full text-yellow-500 transition-colors z-40 shadow-lg border border-slate-500"
+        title={ts({ en: "Rules", vi: "Luật chơi" })}
+      >
+        <BookOpen size={24} />
+      </button>
 
       {/* Game Board */}
       <div className="relative aspect-square w-full max-w-[400px] bg-slate-900 p-6 rounded-lg shadow-2xl select-none touch-none border-2 border-slate-700">
@@ -261,7 +368,7 @@ export default function DotsAndBoxesUI({
                   </div>
                 </div>
               );
-            })
+            }),
           )}
 
           {/* 2. Render Lines (Horizontal & Vertical) */}
@@ -294,8 +401,8 @@ export default function DotsAndBoxesUI({
                             ? "bg-yellow-400 shadow-[0_0_12px_4px_rgba(250,204,21,0.7)] animate-pulse"
                             : "bg-white shadow-[0_0_8px_2px_rgba(255,255,255,0.4)]"
                           : state.gamePhase === "playing"
-                          ? "bg-slate-700 hover:bg-slate-400"
-                          : "bg-slate-800 cursor-default"
+                            ? "bg-slate-700 hover:bg-slate-400"
+                            : "bg-slate-800 cursor-default"
                       }`}
                     style={{
                       top: `${r * gridPercentage}%`,
@@ -315,7 +422,7 @@ export default function DotsAndBoxesUI({
                     )}
                   </div>
                 );
-              })
+              }),
             );
           })}
 

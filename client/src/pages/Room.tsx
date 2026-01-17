@@ -9,6 +9,7 @@ import {
   X,
   Lock,
   Languages,
+  Star,
 } from "lucide-react";
 import { useRoomStore } from "../stores/roomStore";
 import { useChatStore } from "../stores/chatStore";
@@ -16,7 +17,9 @@ import { useUserStore } from "../stores/userStore";
 import { useAlertStore } from "../stores/alertStore";
 import useLanguage from "../stores/languageStore";
 import { getSocket } from "../services/socket";
-import { getAllGames } from "../games/registry";
+import { getAllGames, type GameCategory } from "../games/registry";
+import { useGameFavorites } from "../hooks/useGameFavorites";
+import GameCategoryFilter from "../components/GameCategoryFilter";
 import { type Room } from "../stores/roomStore";
 import SidePanel from "../components/SidePanel";
 import GameContainer from "../games/GameContainer";
@@ -647,13 +650,29 @@ function ChangeGameModal({
   onClose: () => void;
   onChangeGame: (gameId: string) => void;
 }) {
-  const { ti } = useLanguage();
+  const { ti, ts } = useLanguage();
+  const [selectedCategory, setSelectedCategory] = useState<
+    GameCategory | "favorites" | null
+  >(null);
+  const { favorites, toggleFavorite, favoritesCount } = useGameFavorites();
+
+  const filteredGames = getAllGames().filter((game) =>
+    selectedCategory === "favorites"
+      ? favorites.includes(game.id)
+      : selectedCategory
+        ? game.categories.includes(selectedCategory)
+        : true,
+  );
+
   return (
     <div
       className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100] animate-fadeIn"
       onClick={onClose}
     >
-      <div className="bg-background-secondary border border-white/10 rounded-2xl p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto shadow-2xl mx-4 animate-scaleIn relative">
+      <div
+        className="bg-background-secondary border border-white/10 rounded-2xl p-6 max-w-2xl w-full max-h-[85vh] overflow-y-auto shadow-2xl mx-4 animate-scaleIn relative flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
         <button
           onClick={onClose}
           className="absolute top-4 right-4 p-1 hover:bg-white/10 rounded-lg transition-colors text-text-secondary z-10"
@@ -665,45 +684,71 @@ function ChangeGameModal({
           {ti({ en: "Change Game", vi: "Đổi game" })}
         </h3>
 
+        <div className="mb-6">
+          <GameCategoryFilter
+            selectedCategory={selectedCategory}
+            onSelectCategory={setSelectedCategory}
+            favoritesCount={favoritesCount}
+          />
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {getAllGames().map((game) => {
+          {filteredGames.map((game) => {
             const Icon = game.icon;
             const isSelected = currentRoom.gameType === game.id;
             return (
-              <button
-                key={game.id}
-                onClick={() => onChangeGame(game.id)}
-                disabled={!game.isAvailable || isSelected}
-                className={`flex items-center gap-4 p-4 rounded-xl border transition-all text-left ${
-                  isSelected
-                    ? "bg-primary/20 border-primary cursor-default"
-                    : !game.isAvailable
-                      ? "opacity-50 cursor-not-allowed border-white/5 bg-white/5"
-                      : "bg-white/5 border-white/10 hover:border-primary/50 hover:bg-white/10 cursor-pointer"
-                }`}
-              >
-                <div
-                  className={`p-3 rounded-lg ${
+              <div key={game.id} className="relative group">
+                <button
+                  onClick={(e) => toggleFavorite(game.id, e)}
+                  className={`absolute top-2 right-2 p-1.5 rounded-full transition-all duration-200 z-10 ${
+                    favorites.includes(game.id)
+                      ? "text-yellow-500 bg-yellow-500/10 hover:bg-yellow-500/20"
+                      : "text-text-muted hover:text-yellow-500 hover:bg-white/5 md:opacity-0 group-hover:opacity-100"
+                  }`}
+                  title={ts({
+                    en: "Toggle Favorite",
+                    vi: "Đánh dấu yêu thích",
+                  })}
+                >
+                  <Star
+                    className={`w-4 h-4 ${favorites.includes(game.id) ? "fill-current" : ""}`}
+                  />
+                </button>
+
+                <button
+                  onClick={() => onChangeGame(game.id)}
+                  disabled={!game.isAvailable || isSelected}
+                  className={`flex items-center gap-4 p-4 rounded-xl border transition-all text-left w-full ${
                     isSelected
-                      ? "bg-primary text-white"
-                      : "bg-white/10 text-primary"
+                      ? "bg-primary/20 border-primary cursor-default"
+                      : !game.isAvailable
+                        ? "opacity-50 cursor-not-allowed border-white/5 bg-white/5"
+                        : "bg-white/5 border-white/10 hover:border-primary/50 hover:bg-white/10 cursor-pointer"
                   }`}
                 >
-                  <Icon className="w-6 h-6" />
-                </div>
-                <div>
-                  <h4
-                    className={`font-bold ${
-                      isSelected ? "text-primary" : "text-text-primary"
+                  <div
+                    className={`p-3 rounded-lg ${
+                      isSelected
+                        ? "bg-primary text-white"
+                        : "bg-white/10 text-primary"
                     }`}
                   >
-                    {ti(game.name)}
-                  </h4>
-                  <p className="text-xs text-text-secondary line-clamp-2 mt-2 opacity-50">
-                    {ti(game.description)}
-                  </p>
-                </div>
-              </button>
+                    <Icon className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h4
+                      className={`font-bold ${
+                        isSelected ? "text-primary" : "text-text-primary"
+                      }`}
+                    >
+                      {ti(game.name)}
+                    </h4>
+                    <p className="text-xs text-text-secondary line-clamp-2 mt-2 opacity-50">
+                      {ti(game.description)}
+                    </p>
+                  </div>
+                </button>
+              </div>
             );
           })}
         </div>

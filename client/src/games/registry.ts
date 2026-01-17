@@ -31,8 +31,38 @@ export type GameCategory =
   | "puzzle"
   | "card"
   | "party"
-  | "relax"
-  | "classic";
+  | "relax";
+
+// Category display names and colors
+export const CATEGORY_CONFIG: Record<
+  GameCategory,
+  { label: { en: string; vi: string }; color: string }
+> = {
+  board: {
+    label: { en: "Board", vi: "Bàn cờ" },
+    color: "bg-blue-500/20 text-blue-400 border-blue-500/30",
+  },
+  strategy: {
+    label: { en: "Strategy", vi: "Chiến thuật" },
+    color: "bg-purple-500/20 text-purple-400 border-purple-500/30",
+  },
+  puzzle: {
+    label: { en: "Puzzle", vi: "Giải đố" },
+    color: "bg-green-500/20 text-green-400 border-green-500/30",
+  },
+  card: {
+    label: { en: "Card", vi: "Bài" },
+    color: "bg-red-500/20 text-red-400 border-red-500/30",
+  },
+  party: {
+    label: { en: "Party", vi: "Nhiều người" },
+    color: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
+  },
+  relax: {
+    label: { en: "Relax", vi: "Thư giãn" },
+    color: "bg-cyan-500/20 text-cyan-400 border-cyan-500/30",
+  },
+};
 
 export interface GameModule {
   id: string;
@@ -65,7 +95,7 @@ games.set("tictactoe", {
     vi: "Trò chơi lưới 3x3 cổ điển. Xếp 3 ô liên tiếp để thắng!",
   },
   icon: Grid2X2,
-  categories: ["board", "classic", "puzzle"],
+  categories: ["board", "puzzle"],
   minPlayers: 2,
   maxPlayers: 2,
   isAvailable: true,
@@ -105,7 +135,7 @@ games.set("connect4", {
     vi: "Thả đĩa và nối 4 ô liên tiếp để thắng!",
   },
   icon: Columns3,
-  categories: ["board", "classic", "puzzle"],
+  categories: ["board", "puzzle"],
   minPlayers: 2,
   maxPlayers: 2,
   isAvailable: true,
@@ -125,7 +155,7 @@ games.set("ludo", {
     vi: "Lắc xúc xắc và đua các quân cờ về đích!",
   },
   icon: Dices,
-  categories: ["board", "classic", "party"],
+  categories: ["board", "party"],
   minPlayers: 2,
   maxPlayers: 4,
   isAvailable: true,
@@ -145,7 +175,7 @@ games.set("reversi", {
     vi: "Trò chơi chiến thuật cổ điển. Lật quân của đối thủ!",
   },
   icon: Circle,
-  categories: ["board", "strategy", "classic"],
+  categories: ["board", "strategy"],
   minPlayers: 2,
   maxPlayers: 2,
   isAvailable: true,
@@ -165,7 +195,7 @@ games.set("chess", {
     vi: "Trò chơi chiến thuật. Chiếu hết đối thủ!",
   },
   icon: ChessRook,
-  categories: ["board", "strategy", "classic"],
+  categories: ["board", "strategy"],
   minPlayers: 2,
   maxPlayers: 2,
   isAvailable: true,
@@ -243,7 +273,7 @@ games.set("dotsandboxes", {
     vi: "Nối các điểm để đóng ô vuông!",
   },
   icon: LayoutGrid,
-  categories: ["puzzle", "strategy", "classic"],
+  categories: ["puzzle", "strategy"],
   minPlayers: 2,
   maxPlayers: 2,
   isAvailable: true,
@@ -264,7 +294,7 @@ games.set("uno", {
     vi: "Trò chơi bài cổ điển! Ghép màu hoặc số để thắng.",
   },
   icon: Layers,
-  categories: ["card", "party", "classic"],
+  categories: ["card", "party"],
   minPlayers: 2,
   maxPlayers: 4,
   isAvailable: true,
@@ -284,7 +314,7 @@ games.set("billiard", {
     vi: "Đánh bóng vào lỗ và ghi bàn bóng 8 để thắng!",
   },
   icon: CircleDot,
-  categories: ["classic", "strategy"],
+  categories: ["strategy"],
   minPlayers: 2,
   maxPlayers: 2,
   isAvailable: true,
@@ -304,7 +334,7 @@ games.set("monopoly", {
     vi: "Mua bất động sản, xây nhà, phá sản đối thủ!",
   },
   icon: Landmark,
-  categories: ["board", "strategy", "classic", "party"],
+  categories: ["board", "strategy", "party"],
   minPlayers: 2,
   maxPlayers: 4,
   isAvailable: true,
@@ -324,7 +354,7 @@ games.set("oanquan", {
     vi: "Trò chơi dân gian Việt Nam. Tính toán nước đi để ăn nhiều quân nhất!",
   },
   icon: Grid2X2,
-  categories: ["board", "strategy", "classic"],
+  categories: ["board", "strategy"],
   minPlayers: 2,
   maxPlayers: 2,
   isAvailable: true,

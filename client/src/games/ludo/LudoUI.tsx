@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import Ludo from "./Ludo";
 import type { LudoState, Token, PlayerColor, TokenPosition } from "./types";
 import { SAFE_POSITIONS } from "./types";
-import { Play, RefreshCw, Dices } from "lucide-react";
+import { Play, RefreshCw, Dices, BookOpen, X } from "lucide-react";
 import { useAlertStore } from "../../stores/alertStore";
 import type { GameUIProps } from "../types";
 import useLanguage from "../../stores/languageStore";
@@ -79,6 +79,7 @@ export default function LudoUI({ game: baseGame, currentUserId }: GameUIProps) {
   const [rolling, setRolling] = useState(false);
   const [displayDice, setDisplayDice] = useState<number>(1);
   const [showingResult, setShowingResult] = useState(false);
+  const [showRules, setShowRules] = useState(false);
   const [tokenSelectPopup, setTokenSelectPopup] = useState<{
     tokens: { token: Token; color: PlayerColor; playerIndex: number }[];
     x: number;
@@ -497,9 +498,106 @@ export default function LudoUI({ game: baseGame, currentUserId }: GameUIProps) {
     }
   };
 
+  const renderGameRules = () => {
+    if (!showRules) return null;
+
+    return (
+      <div
+        className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4"
+        onClick={() => setShowRules(false)}
+      >
+        <div
+          className="bg-slate-800 rounded-xl max-w-2xl w-full max-h-[90%] flex flex-col shadow-2xl border border-slate-600"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between p-4 border-b border-slate-700">
+            <h2 className="text-xl font-bold text-white flex items-center gap-2">
+              <BookOpen className="w-6 h-6 text-yellow-500" />
+              {ti({ en: "Game Rules", vi: "Luật Chơi" })}
+            </h2>
+            <button
+              onClick={() => setShowRules(false)}
+              className="p-1 hover:bg-slate-700 rounded transition-colors text-white"
+            >
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 overflow-y-auto p-6 custom-scrollbar text-slate-300">
+            <div className="space-y-4">
+              <p>
+                {ti({
+                  en: "Ludo is a strategy board game for two to four players, in which the players race their four tokens from start to finish according to the rolls of a single die.",
+                  vi: "Ludo (Cờ cá ngựa) là trò chơi chiến thuật cho 2-4 người, người chơi đua 4 quân cờ từ vạch xuất phát về đích dựa trên kết quả tung xúc xắc.",
+                })}
+              </p>
+
+              <h3 className="text-lg font-bold text-yellow-400 mt-4">
+                {ti({ en: "Objective", vi: "Mục tiêu" })}
+              </h3>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>
+                  {ti({
+                    en: "Be the first player to move all 4 of your tokens into your home triangle.",
+                    vi: "Là người đầu tiên đưa tất cả 4 quân cờ về đích (hình tam giác màu của mình).",
+                  })}
+                </li>
+              </ul>
+
+              <h3 className="text-lg font-bold text-yellow-400 mt-4">
+                {ti({ en: "Gameplay", vi: "Luật chơi" })}
+              </h3>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>
+                  {ti({
+                    en: "Roll a 6 to move a token out of the starting area.",
+                    vi: "Tung được 6 để đưa 1 quân cờ ra khỏi chuồng.",
+                  })}
+                </li>
+                <li>
+                  {ti({
+                    en: "Rolling a 6 awards an extra roll.",
+                    vi: "Tung được 6 sẽ được đi thêm một lượt nữa.",
+                  })}
+                </li>
+                <li>
+                  {ti({
+                    en: "Capture opponent's token by landing on the same square. The captured token returns to start.",
+                    vi: "Ăn quân đối phương bằng cách đi vào cùng ô với họ. Quân bị ăn sẽ quay về chuồng.",
+                  })}
+                </li>
+                <li>
+                  {ti({
+                    en: "Safe squares (marked with symbols) protect tokens from being captured.",
+                    vi: "Các ô an toàn (có ký hiệu) sẽ bảo vệ quân cờ không bị ăn.",
+                  })}
+                </li>
+              </ul>
+
+              <h3 className="text-lg font-bold text-yellow-400 mt-4">
+                {ti({ en: "Winning", vi: "Chiến thắng" })}
+              </h3>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>
+                  {ti({
+                    en: "The first player to get all 4 tokens to the finish wins.",
+                    vi: "Người đầu tiên đưa đủ 4 quân về đích sẽ thắng.",
+                  })}
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="flex flex-col items-center gap-4 p-4 w-full max-w-2xl mx-auto">
       <style dangerouslySetInnerHTML={{ __html: animationStyles }} />
+      {renderGameRules()}
 
       {/* Token Selection Popup */}
       {tokenSelectPopup && (
@@ -596,6 +694,15 @@ export default function LudoUI({ game: baseGame, currentUserId }: GameUIProps) {
             )}
         </div>
       )}
+
+      {/* Rules Button */}
+      <button
+        onClick={() => setShowRules(true)}
+        className="fixed bottom-4 right-4 p-3 bg-slate-700 hover:bg-slate-600 rounded-full text-yellow-500 transition-colors z-40 shadow-lg border border-slate-500"
+        title={ts({ en: "Rules", vi: "Luật chơi" })}
+      >
+        <BookOpen size={24} />
+      </button>
 
       {/* Game Over */}
       {state.gamePhase === "ended" && (

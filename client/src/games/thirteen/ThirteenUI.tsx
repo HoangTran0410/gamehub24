@@ -12,9 +12,11 @@ import {
   Check,
   Crown,
   Sparkle,
+  BookOpen,
 } from "lucide-react";
 import { useUserStore } from "../../stores/userStore";
 import { useAlertStore } from "../../stores/alertStore";
+import useLanguage from "../../stores/languageStore";
 import type { GameUIProps } from "../types";
 
 export default function ThirteenUI({ game: baseGame }: GameUIProps) {
@@ -22,7 +24,9 @@ export default function ThirteenUI({ game: baseGame }: GameUIProps) {
   const [state, setState] = useState<ThirteenState>(game.getState());
   const [selectedCards, setSelectedCards] = useState<number[]>([]);
   const [expandPlays, setExpandPlays] = useState(false);
+  const [showRules, setShowRules] = useState(false);
   const { username } = useUserStore();
+  const { ti, ts } = useLanguage();
 
   const isHost = game.isHostUser;
   const myIndex = game.getMyPlayerIndex();
@@ -192,8 +196,124 @@ export default function ThirteenUI({ game: baseGame }: GameUIProps) {
     );
   };
 
+  const renderGameRules = () => {
+    if (!showRules) return null;
+
+    return (
+      <div
+        className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4"
+        onClick={() => setShowRules(false)}
+      >
+        <div
+          className="bg-slate-800 rounded-xl max-w-2xl w-full max-h-[90%] flex flex-col shadow-2xl border border-slate-600"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between p-4 border-b border-slate-700">
+            <h2 className="text-xl font-bold text-white flex items-center gap-2">
+              <BookOpen className="w-6 h-6 text-yellow-500" />
+              {ti({ en: "Game Rules", vi: "Luật Chơi" })}
+            </h2>
+            <button
+              onClick={() => setShowRules(false)}
+              className="p-1 hover:bg-slate-700 rounded transition-colors text-white"
+            >
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 overflow-y-auto p-6 custom-scrollbar text-slate-300">
+            <div className="space-y-4">
+              <p>
+                {ti({
+                  en: "Thirteen (Tien Len) is a popular climbing card game using a standard 52-card deck. The goal is to be the first to empty your hand.",
+                  vi: "Tiến Lên Miền Nam là trò chơi bài phổ biến sử dụng bộ bài 52 lá. Mục tiêu là người đầu tiên đánh hết bài.",
+                })}
+              </p>
+
+              <h3 className="text-lg font-bold text-yellow-400 mt-4">
+                {ti({ en: "Card Ranking", vi: "Thứ tự bài" })}
+              </h3>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>
+                  {ti({
+                    en: "Ranks (Low to High): 3, 4, 5, 6, 7, 8, 9, 10, J, Q, K, A, 2.",
+                    vi: "Giá trị (Thấp đến Cao): 3, 4, 5, 6, 7, 8, 9, 10, J, Q, K, A, 2.",
+                  })}
+                </li>
+                <li>
+                  {ti({
+                    en: "Suits (Low to High): Spades ♠ < Clubs ♣ < Diamonds ♦ < Hearts ♥.",
+                    vi: "Chất (Thấp đến Cao): Bích ♠ < Chuồn ♣ < Rô ♦ < Cơ ♥.",
+                  })}
+                </li>
+              </ul>
+
+              <h3 className="text-lg font-bold text-yellow-400 mt-4">
+                {ti({ en: "Combinations", vi: "Các bộ bài" })}
+              </h3>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>
+                  <strong>{ti({ en: "Single", vi: "Rác" })}</strong>:{" "}
+                  {ti({ en: "A single card.", vi: "Một lá bài lẻ." })}
+                </li>
+                <li>
+                  <strong>{ti({ en: "Pair", vi: "Đôi" })}</strong>:{" "}
+                  {ti({
+                    en: "Two cards of the same rank.",
+                    vi: "2 lá cùng giá trị.",
+                  })}
+                </li>
+                <li>
+                  <strong>{ti({ en: "Triple", vi: "Sám cô" })}</strong>:{" "}
+                  {ti({
+                    en: "Three cards of the same rank.",
+                    vi: "3 lá cùng giá trị.",
+                  })}
+                </li>
+                <li>
+                  <strong>{ti({ en: "Straight", vi: "Sảnh" })}</strong>:{" "}
+                  {ti({
+                    en: "3+ consecutive rank cards (e.g., 3-4-5). 2 cannot be in a straight.",
+                    vi: "3+ lá liên tiếp (VD: 3-4-5). 2 không được nằm trong sảnh.",
+                  })}
+                </li>
+              </ul>
+
+              <h3 className="text-lg font-bold text-yellow-400 mt-4">
+                {ti({ en: "Gameplay", vi: "Luật chơi" })}
+              </h3>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>
+                  {ti({
+                    en: "Play a combination that is higher (better rank/suit) than the previous one to beat it.",
+                    vi: "Đánh bộ bài cao hơn (về giá trị/chất) để chặn bài trước đó.",
+                  })}
+                </li>
+                <li>
+                  {ti({
+                    en: "If everyone passes, the last player to play starts a new round with any combination.",
+                    vi: "Nếu tất cả bỏ lượt, người đánh cuối cùng sẽ được đi tiếp với bất kỳ bộ nào.",
+                  })}
+                </li>
+                <li>
+                  {ti({
+                    en: "Special: Four of a Kind cuts a 2. Three consecutive pairs cuts a single 2 or three consecutive pairs.",
+                    vi: "Đặc biệt: Tứ quý chặt 2. 3 đôi thông chặt 2 hoặc 3 đôi thông nhỏ hơn.",
+                  })}
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
-    <div className="flex flex-col h-full p-2 md:p-4 gap-2 md:gap-4 overflow-hidden">
+    <div className="flex flex-col h-full p-2 md:p-4 gap-2 md:gap-4 overflow-hidden md:min-h-[500px] pb-10">
+      {renderGameRules()}
       {/* Mobile: Top row with 3 opponents */}
       <div className="flex md:hidden justify-center gap-2">
         {renderPlayerSlot(1, true)}
@@ -398,6 +518,15 @@ export default function ThirteenUI({ game: baseGame }: GameUIProps) {
           </div>
         </div>
       )}
+
+      {/* Rules Button */}
+      <button
+        onClick={() => setShowRules(true)}
+        className="fixed bottom-4 right-4 p-3 bg-slate-700 hover:bg-slate-600 rounded-full text-yellow-500 transition-colors z-40 shadow-lg border border-slate-500"
+        title={ts({ en: "Rules", vi: "Luật chơi" })}
+      >
+        <BookOpen size={24} />
+      </button>
     </div>
   );
 }

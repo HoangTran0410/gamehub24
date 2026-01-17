@@ -2,7 +2,15 @@ import { useEffect, useState } from "react";
 import Connect4 from "./Connect4";
 import type { Connect4State } from "./types";
 import { ROWS, COLS } from "./types";
-import { Bot, RotateCcw, Play, RefreshCw, Check, X } from "lucide-react";
+import {
+  Bot,
+  RotateCcw,
+  Play,
+  RefreshCw,
+  Check,
+  X,
+  BookOpen,
+} from "lucide-react";
 import useLanguage from "../../stores/languageStore";
 import type { GameUIProps } from "../types";
 
@@ -23,7 +31,8 @@ export default function Connect4UI({
   const game = baseGame as Connect4;
   const [state, setState] = useState<Connect4State>(game.getState());
   const [hoverCol, setHoverCol] = useState<number | null>(null);
-  const { ti } = useLanguage();
+  const [showRules, setShowRules] = useState(false);
+  const { ti, ts } = useLanguage();
 
   useEffect(() => {
     game.onUpdate(setState);
@@ -114,8 +123,93 @@ export default function Connect4UI({
     );
   };
 
+  const renderGameRules = () => {
+    if (!showRules) return null;
+
+    return (
+      <div
+        className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4"
+        onClick={() => setShowRules(false)}
+      >
+        <div
+          className="bg-slate-800 rounded-xl max-w-2xl w-full max-h-[90%] flex flex-col shadow-2xl border border-slate-600"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between p-4 border-b border-slate-700">
+            <h2 className="text-xl font-bold text-white flex items-center gap-2">
+              <BookOpen className="w-6 h-6 text-yellow-500" />
+              {ti({ en: "Game Rules", vi: "Luật Chơi" })}
+            </h2>
+            <button
+              onClick={() => setShowRules(false)}
+              className="p-1 hover:bg-slate-700 rounded transition-colors text-white"
+            >
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 overflow-y-auto p-6 custom-scrollbar text-slate-300">
+            <div className="space-y-4">
+              <p>
+                {ti({
+                  en: "Connect 4 is a two-player connection board game, in which the players choose a color and then take turns dropping colored discs into a seven-column, six-row vertically suspended grid.",
+                  vi: "Connect 4 (Cờ ca-rô xếp đứng) là trò chơi dành cho 2 người, lần lượt thả các quân cờ màu vào lưới xếp đứng 7 cột 6 hàng.",
+                })}
+              </p>
+
+              <h3 className="text-lg font-bold text-yellow-400 mt-4">
+                {ti({ en: "Objective", vi: "Mục tiêu" })}
+              </h3>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>
+                  {ti({
+                    en: "Be the first to form a horizontal, vertical, or diagonal line of four of one's own discs.",
+                    vi: "Là người đầu tiên xếp được 4 quân liên tiếp theo hàng ngang, dọc hoặc chéo.",
+                  })}
+                </li>
+              </ul>
+
+              <h3 className="text-lg font-bold text-yellow-400 mt-4">
+                {ti({ en: "Gameplay", vi: "Luật chơi" })}
+              </h3>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>
+                  {ti({
+                    en: "Players take turns dropping one of their discs into an unfilled column.",
+                    vi: "Người chơi lần lượt thả quân của mình vào một cột chưa đầy.",
+                  })}
+                </li>
+                <li>
+                  {ti({
+                    en: "The disc occupies the lowest available space within the column.",
+                    vi: "Quân cờ sẽ rơi xuống vị trí thấp nhất có thể trong cột.",
+                  })}
+                </li>
+              </ul>
+
+              <h3 className="text-lg font-bold text-yellow-400 mt-4">
+                {ti({ en: "Winning", vi: "Chiến thắng" })}
+              </h3>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>
+                  {ti({
+                    en: "The game ends when a player connects 4 discs or the board is full (draw).",
+                    vi: "Trò chơi kết thúc khi có người xếp được 4 quân hoặc bàn cờ đầy (hòa).",
+                  })}
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="flex flex-col items-center gap-4 p-4 w-full max-w-lg mx-auto">
+      {renderGameRules()}
       {/* Inject drop animation CSS */}
       <style dangerouslySetInnerHTML={{ __html: dropStyle }} />
 
@@ -235,10 +329,10 @@ export default function Connect4UI({
             {state.winner === "draw"
               ? ti({ en: "It's a draw!", vi: "Hòa!" })
               : state.winner === currentUserId
-              ? ti({ en: "🎉 You won!", vi: "🎉 Bạn thắng!" })
-              : `${
-                  state.players.find((p) => p.id === state.winner)?.username
-                } ${ti({ en: "wins!", vi: "thắng!" })}`}
+                ? ti({ en: "🎉 You won!", vi: "🎉 Bạn thắng!" })
+                : `${
+                    state.players.find((p) => p.id === state.winner)?.username
+                  } ${ti({ en: "wins!", vi: "thắng!" })}`}
           </p>
         </div>
       )}
@@ -323,10 +417,19 @@ export default function Connect4UI({
                   >
                     {renderCell(row, col)}
                   </div>
-                ))
+                )),
             )}
         </div>
       </div>
+
+      {/* Rules Button */}
+      <button
+        onClick={() => setShowRules(true)}
+        className="fixed bottom-4 right-4 p-3 bg-slate-700 hover:bg-slate-600 rounded-full text-yellow-500 transition-colors z-40 shadow-lg border border-slate-500"
+        title={ts({ en: "Rules", vi: "Luật chơi" })}
+      >
+        <BookOpen size={24} />
+      </button>
     </div>
   );
 }

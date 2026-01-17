@@ -10,6 +10,7 @@ import {
   RefreshCcw,
   Bot,
   Play,
+  BookOpen,
 } from "lucide-react";
 import { useUserStore } from "../../stores/userStore";
 import useLanguage from "../../stores/languageStore";
@@ -22,7 +23,8 @@ export default function CaroUI({ game: baseGame }: GameUIProps) {
   const game = baseGame as Caro;
   const [state, setState] = useState<CaroState>(game.getState());
   const { userId, username: myUsername } = useUserStore();
-  const { ti } = useLanguage();
+  const { ti, ts } = useLanguage();
+  const [showRules, setShowRules] = useState(false);
 
   const { board, winningLine, pendingUndoRequest } = state;
   const mySymbol = game.getPlayerSymbol();
@@ -145,7 +147,7 @@ export default function CaroUI({ game: baseGame }: GameUIProps) {
           offsetX + hoverCol * cellSize,
           offsetY + hoverRow * cellSize,
           cellSize,
-          cellSize
+          cellSize,
         );
       }
     }
@@ -177,7 +179,7 @@ export default function CaroUI({ game: baseGame }: GameUIProps) {
             offsetX + i * cellSize,
             offsetY + j * cellSize,
             cellSize,
-            cellSize
+            cellSize,
           );
         }
 
@@ -224,7 +226,7 @@ export default function CaroUI({ game: baseGame }: GameUIProps) {
   // Convert canvas coordinates to board position
   const canvasToBoard = (
     clientX: number,
-    clientY: number
+    clientY: number,
   ): { row: number; col: number } | null => {
     const canvas = canvasRef.current;
     if (!canvas) return null;
@@ -395,11 +397,92 @@ export default function CaroUI({ game: baseGame }: GameUIProps) {
     requestAnimationFrame(animate);
   };
 
+  const renderGameRules = () => (
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+      <div className="bg-slate-900 border border-slate-700 rounded-xl max-w-lg w-full max-h-[80vh] overflow-y-auto shadow-2xl relative">
+        <button
+          onClick={() => setShowRules(false)}
+          className="absolute top-4 right-4 p-2 hover:bg-white/10 rounded-full transition-colors text-slate-400 hover:text-white"
+        >
+          <X className="w-5 h-5" />
+        </button>
+
+        <div className="p-6 space-y-6">
+          <h2 className="text-xl font-bold text-white flex items-center gap-2">
+            <BookOpen className="w-6 h-6 text-yellow-500" />
+            {ti({ en: "Game Rules", vi: "Luật Chơi" })}
+          </h2>
+
+          <div className="space-y-4 text-slate-300 leading-relaxed">
+            <section>
+              <h3 className="text-lg font-bold text-yellow-400 mt-4">
+                {ti({ en: "Objective", vi: "Mục tiêu" })}
+              </h3>
+              <p>
+                {ti({
+                  en: "Be the first player to get 5 of your marks in a row (horizontally, vertically, or diagonally).",
+                  vi: "Là người đầu tiên tạo được 5 dấu liên tiếp (ngang, dọc hoặc chéo).",
+                })}
+              </p>
+            </section>
+
+            <section>
+              <h3 className="text-lg font-bold text-yellow-400 mt-4">
+                {ti({ en: "Rules", vi: "Quy Tắc" })}
+              </h3>
+              <ul className="space-y-2 list-disc pl-4 text-sm">
+                <li>
+                  {ti({
+                    en: "Players take turns placing their mark (X or O) on an empty square.",
+                    vi: "Người chơi lần lượt đặt dấu (X hoặc O) vào một ô trống.",
+                  })}
+                </li>
+                <li>
+                  {ti({
+                    en: "The game is played on an infinite board (expandable).",
+                    vi: "Trò chơi diễn ra trên bàn cờ vô tận (có thể mở rộng).",
+                  })}
+                </li>
+                <li>
+                  {ti({
+                    en: "The game ends when one player gets 5 in a row.",
+                    vi: "Trò chơi kết thúc khi có người chơi đạt 5 dấu liên tiếp.",
+                  })}
+                </li>
+              </ul>
+            </section>
+
+            <section>
+              <h3 className="text-lg font-bold text-yellow-400 mt-4">
+                {ti({ en: "Controls", vi: "Điều Khiển" })}
+              </h3>
+              <ul className="space-y-2 list-disc pl-4 text-sm">
+                <li>
+                  {ti({
+                    en: "Click/Tap to place a mark.",
+                    vi: "Click/Chạm để đặt dấu.",
+                  })}
+                </li>
+                <li>
+                  {ti({
+                    en: "Drag to pan the board.",
+                    vi: "Kéo để di chuyển bàn cờ.",
+                  })}
+                </li>
+              </ul>
+            </section>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <div className="flex flex-col gap-3 p-2 md:p-4 w-full">
+      {showRules && renderGameRules()}
+
       {/* Player List */}
       <div className="flex flex-col gap-2 p-3 bg-slate-800 rounded-lg w-full max-w-[400px] mx-auto">
-        <h3 className="text-sm font-medium text-gray-400 mb-1">Players</h3>
         {(["X", "O"] as const).map((symbol) => {
           const player = state.players[symbol];
           const isCurrentTurn = state.currentTurn === symbol && !state.gameOver;
@@ -408,10 +491,10 @@ export default function CaroUI({ game: baseGame }: GameUIProps) {
           const playerName = isBot
             ? "Bot"
             : isMe
-            ? myUsername
-            : player
-            ? ti({ en: "Opponent", vi: "Đối thủ" })
-            : null;
+              ? myUsername
+              : player
+                ? ti({ en: "Opponent", vi: "Đối thủ" })
+                : null;
 
           return (
             <div
@@ -689,6 +772,15 @@ export default function CaroUI({ game: baseGame }: GameUIProps) {
           vi: "Kéo để di chuyển • Nhấp để đặt quân",
         })}
       </div>
+
+      {/* Rules Button */}
+      <button
+        onClick={() => setShowRules(true)}
+        className="fixed bottom-4 right-4 p-3 bg-slate-700 hover:bg-slate-600 rounded-full text-yellow-500 transition-colors z-40 shadow-lg border border-slate-500"
+        title={ts({ en: "Rules", vi: "Luật chơi" })}
+      >
+        <BookOpen size={24} />
+      </button>
     </div>
   );
 }
