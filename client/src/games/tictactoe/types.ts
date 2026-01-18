@@ -1,3 +1,5 @@
+import type { Player } from "../../stores/roomStore";
+
 export interface TicTacToeState {
   board: (string | null)[];
   currentTurn: "X" | "O";
@@ -6,8 +8,8 @@ export interface TicTacToeState {
   winningLine: number[] | null;
   isDraw: boolean;
   players: {
-    X: string | null;
-    O: string | null;
+    X: Player | null;
+    O: Player | null;
   };
   gameOver: boolean;
   /** Index of the last move made */

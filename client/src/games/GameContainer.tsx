@@ -8,6 +8,7 @@ import { getSocket } from "../services/socket";
 import { getGame } from "./registry";
 import type { GameUIProps } from "./types";
 import { RotateCcw } from "lucide-react";
+import type { BaseGame } from "./BaseGame";
 
 export default function GameContainer({
   onShowChangeGameModal,
@@ -81,16 +82,17 @@ export default function GameContainer({
         setIsHost(isHost);
 
         // Load game class and UI in parallel
-        const [game, UI] = await Promise.all([
-          gameModule.createGame(
-            roomId,
-            socket,
-            isHost,
-            userId,
-            currentRoom.players,
-          ),
-          gameModule.loadUI(),
-        ]);
+        const [game, UI]: [BaseGame<any>, ComponentType<GameUIProps>] =
+          await Promise.all([
+            gameModule.createGame(
+              roomId,
+              socket,
+              isHost,
+              userId,
+              currentRoom.players,
+            ),
+            gameModule.loadUI(),
+          ]);
 
         // Check if still relevant (room might have changed during loading)
         if (

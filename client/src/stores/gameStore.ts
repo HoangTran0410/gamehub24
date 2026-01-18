@@ -2,10 +2,10 @@ import { create } from "zustand";
 import type { BaseGame } from "../games/BaseGame";
 
 interface GameStore {
-  gameInstance: BaseGame | null;
+  gameInstance: BaseGame<any> | null;
   gameState: any;
   isHost: boolean;
-  setGameInstance: (instance: BaseGame | null) => void;
+  setGameInstance: (instance: BaseGame<any> | null) => void;
   updateGameState: (state: any) => void;
   setIsHost: (isHost: boolean) => void;
 }

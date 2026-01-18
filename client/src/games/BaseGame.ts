@@ -1,4 +1,5 @@
 import { Socket } from "socket.io-client";
+import type { Player } from "../stores/roomStore";
 
 export interface GameAction {
   // type: string;
@@ -16,16 +17,16 @@ export abstract class BaseGame<T> {
   protected socket: Socket;
   protected isHost: boolean;
   protected userId: string;
-  protected players: { id: string; username: string }[];
-
+  protected players: Player[];
   protected state: T;
+  protected stateListeners: ((state: T) => void)[] = [];
 
   constructor(
     roomId: string,
     socket: Socket,
     isHost: boolean,
     userId: string,
-    players: { id: string; username: string }[] = [],
+    players: Player[] = [],
   ) {
     this.roomId = roomId;
     this.socket = socket;
@@ -46,6 +47,13 @@ export abstract class BaseGame<T> {
     this.init();
   }
 
+  protected init(): void {
+    // host broadcast initial state
+    // if (this.isHost) {
+    //   this.broadcastState();
+    // }
+  }
+
   public get isHostUser(): boolean {
     return this.isHost;
   }
@@ -56,7 +64,6 @@ export abstract class BaseGame<T> {
 
   // Abstract methods that must be implemented by each game
   abstract getInitState(): T;
-  abstract init(): void;
   abstract handleAction(data: { action: GameAction }): void;
   abstract makeMove(action: GameAction): void;
   abstract checkGameEnd(): GameResult | null;
@@ -65,7 +72,6 @@ export abstract class BaseGame<T> {
 
   // Game persistent state name (e.g. "tictactoe")
   protected gameName: string = "unknown";
-
   public setGameName(name: string): void {
     this.gameName = name;
   }
@@ -77,23 +83,34 @@ export abstract class BaseGame<T> {
     return this.state;
   }
 
+  public notifyListeners(state: T): void {
+    this.stateListeners.forEach((listener) => listener({ ...state }));
+  }
+
+  public syncState(): void {
+    this.notifyListeners(this.state);
+    this.broadcastState();
+  }
+
   public setState(state: T): void {
     this.state = state;
-    this.onStateChange?.({ ...state });
+    this.notifyListeners(state);
+    this.broadcastState(); // TODO: check if this is needed
   }
 
-  // Host broadcasts state to all clients
-  protected onStateChange?: (state: T) => void; // use for UI
-
-  public onUpdate(callback: (state: T) => void): void {
-    this.onStateChange = callback;
+  public onUpdate(callback: (state: T) => void): () => void {
+    this.stateListeners.push(callback);
+    return () => {
+      this.stateListeners = this.stateListeners.filter(
+        (listener) => listener !== callback,
+      );
+    };
   }
 
+  // host broadcast state to all guests
   public broadcastState(): void {
-    const state = this.getState();
-    this.onStateChange?.({ ...state });
-
     if (this.isHost) {
+      const state = this.getState();
       this.socket.emit("game:state", {
         roomId: this.roomId,
         state: { ...state },

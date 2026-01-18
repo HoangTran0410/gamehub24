@@ -1,52 +1,23 @@
+import type { Player } from "../../stores/roomStore";
 import { BaseGame, type GameAction, type GameResult } from "../BaseGame";
-import type { Socket } from "socket.io-client";
-import { type TicTacToeState, type TicTacToeAction } from "./types";
+import type { TicTacToeState, TicTacToeAction } from "./types";
 
 export default class TicTacToe extends BaseGame<TicTacToeState> {
-  private state: TicTacToeState;
-
-  constructor(
-    roomId: string,
-    socket: Socket,
-    isHost: boolean,
-    userId: string,
-    players: { id: string; username: string }[],
-  ) {
-    super(roomId, socket, isHost, userId);
-
-    // Initialize state
-    this.state = {
+  getInitState(): TicTacToeState {
+    return {
       board: Array(9).fill(null),
       currentTurn: "X",
       winner: null,
       winningLine: null,
       isDraw: false,
       players: {
-        X: players[0]?.id || null,
-        O: players[1]?.id || null,
+        X: this.players[0],
+        O: this.players[1],
       },
       gameOver: false,
       lastMoveIndex: null,
       gamePhase: "waiting",
     };
-
-    this.init();
-  }
-
-  init(): void {
-    // If host, broadcast initial state
-    if (this.isHost) {
-      this.broadcastState();
-    }
-  }
-
-  getState(): TicTacToeState {
-    return { ...this.state };
-  }
-
-  setState(state: TicTacToeState): void {
-    this.state = state;
-    this.onStateChange?.(this.state);
   }
 
   handleAction(data: { action: GameAction }): void {
@@ -99,9 +70,7 @@ export default class TicTacToe extends BaseGame<TicTacToeState> {
       this.state.currentTurn = this.state.currentTurn === "X" ? "O" : "X";
     }
 
-    // Broadcast updated state
-    this.broadcastState();
-    this.setState({ ...this.state });
+    this.syncState();
 
     // Check if it's bot's turn
     this.checkBotTurn();
@@ -150,27 +119,24 @@ export default class TicTacToe extends BaseGame<TicTacToeState> {
       lastMoveIndex: null,
       gamePhase: "waiting",
     };
-
-    this.broadcastState();
-    this.setState({ ...this.state });
+    this.syncState();
   }
 
-  updatePlayers(players: { id: string; username: string }[]): void {
+  updatePlayers(players: Player[]): void {
     // X is always the first player (Host)
-    this.state.players.X = players[0]?.id || null;
+    this.state.players.X = players[0];
 
     // O is the second player. If human joins, they overwrite Bot.
     if (players[1]) {
-      this.state.players.O = players[1].id;
+      this.state.players.O = players[1];
     } else {
       // No human for O. If it was human, clear it. Keep Bot if active.
-      if (this.state.players.O !== "BOT") {
+      if (!this.state.players.O?.isBot) {
         this.state.players.O = null;
       }
     }
 
-    this.broadcastState();
-    this.setState({ ...this.state });
+    this.syncState();
   }
 
   // Request a move (client-side)
@@ -206,8 +172,7 @@ export default class TicTacToe extends BaseGame<TicTacToeState> {
     if (this.state.board.some((cell) => cell !== null)) return;
 
     this.state.currentTurn = this.state.currentTurn === "X" ? "O" : "X";
-    this.broadcastState();
-    this.setState({ ...this.state });
+    this.syncState();
 
     // Check if it became bot's turn
     this.checkBotTurn();
@@ -229,19 +194,22 @@ export default class TicTacToe extends BaseGame<TicTacToeState> {
     if (this.state.gamePhase !== "waiting") return;
 
     // Assign BOT to O
-    this.state.players.O = "BOT";
-    this.broadcastState();
-    this.setState({ ...this.state });
+    this.state.players.O = {
+      id: "BOT",
+      username: "Bot",
+      isHost: false,
+      isBot: true,
+    };
+    this.syncState();
   }
 
   removeBot(): void {
     if (!this.isHost) return;
     if (this.state.gamePhase !== "waiting") return;
-    if (this.state.players.O !== "BOT") return;
+    if (!this.state.players.O?.isBot) return;
 
     this.state.players.O = null;
-    this.broadcastState();
-    this.setState({ ...this.state });
+    this.syncState();
   }
 
   // Start Game
@@ -250,8 +218,7 @@ export default class TicTacToe extends BaseGame<TicTacToeState> {
     if (!this.state.players.X || !this.state.players.O) return;
 
     this.state.gamePhase = "playing";
-    this.broadcastState();
-    this.setState({ ...this.state });
+    this.syncState();
 
     // Check if bot goes first
     this.checkBotTurn();
@@ -282,7 +249,7 @@ export default class TicTacToe extends BaseGame<TicTacToeState> {
         ? this.state.players.X
         : this.state.players.O;
 
-    if (currentPlayerId === "BOT" && !this.state.gameOver) {
+    if (currentPlayerId?.isBot && !this.state.gameOver) {
       setTimeout(() => this.makeBotMove(), 600);
     }
   }
@@ -400,8 +367,8 @@ export default class TicTacToe extends BaseGame<TicTacToeState> {
 
   // Private helper to get symbol for any player ID
   private getPlayerSymbolInternal(playerId: string): "X" | "O" | null {
-    if (this.state.players.X === playerId) return "X";
-    if (this.state.players.O === playerId) return "O";
+    if (this.state.players.X?.id === playerId) return "X";
+    if (this.state.players.O?.id === playerId) return "O";
     return null;
   }
 

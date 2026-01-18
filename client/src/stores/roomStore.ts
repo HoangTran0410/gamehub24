@@ -5,6 +5,7 @@ export interface Player {
   username: string;
   isHost: boolean;
   socketId?: string;
+  isBot?: boolean;
 }
 
 export interface Room {

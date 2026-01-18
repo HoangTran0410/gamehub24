@@ -14,26 +14,28 @@ export default function ChatPanel() {
   const socket = getSocket();
 
   useEffect(() => {
+    if (!socket) return;
+
     // Listen for chat messages
     socket.on("chat:message", (msg: ChatMessage) => {
       addMessage(msg);
     });
 
     // Request chat history when joining room
-    if (currentRoom) {
+    if (currentRoom?.id) {
       socket.emit(
         "chat:history",
         { roomId: currentRoom.id },
         (history: ChatMessage[]) => {
           history.forEach((msg) => addMessage(msg));
-        }
+        },
       );
     }
 
     return () => {
       socket.off("chat:message");
     };
-  }, [socket, addMessage, currentRoom]);
+  }, [socket, addMessage, currentRoom?.id]);
 
   useEffect(() => {
     // Auto-scroll to bottom when new messages arrive
@@ -75,7 +77,7 @@ export default function ChatPanel() {
               message={msg}
               isHost={msg.userId === currentRoom?.ownerId}
             />
-          )
+          ),
         )}
         <div ref={messagesEndRef} />
       </div>

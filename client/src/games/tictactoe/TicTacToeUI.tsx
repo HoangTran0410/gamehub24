@@ -2,14 +2,12 @@ import { useEffect, useState } from "react";
 import TicTacToe from "./TicTacToe";
 import type { TicTacToeState } from "./types";
 import { RefreshCcw, X, Circle, Bot, Play } from "lucide-react";
-import { useUserStore } from "../../stores/userStore";
 import useLanguage from "../../stores/languageStore";
 import type { GameUIProps } from "../types";
 
 export default function TicTacToeUI({ game: baseGame }: GameUIProps) {
   const game = baseGame as TicTacToe;
   const [state, setState] = useState<TicTacToeState>(game.getState());
-  const { username: myUsername } = useUserStore();
   const { ti } = useLanguage();
 
   const mySymbol = game.getPlayerSymbol();
@@ -20,7 +18,7 @@ export default function TicTacToeUI({ game: baseGame }: GameUIProps) {
 
   useEffect(() => {
     // Subscribe to game state updates
-    game.onUpdate((state) => {
+    return game.onUpdate((state) => {
       setState(state);
     });
   }, [game]);
@@ -48,14 +46,7 @@ export default function TicTacToeUI({ game: baseGame }: GameUIProps) {
           const player = state.players[symbol];
           const isCurrentTurn = state.currentTurn === symbol && !state.gameOver;
           const isMe = symbol === mySymbol;
-          const isBot = player === "BOT";
-          const playerName = isBot
-            ? "Bot"
-            : isMe
-              ? myUsername
-              : player
-                ? ti({ en: "Opponent", vi: "Đối thủ" })
-                : null;
+          const isBot = player?.isBot;
 
           return (
             <div
@@ -81,9 +72,11 @@ export default function TicTacToeUI({ game: baseGame }: GameUIProps) {
                   )}
                 </div>
                 <span className="text-white">
-                  {playerName
-                    ? playerName
-                    : ti({ en: "(waiting...)", vi: "(đang chờ...)" })}
+                  {isBot
+                    ? "Bot"
+                    : player
+                      ? player.username
+                      : ti({ en: "(waiting...)", vi: "(đang chờ...)" })}
                   {isBot && " 🤖"}
                   {isMe && player && ti({ en: " (You)", vi: " (Bạn)" })}
                 </span>

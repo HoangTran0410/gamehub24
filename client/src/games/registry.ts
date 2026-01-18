@@ -80,7 +80,7 @@ export interface GameModule {
     isHost: boolean,
     userId: string,
     players: { id: string; username: string }[],
-  ) => Promise<BaseGame>;
+  ) => Promise<BaseGame<any>>;
   loadUI: () => Promise<ComponentType<GameUIProps>>;
 }
 
