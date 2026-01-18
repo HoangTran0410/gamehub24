@@ -99,7 +99,9 @@ io.on("connection", (socket: Socket) => {
       callback?.({ success: true, room });
 
       // Broadcast updated room list to all clients
-      io.emit("room:list:update", roomManager.getPublicRooms());
+      if (room.isPublic) {
+        io.emit("room:list:update", roomManager.getPublicRooms());
+      }
     } catch (error) {
       console.error("Error creating room:", error);
       callback?.({
@@ -152,8 +154,8 @@ io.on("connection", (socket: Socket) => {
         callback?.({ success: true, room: result.room });
 
         // Broadcast updated lists to room
-        io.to(data.roomId).emit("room:players", result.room.players);
-        io.to(data.roomId).emit("room:spectators", result.room.spectators);
+        // io.to(data.roomId).emit("room:players", result.room.players);
+        // io.to(data.roomId).emit("room:spectators", result.room.spectators);
         io.to(data.roomId).emit("room:update", result.room);
 
         // Send system message
@@ -169,7 +171,9 @@ io.on("connection", (socket: Socket) => {
         io.to(data.roomId).emit("chat:message", systemMessage);
 
         // Broadcast updated room list
-        io.emit("room:list:update", roomManager.getPublicRooms());
+        if (result.room.isPublic) {
+          io.emit("room:list:update", roomManager.getPublicRooms());
+        }
       } else {
         callback?.({ success: false, error: result.error });
       }
@@ -194,8 +198,8 @@ io.on("connection", (socket: Socket) => {
 
         if (result.room) {
           // Room still exists, broadcast updated lists
-          io.to(result.roomId).emit("room:players", result.room.players);
-          io.to(result.roomId).emit("room:spectators", result.room.spectators);
+          // io.to(result.roomId).emit("room:players", result.room.players);
+          // io.to(result.roomId).emit("room:spectators", result.room.spectators);
           io.to(result.roomId).emit("room:update", result.room);
 
           // Send system message
@@ -221,7 +225,9 @@ io.on("connection", (socket: Socket) => {
         }
 
         // Broadcast updated room list
-        io.emit("room:list:update", roomManager.getPublicRooms());
+        if (result.room?.isPublic) {
+          io.emit("room:list:update", roomManager.getPublicRooms());
+        }
       }
     } catch (error) {
       console.error("Error leaving room:", error);
@@ -264,7 +270,9 @@ io.on("connection", (socket: Socket) => {
       io.to(data.roomId).emit("room:update", room);
 
       // Update public room list
-      io.emit("room:list:update", roomManager.getPublicRooms());
+      if (room.isPublic) {
+        io.emit("room:list:update", roomManager.getPublicRooms());
+      }
     } catch (error) {
       console.error("Error updating room:", error);
     }
@@ -291,8 +299,8 @@ io.on("connection", (socket: Socket) => {
           data.userId,
         );
         if (result.success && result.room) {
-          io.to(data.roomId).emit("room:players", result.room.players);
-          io.to(data.roomId).emit("room:spectators", result.room.spectators);
+          // io.to(data.roomId).emit("room:players", result.room.players);
+          // io.to(data.roomId).emit("room:spectators", result.room.spectators);
           io.to(data.roomId).emit("room:update", result.room);
           callback?.({ success: true });
 
@@ -339,8 +347,8 @@ io.on("connection", (socket: Socket) => {
           data.userId,
         );
         if (result.success && result.room) {
-          io.to(data.roomId).emit("room:players", result.room.players);
-          io.to(data.roomId).emit("room:spectators", result.room.spectators);
+          // io.to(data.roomId).emit("room:players", result.room.players);
+          // io.to(data.roomId).emit("room:spectators", result.room.spectators);
           io.to(data.roomId).emit("room:update", result.room);
           callback?.({ success: true });
 
@@ -390,8 +398,8 @@ io.on("connection", (socket: Socket) => {
 
         const result = roomManager.kickUser(data.roomId, data.userId);
         if (result.success && result.room) {
-          io.to(data.roomId).emit("room:players", result.room.players);
-          io.to(data.roomId).emit("room:spectators", result.room.spectators);
+          // io.to(data.roomId).emit("room:players", result.room.players);
+          // io.to(data.roomId).emit("room:spectators", result.room.spectators);
           io.to(data.roomId).emit("room:update", result.room);
 
           // Force kicked user to leave room
@@ -528,7 +536,9 @@ io.on("connection", (socket: Socket) => {
       }
 
       // Broadcast updated room list
-      io.emit("room:list:update", roomManager.getPublicRooms());
+      if (result.room?.isPublic) {
+        io.emit("room:list:update", roomManager.getPublicRooms());
+      }
     }
   });
 });
