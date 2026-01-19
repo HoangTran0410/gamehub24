@@ -49,6 +49,8 @@ export interface WerewolfPlayer {
   hasVoted: boolean;
   // Chat messages remaining this discussion
   messagesRemaining: number;
+  // Personal history
+  history: PlayerHistoryItem[];
 }
 
 // Suspicion marker for discussion phase
@@ -58,13 +60,21 @@ export interface SuspicionMarker {
   timestamp: number;
 }
 
+// Player history item
+export interface PlayerHistoryItem {
+  id: string;
+  type: "vote" | "chat" | "action" | "info";
+  content: { en: string; vi: string };
+  timestamp: number;
+  day: number;
+  isSecret?: boolean;
+}
+
 // Quick message template
 export interface QuickMessage {
   id: string;
   icon: string;
-  textKey: string; // Translation key
-  textEn: string;
-  textVi: string;
+  text: { en: string; vi: string };
   type: "accuse" | "defend" | "claim" | "react";
   targetRequired: boolean;
 }
@@ -80,6 +90,7 @@ export interface ChatMessage {
   // For quick messages with target
   targetPlayerId?: string;
   quickMessageId?: string;
+  day: number;
 }
 
 // Wolf vote for coordination
@@ -180,6 +191,8 @@ export interface WerewolfState {
 
   // Timer
   phaseEndTime: number | null; // Unix timestamp when phase ends
+  isPaused: boolean; // Is the game timer paused
+  pausedTimeRemaining: number | null; // Time remaining when paused (ms)
 }
 
 // === Actions ===
@@ -213,6 +226,7 @@ export interface UpdateConfigAction {
 
 export interface StartGameAction {
   type: "START_GAME";
+  hostRole?: WerewolfRole;
 }
 
 export interface NightActionAction {
@@ -270,6 +284,10 @@ export interface PhaseTimeoutAction {
   type: "PHASE_TIMEOUT";
 }
 
+export interface SkipPhaseAction {
+  type: "SKIP_PHASE";
+}
+
 export interface ResetGameAction {
   type: "RESET_GAME";
 }
@@ -289,6 +307,7 @@ export type WerewolfAction =
   | CastVoteAction
   | HunterShootAction
   | PhaseTimeoutAction
+  | SkipPhaseAction
   | ResetGameAction;
 
 // === Quick Message Templates ===
@@ -298,18 +317,17 @@ export const QUICK_MESSAGES: QuickMessage[] = [
   {
     id: "suspect",
     icon: "🎯",
-    textKey: "suspect",
-    textEn: "I suspect {target} is a Wolf",
-    textVi: "Tôi nghi {target} là Sói",
+    text: {
+      en: "I suspect {target} is a Wolf",
+      vi: "Tôi nghi {target} là Sói",
+    },
     type: "accuse",
     targetRequired: true,
   },
   {
     id: "very_sus",
     icon: "🔴",
-    textKey: "very_sus",
-    textEn: "{target} is VERY suspicious!",
-    textVi: "{target} RẤT đáng ngờ!",
+    text: { en: "{target} is VERY suspicious!", vi: "{target} RẤT đáng ngờ!" },
     type: "accuse",
     targetRequired: true,
   },
@@ -317,18 +335,14 @@ export const QUICK_MESSAGES: QuickMessage[] = [
   {
     id: "trust",
     icon: "🛡️",
-    textKey: "trust",
-    textEn: "I trust {target}",
-    textVi: "Tôi tin {target}",
+    text: { en: "I trust {target}", vi: "Tôi tin {target}" },
     type: "defend",
     targetRequired: true,
   },
   {
     id: "innocent",
     icon: "✅",
-    textKey: "innocent",
-    textEn: "{target} is innocent",
-    textVi: "{target} vô tội",
+    text: { en: "{target} is innocent", vi: "{target} vô tội" },
     type: "defend",
     targetRequired: true,
   },
@@ -336,45 +350,38 @@ export const QUICK_MESSAGES: QuickMessage[] = [
   {
     id: "claim_seer",
     icon: "🔮",
-    textKey: "claim_seer",
-    textEn: "I am the Seer!",
-    textVi: "Tôi là Tiên Tri!",
+    text: { en: "I am the Seer!", vi: "Tôi là Tiên Tri!" },
     type: "claim",
     targetRequired: false,
   },
   {
     id: "claim_bodyguard",
     icon: "🛡️",
-    textKey: "claim_bodyguard",
-    textEn: "I am the Bodyguard!",
-    textVi: "Tôi là Bảo Vệ!",
+    text: { en: "I am the Bodyguard!", vi: "Tôi là Bảo Vệ!" },
     type: "claim",
     targetRequired: false,
   },
   {
     id: "claim_witch",
     icon: "🧙",
-    textKey: "claim_witch",
-    textEn: "I am the Witch!",
-    textVi: "Tôi là Phù Thủy!",
+    text: { en: "I am the Witch!", vi: "Tôi là Phù Thủy!" },
     type: "claim",
     targetRequired: false,
   },
   {
     id: "seer_result_wolf",
     icon: "🐺",
-    textKey: "seer_result_wolf",
-    textEn: "I checked {target} - WOLF!",
-    textVi: "Tôi soi {target} - SÓI!",
+    text: { en: "I checked {target} - WOLF!", vi: "Tôi soi {target} - SÓI!" },
     type: "claim",
     targetRequired: true,
   },
   {
     id: "seer_result_safe",
     icon: "✅",
-    textKey: "seer_result_safe",
-    textEn: "I checked {target} - NOT wolf",
-    textVi: "Tôi soi {target} - KHÔNG phải sói",
+    text: {
+      en: "I checked {target} - NOT wolf",
+      vi: "Tôi soi {target} - KHÔNG phải sói",
+    },
     type: "claim",
     targetRequired: true,
   },
@@ -382,54 +389,42 @@ export const QUICK_MESSAGES: QuickMessage[] = [
   {
     id: "agree",
     icon: "👍",
-    textKey: "agree",
-    textEn: "Agree",
-    textVi: "Đồng ý",
+    text: { en: "Agree", vi: "Đồng ý" },
     type: "react",
     targetRequired: false,
   },
   {
     id: "disagree",
     icon: "👎",
-    textKey: "disagree",
-    textEn: "Disagree",
-    textVi: "Không đồng ý",
+    text: { en: "Disagree", vi: "Không đồng ý" },
     type: "react",
     targetRequired: false,
   },
   {
     id: "thinking",
     icon: "🤔",
-    textKey: "thinking",
-    textEn: "Hmm...",
-    textVi: "Hmm...",
+    text: { en: "Hmm...", vi: "Hmm..." },
     type: "react",
     targetRequired: false,
   },
   {
     id: "shocked",
     icon: "😱",
-    textKey: "shocked",
-    textEn: "Shocked!",
-    textVi: "Sốc!",
+    text: { en: "Shocked!", vi: "Sốc!" },
     type: "react",
     targetRequired: false,
   },
   {
     id: "angry",
     icon: "😤",
-    textKey: "angry",
-    textEn: "No way!",
-    textVi: "Không thể!",
+    text: { en: "No way!", vi: "Không thể!" },
     type: "react",
     targetRequired: false,
   },
   {
     id: "acting",
     icon: "🎭",
-    textKey: "acting",
-    textEn: "Acting?",
-    textVi: "Đang diễn à?",
+    text: { en: "Acting?", vi: "Đang diễn à?" },
     type: "react",
     targetRequired: false,
   },
@@ -562,7 +557,7 @@ export const DEFAULT_CONFIG: GameConfig = {
   voteTime: 30,
   anonymousVoting: false,
   revealRolesOnDeath: true,
-  chatLimit: 3,
+  chatLimit: 10,
   tieHandling: "noElimination",
   roles: ["wolf", "wolf", "seer", "bodyguard", "villager", "villager"],
 };

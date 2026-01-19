@@ -56,3 +56,31 @@
     opacity: 1;
   }
 }
+
+/* Background Slide Animation */
+@keyframes slide-in-right {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.animate-slide-in {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0; /* Behind content but above previous background */
+  animation: slide-in-right 1s ease-in-out forwards;
+}
+
+.show-on-hover-trigger:hover .show-on-hover-item {
+  display: block;
+}
+
+.show-on-hover-item {
+  display: none;
+}

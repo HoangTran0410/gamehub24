@@ -1,20 +1,19 @@
-import type { Player } from "../../stores/roomStore";
-import { BaseGame, type GameAction, type GameResult } from "../BaseGame";
+import { transString } from "../../stores/languageStore";
+import { BaseGame, type GameAction } from "../BaseGame";
 import {
   type WerewolfState,
   type WerewolfAction,
   type WerewolfPlayer,
   type WerewolfRole,
-  type GamePhase,
   type NightSubPhase,
   type NightResult,
   type ChatMessage,
   type GameLog,
-  type WitchPotions,
-  type Team,
+  type PlayerHistoryItem,
   DEFAULT_CONFIG,
   ROLE_SETS,
   ROLE_INFO,
+  QUICK_MESSAGES,
 } from "./types";
 
 export default class Werewolf extends BaseGame<WerewolfState> {
@@ -34,6 +33,7 @@ export default class Werewolf extends BaseGame<WerewolfState> {
         hasPendingShot: false,
         hasVoted: false,
         messagesRemaining: 3,
+        history: [],
       });
     }
 
@@ -81,6 +81,8 @@ export default class Werewolf extends BaseGame<WerewolfState> {
       config: { ...DEFAULT_CONFIG },
       logs: [],
       phaseEndTime: null,
+      isPaused: false,
+      pausedTimeRemaining: null,
     };
   }
 
@@ -89,76 +91,107 @@ export default class Werewolf extends BaseGame<WerewolfState> {
 
     if (this.isHost) {
       // Host processes all actions
-      this.handleAction(action);
+      switch (action.type) {
+        case "JOIN_SLOT":
+          this.handleJoinSlot(
+            action.slotIndex,
+            action.playerId,
+            action.playerName,
+          );
+          break;
+        case "LEAVE_SLOT":
+          this.handleLeaveSlot(action.slotIndex);
+          break;
+        case "ADD_BOT":
+          this.handleAddBot(action.slotIndex);
+          break;
+        case "REMOVE_BOT":
+          this.handleRemoveBot(action.slotIndex);
+          break;
+        case "UPDATE_CONFIG":
+          this.handleUpdateConfig(action.config);
+          break;
+        case "START_GAME":
+          this.handleStartGame(action.hostRole);
+          break;
+        case "NIGHT_ACTION":
+          this.handleNightAction(
+            action.playerId,
+            action.role,
+            action.targetId,
+            action.useHealPotion,
+            action.useKillPotion,
+            action.secondTargetId,
+          );
+          break;
+        case "SKIP_NIGHT_ACTION":
+          this.handleSkipNightAction(action.playerId, action.role);
+          break;
+        case "SEND_MESSAGE":
+          this.handleSendMessage(
+            action.playerId,
+            action.content,
+            action.messageType,
+            action.targetPlayerId,
+            action.quickMessageId,
+          );
+          break;
+        case "ADD_SUSPICION":
+          this.handleAddSuspicion(action.playerId, action.targetId);
+          break;
+        case "REMOVE_SUSPICION":
+          this.handleRemoveSuspicion(action.playerId, action.targetId);
+          break;
+        case "CAST_VOTE":
+          this.handleCastVote(action.playerId, action.targetId);
+          break;
+        case "HUNTER_SHOOT":
+          this.handleHunterShoot(action.playerId, action.targetId);
+          break;
+        case "PHASE_TIMEOUT":
+          this.handlePhaseTimeout();
+          break;
+        case "SKIP_PHASE":
+          this.handleSkipPhase();
+          break;
+        case "RESET_GAME":
+          this.handleResetGame();
+          break;
+      }
     }
   }
 
-  // === Action Handlers ===
+  public updatePlayers(players: any[]): void {
+    super.updatePlayers(players);
 
-  private handleAction(action: WerewolfAction): void {
-    switch (action.type) {
-      case "JOIN_SLOT":
-        this.handleJoinSlot(
-          action.slotIndex,
-          action.playerId,
-          action.playerName,
-        );
-        break;
-      case "LEAVE_SLOT":
-        this.handleLeaveSlot(action.slotIndex);
-        break;
-      case "ADD_BOT":
-        this.handleAddBot(action.slotIndex);
-        break;
-      case "REMOVE_BOT":
-        this.handleRemoveBot(action.slotIndex);
-        break;
-      case "UPDATE_CONFIG":
-        this.handleUpdateConfig(action.config);
-        break;
-      case "START_GAME":
-        this.handleStartGame();
-        break;
-      case "NIGHT_ACTION":
-        this.handleNightAction(
-          action.playerId,
-          action.role,
-          action.targetId,
-          action.useHealPotion,
-          action.useKillPotion,
-          action.secondTargetId,
-        );
-        break;
-      case "SKIP_NIGHT_ACTION":
-        this.handleSkipNightAction(action.playerId, action.role);
-        break;
-      case "SEND_MESSAGE":
-        this.handleSendMessage(
-          action.playerId,
-          action.content,
-          action.messageType,
-          action.targetPlayerId,
-          action.quickMessageId,
-        );
-        break;
-      case "ADD_SUSPICION":
-        this.handleAddSuspicion(action.playerId, action.targetId);
-        break;
-      case "REMOVE_SUSPICION":
-        this.handleRemoveSuspicion(action.playerId, action.targetId);
-        break;
-      case "CAST_VOTE":
-        this.handleCastVote(action.playerId, action.targetId);
-        break;
-      case "HUNTER_SHOOT":
-        this.handleHunterShoot(action.playerId, action.targetId);
-        break;
-      case "PHASE_TIMEOUT":
-        this.handlePhaseTimeout();
-        break;
-      case "RESET_GAME":
-        this.handleResetGame();
-        break;
+    // Only auto-add in setup phase
+    if (this.state.isGameStarted) return;
+
+    let stateChanged = false;
+
+    // 1. Handle new players joining
+    players.forEach((roomPlayer) => {
+      // Check if player is already in a slot
+      const existingSlot = this.state.players.find(
+        (p) => p.id === roomPlayer.id,
+      );
+
+      if (!existingSlot) {
+        // Find first empty slot
+        const emptySlot = this.state.players.find((p) => p.id === null);
+        if (emptySlot) {
+          emptySlot.id = roomPlayer.id;
+          emptySlot.username = roomPlayer.username;
+          // Reset other fields if necessary
+          emptySlot.isBot = false;
+          emptySlot.role = null;
+          stateChanged = true;
+        }
+      }
+    });
+
+    if (stateChanged) {
+      this.syncState();
     }
   }
 
@@ -239,13 +272,13 @@ export default class Werewolf extends BaseGame<WerewolfState> {
     this.syncState();
   }
 
-  private handleStartGame(): void {
+  private handleStartGame(hostRole?: WerewolfRole): void {
     const activePlayers = this.state.players.filter((p) => p.id !== null);
     if (activePlayers.length < this.state.minPlayers) return;
     if (this.state.isGameStarted) return;
 
     // Assign roles
-    this.assignRoles(activePlayers);
+    this.assignRoles(activePlayers, hostRole);
 
     // Initialize witch potions
     const witches = this.state.players.filter((p) => p.role === "witch");
@@ -269,7 +302,10 @@ export default class Werewolf extends BaseGame<WerewolfState> {
     this.startNightPhase();
   }
 
-  private assignRoles(activePlayers: WerewolfPlayer[]): void {
+  private assignRoles(
+    activePlayers: WerewolfPlayer[],
+    hostRole?: WerewolfRole,
+  ): void {
     const playerCount = activePlayers.length;
 
     // Get role set based on player count
@@ -291,16 +327,48 @@ export default class Werewolf extends BaseGame<WerewolfState> {
       }
     }
 
+    // Handle Host Role Selection
+    if (hostRole) {
+      // Find the human player (Host) when playing with bots
+      const humans = activePlayers.filter((p) => !p.isBot);
+      const targetPlayer = humans.length > 0 ? humans[0] : null;
+
+      if (targetPlayer) {
+        // Remove one instance of the requested role from the pool
+        const roleIndex = roles.indexOf(hostRole);
+        if (roleIndex !== -1) {
+          roles.splice(roleIndex, 1);
+        } else {
+          // Force it: remove a villager or random role to make space
+          const villagerIndex = roles.lastIndexOf("villager");
+          if (villagerIndex !== -1) {
+            roles.splice(villagerIndex, 1);
+          } else {
+            roles.pop();
+          }
+        }
+        // Assign to target immediately
+        targetPlayer.role = hostRole;
+      }
+    }
+
     // Shuffle roles
     const shuffledRoles = this.shuffleArray([...roles]);
 
     // Assign roles to active players
     let roleIndex = 0;
     this.state.players.forEach((player) => {
-      if (player.id !== null) {
+      // Only assign if not already assigned (host might have role)
+      if (player.id !== null && !player.role) {
         player.role = shuffledRoles[roleIndex++];
+      }
+
+      // Reset state for new game
+      if (player.id !== null) {
         player.isAlive = true;
         player.hasVoted = false;
+        player.hasPendingShot = false;
+        player.loverId = null;
         player.messagesRemaining = this.state.config.chatLimit;
       }
     });
@@ -478,20 +546,41 @@ export default class Werewolf extends BaseGame<WerewolfState> {
     if (!targetId) return;
 
     this.state.nightActions.seerTarget = targetId;
+
+    const target = this.state.players.find((p) => p.id === targetId);
+    if (target) {
+      const isWolf = target.role === "wolf";
+      this.addPlayerHistory(
+        playerId,
+        "info",
+        {
+          vi: `Kết quả soi: ${target.username} là ${isWolf ? "MA SÓI" : "Dân Làng"}`,
+          en: `Seer Result: ${target.username} is ${isWolf ? "a WEREWOLF" : "a Villager"}`,
+        },
+        true,
+      );
+    }
+
     this.advanceNightSubPhase();
   }
 
   private handleBodyguardAction(
-    playerId: string,
+    _playerId: string,
     targetId: string | null,
   ): void {
     if (this.state.nightSubPhase !== "bodyguard") return;
     if (!targetId) return;
 
     // Can't protect same person twice in a row
-    if (targetId === this.state.nightActions.lastBodyguardTarget) return;
+    if (targetId === this.state.nightActions.lastBodyguardTarget) {
+      console.log(
+        `Bodyguard protect failed: Cannot protect ${targetId} twice in a row.`,
+      );
+      return;
+    }
 
     this.state.nightActions.bodyguardTarget = targetId;
+    console.log(`Bodyguard protected ${targetId}`);
     this.advanceNightSubPhase();
   }
 
@@ -514,6 +603,20 @@ export default class Werewolf extends BaseGame<WerewolfState> {
       this.state.nightActions.witchHealTarget =
         this.state.nightActions.wolfTarget;
       potions.hasHealPotion = false;
+      console.log(
+        "Witch healed:",
+        this.state.nightActions.witchHealTarget,
+        "Wolf target:",
+        this.state.nightActions.wolfTarget,
+      );
+    } else if (useHealPotion) {
+      console.log(
+        "Witch heal failed:",
+        "Has potion:",
+        potions.hasHealPotion,
+        "Wolf target:",
+        this.state.nightActions.wolfTarget,
+      );
     }
 
     if (useKillPotion && potions.hasKillPotion && targetId) {
@@ -525,7 +628,7 @@ export default class Werewolf extends BaseGame<WerewolfState> {
   }
 
   private handleCupidAction(
-    playerId: string,
+    _playerId: string,
     targetId: string | null,
     secondTargetId?: string,
   ): void {
@@ -572,8 +675,15 @@ export default class Werewolf extends BaseGame<WerewolfState> {
         this.state.nightActions.bodyguardTarget ===
         this.state.nightActions.wolfTarget;
       const isHealed =
+        !!this.state.nightActions.witchHealTarget &&
         this.state.nightActions.witchHealTarget ===
-        this.state.nightActions.wolfTarget;
+          this.state.nightActions.wolfTarget;
+
+      console.log("Process Night Result:", {
+        wolfTarget: this.state.nightActions.wolfTarget,
+        healTarget: this.state.nightActions.witchHealTarget,
+        isHealed,
+      });
 
       if (isProtected) {
         result.savedByBodyguard = true;
@@ -587,6 +697,19 @@ export default class Werewolf extends BaseGame<WerewolfState> {
     // Process witch kill
     if (this.state.nightActions.witchKillTarget) {
       result.killedByWitch = this.state.nightActions.witchKillTarget;
+    }
+
+    // Process seer check
+    if (this.state.nightActions.seerTarget) {
+      const target = this.state.players.find(
+        (p) => p.id === this.state.nightActions.seerTarget,
+      );
+      if (target && target.role) {
+        result.seerCheck = {
+          targetId: target.id!,
+          isWolf: target.role === "wolf",
+        };
+      }
     }
 
     // Update last bodyguard target
@@ -660,8 +783,13 @@ export default class Werewolf extends BaseGame<WerewolfState> {
     if (hunterWithPendingShot) {
       this.state.phase = "hunterRevenge";
       this.state.pendingElimination = hunterWithPendingShot.id;
+
+      // Reset voted flag so UI shows controls
+      hunterWithPendingShot.hasVoted = false;
+
       this.startPhaseTimer();
       this.syncState();
+      this.processBotHunterAction();
       return;
     }
 
@@ -672,14 +800,8 @@ export default class Werewolf extends BaseGame<WerewolfState> {
     }
 
     // Auto-advance to discussion after brief pause
-    this.state.phaseEndTime = Date.now() + 5000; // 5 second pause
+    this.startPhaseTimer();
     this.syncState();
-
-    setTimeout(() => {
-      if (this.state.phase === "morning") {
-        this.startDiscussionPhase();
-      }
-    }, 5000);
   }
 
   private killPlayer(playerId: string): void {
@@ -729,6 +851,9 @@ export default class Werewolf extends BaseGame<WerewolfState> {
 
     this.startPhaseTimer();
     this.syncState();
+
+    // Bot auto actions during discussion
+    this.processBotDiscussion();
   }
 
   private handleSendMessage(
@@ -760,17 +885,23 @@ export default class Werewolf extends BaseGame<WerewolfState> {
       timestamp: Date.now(),
       targetPlayerId,
       quickMessageId,
+      day: this.state.day,
     };
 
     this.state.chatMessages.push(message);
 
     if (messageType === "text") {
       player.messagesRemaining--;
+
+      this.addPlayerHistory(playerId, "chat", {
+        en: `Chat: "${content}"`,
+        vi: `Chat: "${content}"`,
+      });
     }
 
-    // Keep only last 50 messages
-    if (this.state.chatMessages.length > 50) {
-      this.state.chatMessages = this.state.chatMessages.slice(-50);
+    // Keep last 500 messages
+    if (this.state.chatMessages.length > 500) {
+      this.state.chatMessages = this.state.chatMessages.slice(-500);
     }
 
     this.syncState();
@@ -782,17 +913,41 @@ export default class Werewolf extends BaseGame<WerewolfState> {
     const player = this.state.players.find((p) => p.id === playerId);
     if (!player || !player.isAlive) return;
 
-    // Remove existing suspicion from this player
-    this.state.suspicionMarkers = this.state.suspicionMarkers.filter(
-      (m) => m.fromPlayerId !== playerId,
+    // Check if already suspected
+    const alreadySuspected = this.state.suspicionMarkers.some(
+      (m) => m.fromPlayerId === playerId && m.toPlayerId === targetId,
     );
 
-    // Add new suspicion
-    this.state.suspicionMarkers.push({
-      fromPlayerId: playerId,
-      toPlayerId: targetId,
-      timestamp: Date.now(),
-    });
+    if (alreadySuspected) {
+      // Remove suspicion (Toggle OFF)
+      this.state.suspicionMarkers = this.state.suspicionMarkers.filter(
+        (m) => !(m.fromPlayerId === playerId && m.toPlayerId === targetId),
+      );
+
+      this.addPlayerHistory(playerId, "action", {
+        en: `Removed suspicion on ${this.state.players.find((p) => p.id === targetId)?.username}`,
+        vi: `Bỏ nghi ngờ ${this.state.players.find((p) => p.id === targetId)?.username}`,
+      });
+    } else {
+      // Add new suspicion (Toggle ON)
+      this.state.suspicionMarkers.push({
+        fromPlayerId: playerId,
+        toPlayerId: targetId,
+        timestamp: Date.now(),
+      });
+
+      // Add history
+      this.addPlayerHistory(playerId, "action", {
+        en: `Suspects ${this.state.players.find((p) => p.id === targetId)?.username}`,
+        vi: `Nghi ngờ ${this.state.players.find((p) => p.id === targetId)?.username}`,
+      });
+
+      // Add incoming history to target
+      this.addPlayerHistory(targetId, "info", {
+        en: `${player.username} suspects you`,
+        vi: `${player.username} nghi ngờ bạn`,
+      });
+    }
 
     this.syncState();
   }
@@ -820,6 +975,9 @@ export default class Werewolf extends BaseGame<WerewolfState> {
 
     this.startPhaseTimer();
     this.syncState();
+
+    // Bot auto voting
+    this.processBotVoting();
   }
 
   private handleCastVote(playerId: string, targetId: string | null): void {
@@ -846,6 +1004,14 @@ export default class Werewolf extends BaseGame<WerewolfState> {
       voterId: playerId,
       targetId,
     });
+
+    // Add incoming history to target (if not null)
+    if (targetId) {
+      this.addPlayerHistory(targetId, "vote", {
+        en: `${player.username} voted for you`,
+        vi: `${player.username} đã bình chọn bạn`,
+      });
+    }
 
     // Check if all alive players have voted
     const alivePlayers = this.state.players.filter(
@@ -949,8 +1115,13 @@ export default class Werewolf extends BaseGame<WerewolfState> {
     if (hunterWithPendingShot) {
       this.state.phase = "hunterRevenge";
       this.state.pendingElimination = hunterWithPendingShot.id;
+
+      // Reset voted flag so UI shows controls
+      hunterWithPendingShot.hasVoted = false;
+
       this.startPhaseTimer();
       this.syncState();
+      this.processBotHunterAction();
       return;
     }
 
@@ -961,16 +1132,8 @@ export default class Werewolf extends BaseGame<WerewolfState> {
     }
 
     // Pause then start next night
-    this.state.phaseEndTime = Date.now() + 5000;
+    this.startPhaseTimer();
     this.syncState();
-
-    setTimeout(() => {
-      if (this.state.phase === "elimination") {
-        this.state.pendingElimination = null;
-        this.state.day++;
-        this.startNightPhase();
-      }
-    }, 5000);
   }
 
   // === Hunter Revenge ===
@@ -982,26 +1145,35 @@ export default class Werewolf extends BaseGame<WerewolfState> {
     if (!hunter || hunter.role !== "hunter" || !hunter.hasPendingShot) return;
 
     const target = this.state.players.find((p) => p.id === targetId);
-    if (!target || !target.isAlive) return;
 
-    hunter.hasPendingShot = false;
-
-    this.addLog(
-      {
-        en: `${hunter.username} took ${target.username} with them!`,
-        vi: `${hunter.username} kéo ${target.username} đi cùng!`,
-      },
-      "death",
-    );
-
-    this.killPlayer(targetId);
-
-    if (this.state.config.revealRolesOnDeath && target.role) {
-      const roleInfo = ROLE_INFO[target.role];
+    // Valid shot
+    if (target && target.isAlive) {
       this.addLog(
         {
-          en: `${target.username} was a ${roleInfo.name.en}`,
-          vi: `${target.username} là ${roleInfo.name.vi}`,
+          en: `${hunter.username} took ${target.username} with them!`,
+          vi: `${hunter.username} kéo ${target.username} đi cùng!`,
+        },
+        "death",
+      );
+
+      this.killPlayer(targetId);
+
+      if (this.state.config.revealRolesOnDeath && target.role) {
+        const roleInfo = ROLE_INFO[target.role];
+        this.addLog(
+          {
+            en: `${target.username} was a ${roleInfo.name.en}`,
+            vi: `${target.username} là ${roleInfo.name.vi}`,
+          },
+          "info",
+        );
+      }
+    } else {
+      // Missed shot or timeout
+      this.addLog(
+        {
+          en: `${hunter.username} didn't shoot anyone.`,
+          vi: `${hunter.username} không bắn ai cả.`,
         },
         "info",
       );
@@ -1117,6 +1289,10 @@ export default class Werewolf extends BaseGame<WerewolfState> {
       case "hunterRevenge":
         duration = 15000; // 15 seconds for hunter shot
         break;
+      case "morning":
+      case "elimination":
+        duration = 10000; // 10 seconds for reading results
+        break;
       default:
         duration = 30000;
     }
@@ -1125,11 +1301,54 @@ export default class Werewolf extends BaseGame<WerewolfState> {
 
     if (this.isHost) {
       this.timerInterval = setInterval(() => {
-        if (Date.now() >= (this.state.phaseEndTime || 0)) {
+        if (
+          !this.state.isPaused &&
+          this.state.phaseEndTime !== null &&
+          Date.now() >= this.state.phaseEndTime
+        ) {
           this.handlePhaseTimeout();
         }
       }, 1000);
     }
+  }
+
+  requestPauseGame(): void {
+    if (!this.isHost || !this.state.phaseEndTime || this.state.isPaused) return;
+
+    const now = Date.now();
+    const remaining = Math.max(0, this.state.phaseEndTime - now);
+
+    this.state.isPaused = true;
+    this.state.pausedTimeRemaining = remaining;
+    this.state.phaseEndTime = null;
+
+    this.clearTimer();
+    this.syncState();
+  }
+
+  requestResumeGame(): void {
+    if (
+      !this.isHost ||
+      !this.state.isPaused ||
+      this.state.pausedTimeRemaining === null
+    )
+      return;
+
+    this.state.isPaused = false;
+    this.state.phaseEndTime = Date.now() + this.state.pausedTimeRemaining;
+    this.state.pausedTimeRemaining = null;
+
+    this.timerInterval = setInterval(() => {
+      if (
+        !this.state.isPaused &&
+        this.state.phaseEndTime !== null &&
+        Date.now() >= this.state.phaseEndTime
+      ) {
+        this.handlePhaseTimeout();
+      }
+    }, 1000);
+
+    this.syncState();
   }
 
   private clearTimer(): void {
@@ -1140,38 +1359,50 @@ export default class Werewolf extends BaseGame<WerewolfState> {
   }
 
   private handlePhaseTimeout(): void {
-    this.clearTimer();
+    if (
+      this.state.isGameOver ||
+      this.state.isPaused ||
+      !this.state.phaseEndTime
+    )
+      return;
 
+    // Logic to end current phase and move to next
     switch (this.state.phase) {
-      case "night":
-        // Auto-advance night sub-phase
-        this.advanceNightSubPhase();
-        break;
       case "discussion":
-        // Move to voting
         this.startVotingPhase();
         break;
       case "voting":
-        // Process whatever votes we have
         this.processVotes();
         break;
+      case "night":
+        this.advanceNightSubPhase();
+        break;
       case "hunterRevenge":
-        // Hunter didn't shoot, continue
-        const hunter = this.state.players.find(
-          (p) => p.id === this.state.pendingElimination && p.hasPendingShot,
+        this.handleHunterShoot(
+          this.state.players.find((p) => p.hasPendingShot)?.id || "",
+          "", // Empty target = miss shot/timeout
         );
-        if (hunter) {
-          hunter.hasPendingShot = false;
-        }
+        break;
+      case "morning":
+        this.startDiscussionPhase();
+        break;
+      case "elimination":
         this.state.pendingElimination = null;
-        if (this.checkWinCondition()) {
-          this.endGame();
-        } else {
-          this.state.day++;
-          this.startNightPhase();
-        }
+        this.state.day++;
+        this.startNightPhase();
         break;
     }
+  }
+
+  private handleSkipPhase(): void {
+    if (this.state.isGameOver || this.state.isPaused) return;
+
+    // Set timeout to 5 seconds from now
+    this.state.phaseEndTime = Date.now() + 5000;
+    this.state.isPaused = false;
+    this.state.pausedTimeRemaining = null;
+
+    this.syncState();
   }
 
   // === Bot AI ===
@@ -1224,15 +1455,52 @@ export default class Werewolf extends BaseGame<WerewolfState> {
       );
       if (targets.length === 0) return;
 
-      const target = targets[Math.floor(Math.random() * targets.length)];
-      this.handleNightAction(
-        wolf.id,
-        "wolf",
-        target.id,
-        false,
-        false,
-        undefined,
-      );
+      // 80% change to follow existing votes (coordinate attack)
+      let targetId = "";
+
+      const existingVotes = this.state.nightActions.wolfVotes;
+      if (existingVotes.length > 0 && Math.random() < 0.8) {
+        // Find most voted target
+        const voteCounts: Record<string, number> = {};
+        existingVotes.forEach((v) => {
+          voteCounts[v.targetId] = (voteCounts[v.targetId] || 0) + 1;
+        });
+
+        let maxVotes = 0;
+        let bestTarget = "";
+
+        Object.entries(voteCounts).forEach(([tid, count]) => {
+          if (count > maxVotes) {
+            maxVotes = count;
+            bestTarget = tid;
+          }
+        });
+
+        if (bestTarget) {
+          targetId = bestTarget;
+        }
+      }
+
+      // If no target selected (no existing votes or 20% independent), pick random
+      if (!targetId) {
+        // Prefer targets with low suspicion (villagers who are trusted)
+        // or high suspicion (to blend in)? Wolves usually kill confirmed good players.
+        // For now, random is fine, but let's ensure we don't pick null
+        const randomTarget =
+          targets[Math.floor(Math.random() * targets.length)];
+        if (randomTarget?.id) targetId = randomTarget.id;
+      }
+
+      if (targetId) {
+        this.handleNightAction(
+          wolf.id,
+          "wolf",
+          targetId,
+          false,
+          false,
+          undefined,
+        );
+      }
     });
   }
 
@@ -1245,9 +1513,22 @@ export default class Werewolf extends BaseGame<WerewolfState> {
     const targets = this.state.players.filter(
       (p) => p.isAlive && p.id !== botSeer.id && p.id !== null,
     );
-    if (targets.length === 0) return;
 
-    const target = targets[Math.floor(Math.random() * targets.length)];
+    // Filter out already checked targets using history
+    const uncheckedTargets = targets.filter((target) => {
+      return !botSeer.history.some(
+        (h) =>
+          h.type === "info" &&
+          h.content.en.startsWith("Seer Result:") &&
+          h.content.en.includes(target.username),
+      );
+    });
+
+    const targetPool = uncheckedTargets.length > 0 ? uncheckedTargets : targets;
+
+    if (targetPool.length === 0) return;
+
+    const target = targetPool[Math.floor(Math.random() * targetPool.length)];
     this.handleNightAction(
       botSeer.id,
       "seer",
@@ -1301,12 +1582,25 @@ export default class Werewolf extends BaseGame<WerewolfState> {
       this.state.nightActions.wolfTarget &&
       Math.random() > 0.5;
 
-    // 30% chance to use kill if available
+    // 30% chance to use kill if available, but only after night 1
     let killTarget: string | null = null;
-    if (potions.hasKillPotion && Math.random() > 0.7) {
-      const targets = this.state.players.filter(
-        (p) => p.isAlive && p.id !== botWitch.id && p.id !== null,
+    if (potions.hasKillPotion && this.state.day > 1 && Math.random() > 0.7) {
+      // Kill suspicious players (those with suspicion markers)
+      const suspiciousTargets = this.state.players.filter(
+        (p) =>
+          p.isAlive &&
+          p.id !== botWitch.id &&
+          p.id !== null &&
+          this.state.suspicionMarkers.some((m) => m.toPlayerId === p.id),
       );
+
+      const targets =
+        suspiciousTargets.length > 0
+          ? suspiciousTargets
+          : this.state.players.filter(
+              (p) => p.isAlive && p.id !== botWitch.id && p.id !== null,
+            );
+
       if (targets.length > 0) {
         killTarget = targets[Math.floor(Math.random() * targets.length)].id;
       }
@@ -1344,6 +1638,237 @@ export default class Werewolf extends BaseGame<WerewolfState> {
     );
   }
 
+  private processBotHunterAction(): void {
+    const hunterRevenge = this.state.players.find(
+      (p) =>
+        p.role === "hunter" &&
+        p.id === this.state.pendingElimination &&
+        p.isBot &&
+        !p.isAlive,
+    );
+
+    if (!hunterRevenge?.id) return;
+
+    // Delay shot
+    setTimeout(
+      () => {
+        if (this.state.phase !== "hunterRevenge") return;
+        if (this.state.pendingElimination !== hunterRevenge.id) return;
+
+        const targets = this.state.players.filter(
+          (p) => p.isAlive && p.id && p.id !== hunterRevenge.id,
+        );
+
+        if (targets.length === 0) {
+          this.handleHunterShoot(hunterRevenge.id!, "SKIP");
+          return;
+        }
+
+        // Prioritize previous voters or suspicious players?
+        // For now, random
+        const target = targets[Math.floor(Math.random() * targets.length)];
+        if (target.id) {
+          this.handleHunterShoot(hunterRevenge.id!, target.id);
+        }
+      },
+      3000 + Math.random() * 2000,
+    );
+  }
+
+  // === Bot Discussion & Voting AI ===
+
+  private processBotDiscussion(): void {
+    if (!this.isHost) return;
+    if (this.state.phase !== "discussion") return;
+
+    const aliveBots = this.state.players.filter(
+      (p) => p.isBot && p.isAlive && p.id,
+    );
+
+    // Each bot adds suspicion and sends quick messages with random delays
+    aliveBots.forEach((bot, index) => {
+      // Delay each bot's actions to make it feel more natural
+      const delay = 2000 + index * 1500 + Math.random() * 3000;
+
+      setTimeout(() => {
+        if (this.state.phase !== "discussion") return;
+        if (!bot.id) return;
+
+        // Add suspicion to a random alive non-wolf player (if bot is wolf)
+        // or random player (if bot is villager)
+        const potentialTargets = this.state.players.filter(
+          (p) => p.isAlive && p.id && p.id !== bot.id,
+        );
+
+        if (potentialTargets.length > 0) {
+          // Wolves prefer to not accuse each other
+          let suspectTargets = potentialTargets;
+          if (bot.role === "wolf") {
+            suspectTargets = potentialTargets.filter((p) => p.role !== "wolf");
+            if (suspectTargets.length === 0) suspectTargets = potentialTargets;
+          }
+
+          const target =
+            suspectTargets[Math.floor(Math.random() * suspectTargets.length)];
+
+          // 70% chance to add suspicion
+          if (Math.random() < 0.7 && target.id) {
+            this.handleAddSuspicion(bot.id, target.id);
+          }
+
+          // 40% chance to send a quick message
+          if (Math.random() < 0.4) {
+            this.handleBotQuickMessage(bot, potentialTargets);
+          }
+        }
+      }, delay);
+    });
+  }
+
+  private handleBotQuickMessage(
+    bot: WerewolfPlayer,
+    potentialTargets: WerewolfPlayer[],
+  ): void {
+    if (!bot.id) return;
+
+    // Filter relevant messages based on role and context
+    let messages = QUICK_MESSAGES.filter((msg) => {
+      // Role claims
+      if (msg.type === "claim") {
+        if (msg.id === "claim_seer" && bot.role === "seer")
+          return Math.random() < 0.3; // Low chance to claim real role early
+        if (msg.id === "claim_bodyguard" && bot.role === "bodyguard")
+          return Math.random() < 0.2;
+        if (
+          bot.role === "wolf" &&
+          (msg.id === "claim_seer" || msg.id === "claim_bodyguard")
+        ) {
+          return Math.random() < 0.1; // Wolves rarely claim roles randomly
+        }
+        return false;
+      }
+
+      // Seer results
+      if (msg.id.startsWith("seer_result")) {
+        return (
+          bot.role === "seer" || (bot.role === "wolf" && Math.random() < 0.2)
+        );
+      }
+
+      // Default to accusation/defense/reaction
+      return true;
+    });
+
+    if (messages.length === 0) return;
+
+    const messageTemplate =
+      messages[Math.floor(Math.random() * messages.length)];
+    let targetId: string | undefined;
+
+    if (messageTemplate.targetRequired) {
+      // Pick a target
+      let targetPool = potentialTargets;
+
+      // Wolves try to frame non-wolves
+      if (bot.role === "wolf" && messageTemplate.type === "accuse") {
+        targetPool = potentialTargets.filter((p) => p.role !== "wolf");
+        if (targetPool.length === 0) targetPool = potentialTargets;
+      }
+
+      // Seer checks
+      if (
+        bot.role === "seer" &&
+        (messageTemplate.id === "seer_result_wolf" ||
+          messageTemplate.id === "seer_result_safe")
+      ) {
+        // Try to report actual check result if available (simplified for now as bot memory isn't fully implemented)
+        // For now, random target from pool
+      }
+
+      const target = targetPool[Math.floor(Math.random() * targetPool.length)];
+      if (target && target.id) {
+        targetId = target.id;
+      } else {
+        return; // No valid target
+      }
+    }
+
+    // construct message content for display (fallback/log)
+    // The actual UI uses the template ID, but we store a string rep for logs
+    let content = transString(messageTemplate.text); // Default to EN for log, UI handles translation
+    if (targetId) {
+      const targetName =
+        this.state.players.find((p) => p.id === targetId)?.username ||
+        "Unknown";
+      content = content.replace("{target}", targetName);
+    }
+
+    this.handleSendMessage(
+      bot.id,
+      content,
+      "quick",
+      targetId,
+      messageTemplate.id,
+    );
+  }
+
+  private processBotVoting(): void {
+    if (!this.isHost) return;
+    if (this.state.phase !== "voting") return;
+
+    const aliveBots = this.state.players.filter(
+      (p) => p.isBot && p.isAlive && p.id && !p.hasVoted,
+    );
+
+    // Each bot votes with random delay
+    aliveBots.forEach((bot, index) => {
+      const delay = 1000 + index * 1000 + Math.random() * 2000;
+
+      setTimeout(() => {
+        if (this.state.phase !== "voting") return;
+        if (!bot.id || bot.hasVoted) return;
+
+        // Get potential vote targets (alive players except self)
+        const potentialTargets = this.state.players.filter(
+          (p) => p.isAlive && p.id && p.id !== bot.id,
+        );
+
+        if (potentialTargets.length === 0) {
+          // Skip vote
+          this.handleCastVote(bot.id, null);
+          return;
+        }
+
+        // Wolves try not to vote for each other
+        let voteTargets = potentialTargets;
+        if (bot.role === "wolf") {
+          voteTargets = potentialTargets.filter((p) => p.role !== "wolf");
+          if (voteTargets.length === 0) voteTargets = potentialTargets;
+        }
+
+        // Prefer players with suspicion markers
+        const suspectedPlayers = voteTargets.filter((p) =>
+          this.state.suspicionMarkers.some((m) => m.toPlayerId === p.id),
+        );
+
+        let targetPool =
+          suspectedPlayers.length > 0 ? suspectedPlayers : voteTargets;
+
+        // 10% chance to skip vote
+        if (Math.random() < 0.1) {
+          this.handleCastVote(bot.id, null);
+          return;
+        }
+
+        const target =
+          targetPool[Math.floor(Math.random() * targetPool.length)];
+        if (target.id) {
+          this.handleCastVote(bot.id, target.id);
+        }
+      }, delay);
+    });
+  }
+
   // === Utility ===
 
   private addLog(
@@ -1362,6 +1887,29 @@ export default class Werewolf extends BaseGame<WerewolfState> {
     if (this.state.logs.length > 100) {
       this.state.logs = this.state.logs.slice(-100);
     }
+
+    this.syncState();
+  }
+
+  private addPlayerHistory(
+    playerId: string,
+    type: PlayerHistoryItem["type"],
+    content: { en: string; vi: string },
+    isSecret?: boolean,
+  ): void {
+    const player = this.state.players.find((p) => p.id === playerId);
+    if (!player) return;
+
+    player.history.push({
+      id: `hist_${Date.now()}_${Math.random()}`,
+      type,
+      content,
+      timestamp: Date.now(),
+      day: this.state.day,
+      isSecret,
+    });
+
+    this.syncState();
   }
 
   private handleResetGame(): void {
@@ -1417,9 +1965,9 @@ export default class Werewolf extends BaseGame<WerewolfState> {
     this.handleUpdateConfig(config);
   }
 
-  requestStartGame(): void {
+  requestStartGame(hostRole?: WerewolfRole): void {
     if (!this.isHost) return;
-    this.handleStartGame();
+    this.handleStartGame(hostRole);
   }
 
   requestNightAction(
@@ -1499,6 +2047,13 @@ export default class Werewolf extends BaseGame<WerewolfState> {
   requestResetGame(): void {
     if (!this.isHost) return;
     this.handleResetGame();
+  }
+
+  requestSkipPhase(): void {
+    if (!this.isHost) return;
+    this.makeAction({
+      type: "SKIP_PHASE",
+    });
   }
 
   getMyPlayer(): WerewolfPlayer | null {

@@ -1,5 +1,5 @@
 import { Socket } from "socket.io-client";
-import type { Player } from "../stores/roomStore";
+import { useRoomStore, type Player } from "../stores/roomStore";
 
 export interface GameAction {
   // type: string;
@@ -115,10 +115,17 @@ export abstract class BaseGame<T> {
   public broadcastState(): void {
     if (this.isHost) {
       const state = this.getState();
-      this.socket.emit("game:state", {
-        roomId: this.roomId,
-        state: { ...state },
-      });
+
+      // only emit if there are someone else in the room
+      const room = useRoomStore.getState().currentRoom;
+      const userCount =
+        (room?.spectators?.length || 0) + (room?.players?.length || 0);
+      if (userCount > 1) {
+        this.socket.emit("game:state", {
+          roomId: this.roomId,
+          state: { ...state },
+        });
+      }
 
       // Auto-save state to localStorage
       this.saveStateToStorage();
