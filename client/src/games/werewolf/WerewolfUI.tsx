@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
 import type { GameUIProps } from "../types";
 import Werewolf from "./Werewolf";
 import type {
@@ -406,7 +407,9 @@ const PlayerHistoryModal: React.FC<{
                                 : "bg-gray-500/20 text-gray-400"
                         }`}
                       >
-                        {item.type}
+                        {item.type}{" "}
+                        {item.isSecret &&
+                          ti({ vi: "(bí mật)", en: "(secret)" })}
                       </span>
                       <span className="text-[10px] text-white/40">
                         {ti({ vi: `Ngày ${item.day}`, en: `Day ${item.day}` })}{" "}
@@ -724,11 +727,11 @@ const SetupPhase: React.FC<{
       </div>
 
       {/* Player Slots */}
-      <div className="flex flex-wrap justify-center gap-2 mb-4">
+      <div className="flex flex-wrap justify-center gap-1 md:gap-2 mb-4">
         {state.players.slice(0, 12).map((player, index) => (
           <div
             key={index}
-            className={`p-3 rounded-xl flex flex-col items-center justify-center w-[120px] min-h-[120px] ${
+            className={`p-2 rounded-xl flex flex-col items-center justify-center w-[100px] min-h-[120px] ${
               player.id
                 ? "bg-white/10"
                 : "bg-white/5 border-2 border-dashed border-white/20"
@@ -1338,9 +1341,8 @@ const VotingPhase: React.FC<{
 const GameEnd: React.FC<{
   game: Werewolf;
   state: WerewolfState;
-  currentUserId: string;
-  isHost: boolean;
-}> = ({ game, state, isHost }) => {
+  showResetButton?: boolean;
+}> = ({ game, state, showResetButton }) => {
   const { ts } = useLanguage();
 
   const winnerLabel =
@@ -1359,14 +1361,14 @@ const GameEnd: React.FC<{
 
   return (
     <div className="flex flex-col items-center justify-center h-full">
-      <h2 className="text-3xl font-bold mb-4 flex items-center justify-center gap-2">
+      <h2 className="text-xl font-bold flex items-center justify-center gap-2">
         <WinnerIcon className="w-8 h-8" /> {winnerLabel}
       </h2>
 
-      {isHost && (
+      {showResetButton && (
         <button
           onClick={() => game.requestResetGame()}
-          className="px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-500 rounded-xl font-bold flex items-center gap-2"
+          className="mt-4 px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-500 rounded-xl font-bold flex items-center gap-2"
         >
           <RotateCcw className="w-5 h-5" /> Chơi lại
         </button>
@@ -1388,6 +1390,23 @@ const WerewolfUI: React.FC<GameUIProps> = ({ game, currentUserId = "" }) => {
   const [secondSelectedTarget, setSecondSelectedTarget] = useState<
     string | null
   >(null);
+
+  // Sticky Header State
+  const [isHeaderFixed, setIsHeaderFixed] = useState(false);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setIsHeaderFixed(
+          !entry.isIntersecting && entry.boundingClientRect.top < 0,
+        );
+      },
+      { threshold: 0 },
+    );
+    if (sentinelRef.current) observer.observe(sentinelRef.current);
+    return () => observer.disconnect();
+  }, [state.isGameStarted]);
 
   // Background animation state
   const [currentBg, setCurrentBg] = useState("");
@@ -1502,14 +1521,101 @@ const WerewolfUI: React.FC<GameUIProps> = ({ game, currentUserId = "" }) => {
           <GameEnd
             game={werewolf}
             state={state}
-            currentUserId={currentUserId}
-            isHost={werewolf.isHost}
+            showResetButton={werewolf.isHost}
           />
         );
       default:
         return null;
     }
   };
+
+  const renderHeader = (fixed: boolean) => (
+    <div
+      className={`${
+        fixed
+          ? "fixed top-0 left-0 right-0 z-[100] bg-slate-900/95 backdrop-blur-md border-b border-white/10 py-2 animate-in slide-in-from-top duration-300 shadow-2xl"
+          : "mb-3"
+      } flex justify-center w-full`}
+    >
+      <div
+        className={`flex justify-between w-full max-w-[450px] ${
+          fixed
+            ? "px-4"
+            : "bg-slate-900/60 backdrop-blur-md p-2 px-4 rounded-xl border border-white/10 shadow-lg"
+        }`}
+      >
+        <div className="flex items-center gap-2">
+          {getPhaseIcon(state.phase)}
+          <div className="flex flex-col md:flex-row md:items-center md:gap-2">
+            <span className="font-bold">{ti(getPhaseLabel(state.phase))}</span>
+            {state.day > 0 && (
+              <span className="text-white/60 text-sm">
+                {ti({ vi: "Ngày", en: "Day" })} {state.day}
+              </span>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-1">
+          {state.phase !== "end" ? (
+            <TimerDisplay
+              endTime={state.phaseEndTime}
+              isPaused={state.isPaused}
+              pausedTimeRemaining={state.pausedTimeRemaining}
+            />
+          ) : (
+            <GameEnd game={werewolf} state={state} showResetButton={false} />
+          )}
+          {werewolf.isHost && state.phase !== "end" && (
+            <>
+              {/* Play/Pause btn */}
+              <button
+                onClick={() =>
+                  state.isPaused
+                    ? werewolf.requestResumeGame()
+                    : werewolf.requestPauseGame()
+                }
+                className={`p-2 rounded-full transition-colors ${
+                  state.isPaused
+                    ? "bg-green-500/20 text-green-400 hover:bg-green-500/30"
+                    : "bg-white/10 text-white/60 hover:bg-white/20"
+                }`}
+                title={state.isPaused ? "Resume" : "Pause"}
+              >
+                {state.isPaused ? (
+                  <Play className="w-5 h-5" />
+                ) : (
+                  <Pause className="w-5 h-5" />
+                )}
+              </button>
+              {/* Skip btn */}
+              <button
+                onClick={async () => {
+                  if (
+                    await showConfirm(
+                      ts({
+                        vi: "Đếm ngược sẽ được đặt về 5 giây",
+                        en: "The countdown will be reset to 5 seconds",
+                      }),
+                      ts({
+                        vi: "Tăng tốc giai đoạn?",
+                        en: "Skip phase?",
+                      }),
+                    )
+                  ) {
+                    werewolf.requestSkipPhase();
+                  }
+                }}
+                className="p-2 rounded-full transition-colors bg-white/10 text-white/60 hover:bg-white/20"
+                title="Skip"
+              >
+                <SkipForward className="w-5 h-5" />
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 
   const renderHistoryModal = () => (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
@@ -1766,77 +1872,15 @@ const WerewolfUI: React.FC<GameUIProps> = ({ game, currentUserId = "" }) => {
 
         {/* Sticky Phase/Timer Header */}
         {state.isGameStarted && (
-          <div className="flex justify-center w-full mb-3">
-            <div className="flex justify-between w-full max-w-[450px] bg-slate-900/60 backdrop-blur-md p-2 px-4 rounded-xl border border-white/10 shadow-lg">
-              <div className="flex items-center gap-2">
-                {getPhaseIcon(state.phase)}
-                <div className="flex flex-col md:flex-row md:items-center md:gap-2">
-                  <span className="font-bold">
-                    {ti(getPhaseLabel(state.phase))}
-                  </span>
-                  {state.day > 0 && (
-                    <span className="text-white/60 text-sm">
-                      {ti({ vi: "Ngày", en: "Day" })} {state.day}
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div className="flex items-center gap-1">
-                <TimerDisplay
-                  endTime={state.phaseEndTime}
-                  isPaused={state.isPaused}
-                  pausedTimeRemaining={state.pausedTimeRemaining}
-                />
-                {werewolf.isHost && state.phase !== "end" && (
-                  <>
-                    {/* Play/Pause btn */}
-                    <button
-                      onClick={() =>
-                        state.isPaused
-                          ? werewolf.requestResumeGame()
-                          : werewolf.requestPauseGame()
-                      }
-                      className={`p-2 rounded-full transition-colors ${
-                        state.isPaused
-                          ? "bg-green-500/20 text-green-400 hover:bg-green-500/30"
-                          : "bg-white/10 text-white/60 hover:bg-white/20"
-                      }`}
-                      title={state.isPaused ? "Resume" : "Pause"}
-                    >
-                      {state.isPaused ? (
-                        <Play className="w-5 h-5" />
-                      ) : (
-                        <Pause className="w-5 h-5" />
-                      )}
-                    </button>
-                    {/* Skip btn */}
-                    <button
-                      onClick={async () => {
-                        if (
-                          await showConfirm(
-                            ts({
-                              vi: "Đếm ngược sẽ được đặt về 5 giây",
-                              en: "The countdown will be reset to 5 seconds",
-                            }),
-                            ts({
-                              vi: "Tăng tốc giai đoạn?",
-                              en: "Skip phase?",
-                            }),
-                          )
-                        ) {
-                          werewolf.requestSkipPhase();
-                        }
-                      }}
-                      className="p-2 rounded-full transition-colors bg-white/10 text-white/60 hover:bg-white/20"
-                      title="Skip"
-                    >
-                      <SkipForward className="w-5 h-5" />
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
+          <>
+            <div
+              ref={sentinelRef}
+              className="w-full h-px -mt-2 pointer-events-none"
+            />
+            {isHeaderFixed && createPortal(renderHeader(true), document.body)}
+            {renderHeader(false)}
+            {/* {isHeaderFixed && <div className="w-full h-[80px] mb-3" />} */}
+          </>
         )}
 
         {/* Persistent Player Grid - always visible when game started */}

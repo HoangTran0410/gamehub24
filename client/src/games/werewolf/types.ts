@@ -564,9 +564,9 @@ export const DEFAULT_CONFIG: GameConfig = {
 
 // Role sets for different player counts
 export const ROLE_SETS: Record<string, WerewolfRole[]> = {
-  "5": ["wolf", "wolf", "seer", "bodyguard", "villager"],
-  "6": ["wolf", "wolf", "seer", "bodyguard", "villager", "villager"],
-  "7": ["wolf", "wolf", "seer", "bodyguard", "witch", "villager", "villager"],
+  "5": ["wolf", "seer", "villager", "villager", "villager"],
+  "6": ["wolf", "wolf", "seer", "villager", "villager", "villager"],
+  "7": ["wolf", "wolf", "seer", "witch", "villager", "villager", "villager"],
   "8": [
     "wolf",
     "wolf",
