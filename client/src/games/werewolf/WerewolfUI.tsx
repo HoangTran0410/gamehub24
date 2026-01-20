@@ -767,7 +767,9 @@ const UnifiedPlayerCard: React.FC<{
         >
           {/* <Search className="w-4 h-4 text-blue-300" /> */}
 
-          <span className="text-xs text-white/70">{player.history.length}</span>
+          <span className="text-xs text-white/70">
+            {player.history.filter((h) => !h.isSecret).length}
+          </span>
         </button>
       )}
     </div>
