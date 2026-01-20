@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   Crown,
@@ -32,15 +32,43 @@ export default function RoomPage() {
     useRoomStore();
   const { clearMessages } = useChatStore();
   const { userId, username } = useUserStore();
-
   const { show: showAlert, confirm: showConfirm } = useAlertStore();
   const { ti, ts, language, setLanguage } = useLanguage();
   const socket = getSocket();
 
+  // Resize state
+  const [chatPanelWidth, setChatPanelWidth] = useState(() => {
+    const storedWidth = localStorage.getItem("chatPanelWidth");
+    return storedWidth ? parseInt(storedWidth) : 400;
+  });
+  const [isResizing, setIsResizing] = useState(false);
+  const isDragging = useRef(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  // Helper to check for desktop view
+  const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 1024);
+
+  const isSpectator = currentRoom?.spectators?.some((p) => p.id === userId);
+  const isHost = currentRoom?.ownerId === userId;
+  const hostUser = currentRoom?.players.find(
+    (p) => p.id === currentRoom.ownerId,
+  );
+
+  // Share modal state
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [showLanguageDropdown, setShowLanguageDropdown] = useState(false);
+  const [showChangeGameModal, setShowChangeGameModal] = useState(false);
+  const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
+  const [showUserTooltip, setShowUserTooltip] = useState(false);
+
+  const game = useMemo(
+    () => getAllGames().find((g) => g.id === currentRoom?.gameType),
+    [currentRoom?.gameType],
+  );
+
   // Effect for joining room via direct URL
   useEffect(() => {
     if (!roomId) {
-      navigate("/");
+      navigate("/", { replace: true });
       return;
     }
 
@@ -71,7 +99,7 @@ export default function RoomPage() {
           }),
           { type: "error" },
         );
-        navigate("/");
+        navigate("/", { replace: true });
       }, 5000);
 
       socket.emit(
@@ -92,7 +120,7 @@ export default function RoomPage() {
               showAlert(response.error || "Failed to join room", {
                 type: "error",
               });
-              navigate("/");
+              navigate("/", { replace: true });
             }
           }
         },
@@ -115,7 +143,7 @@ export default function RoomPage() {
         }),
         { type: "error" },
       );
-      navigate("/");
+      navigate("/", { replace: true });
     };
 
     if (socket.connected) {
@@ -135,7 +163,7 @@ export default function RoomPage() {
           }),
           { type: "error" },
         );
-        navigate("/");
+        navigate("/", { replace: true });
       }, 10000);
     }
 
@@ -145,11 +173,13 @@ export default function RoomPage() {
       if (timeoutId) clearTimeout(timeoutId);
       if (connectionTimeoutId) clearTimeout(connectionTimeoutId);
     };
-  }, [roomId, socket, navigate, setCurrentRoom, showAlert, ts]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roomId, currentRoom?.id]);
 
   // Effect for room event listeners
   useEffect(() => {
     if (!roomId) return;
+    console.log("listen room events");
 
     socket.on("room:players", (players) => {
       updatePlayers(players);
@@ -174,7 +204,7 @@ export default function RoomPage() {
       );
       setCurrentRoom(null);
       clearMessages();
-      navigate("/");
+      navigate("/", { replace: true });
     });
 
     socket.on("room:kicked", (data) => {
@@ -191,7 +221,7 @@ export default function RoomPage() {
       );
       setCurrentRoom(null);
       clearMessages();
-      navigate("/");
+      navigate("/", { replace: true });
     });
 
     return () => {
@@ -201,15 +231,8 @@ export default function RoomPage() {
       socket.off("room:deleted");
       socket.off("room:kicked");
     };
-  }, [roomId, socket, updatePlayers, setCurrentRoom, navigate, clearMessages]);
-
-  const isHost = currentRoom?.ownerId === userId;
-
-  const hostUser = currentRoom?.players.find(
-    (p) => p.id === currentRoom.ownerId,
-  );
-
-  const isSpectator = currentRoom?.spectators?.some((p) => p.id === userId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roomId]);
 
   // Warning before unload (browser back/refresh/close) for host
   useEffect(() => {
@@ -248,21 +271,9 @@ export default function RoomPage() {
       socket.emit("room:leave", { roomId });
       setCurrentRoom(null);
       clearMessages();
-      navigate("/");
+      navigate("/", { replace: true });
     }
   };
-
-  // Resize state
-  const [chatPanelWidth, setChatPanelWidth] = useState(() => {
-    const storedWidth = localStorage.getItem("chatPanelWidth");
-    return storedWidth ? parseInt(storedWidth) : 400;
-  });
-  const [isResizing, setIsResizing] = useState(false);
-  const isDragging = useRef(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  // Helper to check for desktop view
-  const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 1024);
 
   useEffect(() => {
     const handleResize = () => setIsDesktop(window.innerWidth >= 1024);
@@ -309,13 +320,6 @@ export default function RoomPage() {
     };
   }, [isResizing, resize, stopResizing]);
 
-  // Share modal state
-  const [showShareModal, setShowShareModal] = useState(false);
-  const [showLanguageDropdown, setShowLanguageDropdown] = useState(false);
-  const [showChangeGameModal, setShowChangeGameModal] = useState(false);
-  const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
-  const [showUserTooltip, setShowUserTooltip] = useState(false);
-
   const handleChangeGame = (gameId: string) => {
     socket.emit("room:update", { roomId, gameType: gameId });
     setShowChangeGameModal(false);
@@ -339,7 +343,7 @@ export default function RoomPage() {
           <PasswordPromptModal
             roomId={roomId || ""}
             onSuccess={(room) => setCurrentRoom(room)}
-            onCancel={() => navigate("/")}
+            onCancel={() => navigate("/", { replace: true })}
             onError={(msg) => showAlert(msg, { type: "error" })}
           />
         </div>
@@ -355,8 +359,6 @@ export default function RoomPage() {
       </div>
     );
   }
-
-  const game = getAllGames().find((g) => g.id === currentRoom.gameType);
 
   return (
     <>

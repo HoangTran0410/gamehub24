@@ -392,7 +392,7 @@ function RoomListItem({ room }: { room: Room }) {
       (response: { success: boolean; room?: Room; error?: string }) => {
         if (response.success && response.room) {
           setCurrentRoom(response.room);
-          navigate(`/room/${room.id}`);
+          navigate(`/room/${room.id}`, { replace: true });
         } else {
           showAlert(response.error || "Failed to join room", { type: "error" });
         }
@@ -538,7 +538,7 @@ function CreateRoomModal({
       (response: { success: boolean; room?: Room; error?: string }) => {
         if (response.success && response.room) {
           setCurrentRoom(response.room);
-          navigate(`/room/${response.room.id}`);
+          navigate(`/room/${response.room.id}`, { replace: true });
         } else {
           showAlert(response.error || "Failed to create room", {
             type: "error",
@@ -680,7 +680,7 @@ function JoinRoomModal({ onClose }: { onClose: () => void }) {
       (response: { success: boolean; room?: Room; error?: string }) => {
         if (response.success && response.room) {
           setCurrentRoom(response.room);
-          navigate(`/room/${response.room.id}`);
+          navigate(`/room/${response.room.id}`, { replace: true });
         } else {
           showAlert(response.error || "Failed to join room", {
             type: "error",
