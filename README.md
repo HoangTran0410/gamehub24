@@ -1,126 +1,262 @@
-# 🎮 GameHub24
-> **Your Ultimate Real-Time Multiplayer Gaming Destination**
+# 🎮 GameHub
 
-### [Play now](https://gamehub24.pages.dev)
+> **Real-time multiplayer gaming platform for everyone**
+
+### [🎯 Play Now](https://gamehub24.pages.dev)
 
 ![GameHub Banner](https://images.unsplash.com/photo-1550745165-9bc0b252726f?q=80&w=2070&auto=format&fit=crop)
 
-**GameHub** is a cutting-edge web platform that brings friends together through seamless real-time gaming experiences. Built with modern web technologies, it offers a sleek, dark-themed interface where players can create rooms, chat, and compete in classic board games or relax with watch parties.
+---
+
+## 📖 What is GameHub?
+
+**GameHub** is a modern web platform that brings people together through **real-time multiplayer gaming**. Whether you're competing in chess, strategizing in board games, or just hanging out in a watch party, GameHub provides a seamless, beautiful experience.
+
+Built with cutting-edge web technologies and designed with a stunning glassmorphic dark theme, GameHub delivers premium gaming experiences right in your browser—no downloads required.
 
 ---
 
-## ✨ Key Features
+## ✨ Highlights
 
-### 🕹️ Diverse Game Library
-- **Chess**:
-  - **Single Player**: Challenge our advanced Stockfish AI with varying difficulty levels.
-  - **Multiplayer**: Classic 1v1 matches with move validation, history, and captured piece tracking.
-- **Caro (Gomoku)**: The ultimate test of strategy on a boundless board. Win by connecting 5 in a row!
-- **Tic Tac Toe**: The classic game, reimagined with a modern UI.
-- **YouTube Watch Party**: Synchronized video playback to watch content together in real-time.
-
-### 🌐 Powerful Multiplayer System
-- **Real-Time Interaction**: Instant updates for moves, chat, and room status using **Socket.IO**.
-- **Room Management**:
-  - Create **Public** rooms to meet new players.
-  - Create **Private** password-protected rooms for friends.
-- **Live Chat**: Integrated lobby and in-room chat systems with typing indicators and presence detection.
-- **Smart Hosting**: Automatic host assignment and transfer ensure the game always goes on.
-
-### 🎨 Premium User Experience
-- **Glassmorphism Design**: A stunning, translucent UI with blur effects and neon accents.
-- **OLED Dark Mode**: Deep blacks and vibrant purples designed for prolonged gaming sessions.
-- **Responsive & Adaptive**: Flawless experience across desktop, tablet, and mobile devices.
-- **Global Alerts**: Beautiful, non-intrusive notification system for game events and errors.
+- 🎮 **15+ Games** - Chess, Caro, Tic Tac Toe, UNO, Werewolf, Ludo, Connect 4, and more!
+- 🤖 **Smart Bots** - Play solo with AI opponents (Minimax, Stockfish)
+- 🌐 **Real-Time Multiplayer** - Powered by Socket.IO for instant synchronization
+- 💬 **Live Chat** - Integrated chat in every room
+- 🎨 **Premium UI** - Glassmorphism design with vibrant neon accents
+- 📱 **Fully Responsive** - Seamless experience on desktop, tablet, and mobile
+🏠 **Flexible Rooms** - Public rooms to meet players or private password-protected rooms for friends
+👥 **Spectator Mode** - Watch games in progress
 
 ---
 
-## 🛠️ Technology Stack
+## 🏗️ Project Structure
 
-GameHub is engineered for performance and scalability using the latest industry standards.
-
-| Component | Tech Stack |
-| :--- | :--- |
-| **Frontend** | **React 19**, **TypeScript**, **Vite** |
-| **Styling** | **Tailwind CSS 4** (Utility-first), **Lucide React** (Icons) |
-| **State Management** | **Zustand** (Global State) |
-| **Real-Time** | **Socket.IO Client** & **Server** |
-| **Engine** | **Stockfish.js** (Chess Engine) |
-| **Routing** | **React Router** (HashRouter for broad compatibility) |
-
----
-
-## 🚀 Getting Started
-
-### Prerequisites
-- Node.js (v18 or higher)
-- npm or yarn
-
-### Quick Install
-
-```bash
-# 1. Clone the repository
-git clone https://github.com/yourusername/gamehub.git
-cd gamehub
-
-# 2. Install Client + Server
-cd client && npm i && cd .. && cd server && npm i
+```
+gamehub/
+├── client/          # React + TypeScript frontend
+│   └── src/
+│       └── games/   # Game implementations
+│           └── README.md  📄 Game Architecture Guide
+│
+├── server/          # Socket.IO relay server
+│   └── README.md    📄 Server Documentation
+│
+└── README.md        📄 This file (overview)
 ```
 
-### Running the Application
+---
 
-**1. Start the Backend Server**
+## 📚 Documentation
+
+### 🎮 [Client Game Architecture →](./client/src/games/README.md)
+**For developers creating new games**
+
+Learn about:
+- 🏗️ Game architecture and base classes
+- 🔄 Host/Guest/Bot flow patterns
+- 🔌 Socket communication
+- 🛠️ Step-by-step guide to create new games
+- 📋 Checklist and best practices
+
+### 🌐 [Server Documentation →](./server/README.md)
+**For backend/deployment setup**
+
+Learn about:
+- 🔌 Socket.IO event reference
+- 🏠 Room management system
+- 💬 Chat and relay architecture
+- 🚀 Deployment guides
+- 🐛 Debugging tips
+
+---
+
+## 🚀 Quick Start
+
+### Prerequisites
+- **Node.js** v18+
+- **npm** or **bun**
+
+### 1️⃣ Clone the Repository
+```bash
+git clone https://github.com/HoangTran0410/gamehub24.git
+cd gamehub
+```
+
+### 2️⃣ Install Dependencies
+```bash
+# Install client dependencies
+cd client
+npm install
+
+# Install server dependencies
+cd ../server
+npm install
+```
+
+### 3️⃣ Run Development Servers
+
+**Terminal 1: Start Server**
 ```bash
 cd server
 npm run dev
-# Server runs on http://localhost:3001
+# 🌐 Server running on http://localhost:3001
 ```
 
-**2. Start the Frontend Client**
+**Terminal 2: Start Client**
 ```bash
 cd client
 npm run dev
-# Client runs on http://localhost:5173
+# 🎮 Client running on http://localhost:5173
 ```
+
+### 4️⃣ Open Browser
+```
+http://localhost:5173
+```
+
+🎉 **You're ready to play!**
+
+---
+
+## 🎮 Featured Games
+
+| Game | Players | Bot Support | Complexity |
+|------|---------|-------------|------------|
+| **Chess** ♟️ | 2 | ✅ Stockfish | ⭐⭐⭐ |
+| **Caro (Gomoku)** 🔲 | 2 | ✅ Minimax | ⭐⭐ |
+| **Werewolf** 🐺 | 5-12 | ✅ Multi-bot | ⭐⭐⭐ |
+| **UNO** 🃏 | 2-4 | ✅ | ⭐⭐ |
+| **Ludo** 🎲 | 2-4 | ✅ | ⭐⭐ |
+| **Connect 4** 🔴 | 2 | ✅ | ⭐ |
+| **Dots & Boxes** ⬛ | 2 | ❌ | ⭐⭐ |
+| **Billiard** 🎱 | 2 | ❌ | ⭐⭐⭐ |
+| **YouTube Party** 📺 | 1-100 | N/A | ⭐ |
+| ...and more! | | | |
+
+---
+
+## 🛠️ Tech Stack
+
+| Layer | Technologies |
+|-------|-------------|
+| **Frontend** | React 19, TypeScript, Vite, Tailwind CSS 4 |
+| **State** | Zustand |
+| **Real-time** | Socket.IO Client |
+| **Backend** | Node.js, Express, Socket.IO Server |
+| **Game Engines** | Stockfish.js (Chess), Minimax (TicTacToe, Caro) |
+| **Routing** | React Router (HashRouter) |
+| **Icons** | Lucide React |
+
+---
+
+## 🌐 Architecture Overview
+
+```mermaid
+graph LR
+    subgraph Browser
+        A[React Client]
+        B[Game Logic]
+        C[Socket Client]
+    end
+
+    subgraph Server
+        D[Socket.IO Server]
+        E[Room Manager]
+    end
+
+    A <--> B
+    B <--> C
+    C <-->|WebSocket| D
+    D <--> E
+
+    style A fill:#9333ea
+    style D fill:#06b6d4
+```
+
+**Key Concepts:**
+- 🎮 **Client-Authoritative**: Game logic runs on the client (host)
+- 🔄 **Pure Relay Server**: Server only relays events, no game validation
+- 👑 **Host as Authority**: Room creator manages game state
+- 👥 **Guest Receives State**: Guests sync state from host
+
+📖 **Learn more**: [Game Architecture Guide](./client/src/games/README.md)
 
 ---
 
 ## 📦 Deployment
 
-### Frontend (GitHub Pages / Vercel)
-The client is optimized for static hosting.
+### Frontend (Cloudflare Pages / Vercel / Netlify)
 ```bash
 cd client
 npm run build
-# Deploy the 'built/' folder + file 'index.html'
+# Deploy the 'built/' folder
 ```
-*Note: The app uses `HashRouter` and relative paths (`./`) to ensure compatibility with subdirectory deployments like GitHub Pages.*
+
+**Compatibility**: Uses HashRouter for subdirectory deployments (e.g., GitHub Pages)
 
 ### Backend (Railway / Render / Fly.io)
-Deploy the Node.js server to any platform supporting WebSockets.
-- set `CLIENT_URL` environment variable to your frontend domain (CORS).
-- set `PORT` (defaults to 3001).
+```bash
+cd server
+npm run build
+npm start
+```
+
+**Required Environment Variables:**
+```env
+PORT=3001
+CLIENT_URL=https://your-frontend-url.com
+NODE_ENV=production
+```
+
+📖 **Learn more**: [Server Deployment Guide](./server/README.md)
 
 ---
 
 ## 🤝 Contributing
 
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+We welcome contributions from the community!
 
-1. Fork the Project
-2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the Branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+### How to Contribute
+1. 🍴 Fork the repository
+2. 🌱 Create a feature branch (`git checkout -b feature/AmazingFeature`)
+3. ✅ Commit your changes (`git commit -m 'Add AmazingFeature'`)
+4. 📤 Push to your branch (`git push origin feature/AmazingFeature`)
+5. 🎉 Open a Pull Request
+
+### Development Guidelines
+- Follow existing code style (TypeScript, ESLint)
+- Write descriptive commit messages
+- Test your changes thoroughly
+- Update documentation if needed
+
+### Creating New Games
+See the [Game Architecture Guide](./client/src/games/README.md) for a complete tutorial on adding new games to GameHub!
 
 ---
 
 ## 📄 License
 
-Distributed under the MIT License. See `LICENSE` for more information.
+Distributed under the **MIT License**. See `LICENSE` for more information.
+
+---
+
+## 🙏 Acknowledgments
+
+- [Socket.IO](https://socket.io/) - Real-time engine
+- [Stockfish.js](https://github.com/nmrugg/stockfish.js) - Chess AI
+- [chess.js](https://github.com/jhlywa/chess.js) - Chess logic
+- [Tailwind CSS](https://tailwindcss.com/) - Styling
+- [Lucide](https://lucide.dev/) - Icons
+- All our awesome contributors! ❤️
 
 ---
 
 <div align="center">
-  <p>Built with ❤️ by Hoang Tran</p>
+
+### 🌟 Star this project if you like it!
+
+**Built with ❤️ by [Hoang Tran](https://github.com/HoangTran0410)**
+
+[🎮 Play Now](https://gamehub24.pages.dev) • [📖 Documentation](#-documentation) • [🐛 Report Bug](https://github.com/HoangTran0410/gamehub24/issues)
+
 </div>

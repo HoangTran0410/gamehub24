@@ -73,6 +73,7 @@ export default function RoomPage() {
 
   // Effect for joining room via direct URL
   useEffect(() => {
+    if (leaveRef.current) return;
     if (!roomId) {
       navigate("/", { replace: true });
       return;
@@ -180,7 +181,7 @@ export default function RoomPage() {
       if (connectionTimeoutId) clearTimeout(connectionTimeoutId);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roomId, currentRoom?.id]);
+  }, [roomId, currentRoom?.id, socket]);
 
   // Effect for room event listeners
   useEffect(() => {
@@ -258,6 +259,8 @@ export default function RoomPage() {
     };
   }, [isHost]);
 
+  // to make sure useEffect auto join room not run again when user leave room
+  const leaveRef = useRef(false);
   const handleLeaveRoom = async () => {
     const confirmed = await showConfirm(
       isHost
@@ -278,6 +281,7 @@ export default function RoomPage() {
       setCurrentRoom(null);
       clearMessages();
       navigate("/", { replace: true });
+      leaveRef.current = true;
     }
   };
 
