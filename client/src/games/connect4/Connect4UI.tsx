@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import useLanguage from "../../stores/languageStore";
 import type { GameUIProps } from "../types";
+import { createPortal } from "react-dom";
 
 // CSS for drop animation
 const dropStyle = `
@@ -122,8 +123,6 @@ export default function Connect4UI({
   };
 
   const renderGameRules = () => {
-    if (!showRules) return null;
-
     return (
       <div
         className="fixed inset-0 z-60 flex items-center justify-center bg-black/80 p-4"
@@ -207,7 +206,8 @@ export default function Connect4UI({
 
   return (
     <div className="flex flex-col items-center gap-4 p-4 w-full max-w-lg mx-auto">
-      {renderGameRules()}
+      {showRules && createPortal(renderGameRules(), document.body)}
+
       {/* Inject drop animation CSS */}
       <style dangerouslySetInnerHTML={{ __html: dropStyle }} />
 

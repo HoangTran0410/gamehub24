@@ -4,6 +4,7 @@ import type { DotsAndBoxesState, PlayerColor } from "./types";
 import { Play, RefreshCw, BookOpen, X } from "lucide-react";
 import useLanguage from "../../stores/languageStore";
 import type { GameUIProps } from "../types";
+import { createPortal } from "react-dom";
 
 const PLAYER_BG_COLORS: Record<PlayerColor, string> = {
   red: "bg-red-500/60",
@@ -50,8 +51,6 @@ export default function DotsAndBoxesUI({
   const gridPercentage = 100 / (gridSize - 1);
 
   const renderGameRules = () => {
-    if (!showRules) return null;
-
     return (
       <div
         className="fixed inset-0 z-60 flex items-center justify-center bg-black/80 p-4"
@@ -147,7 +146,6 @@ export default function DotsAndBoxesUI({
 
   return (
     <div className="flex flex-col items-center gap-6 p-4 w-full max-w-2xl mx-auto pb-10">
-      {renderGameRules()}
       {/* Header Info */}
       <div className="flex flex-col items-center gap-2">
         <h2 className="text-3xl font-bold text-white">Dots & Boxes</h2>
@@ -461,6 +459,8 @@ export default function DotsAndBoxesUI({
             )} */}
         </div>
       </div>
+
+      {showRules && createPortal(renderGameRules(), document.body)}
     </div>
   );
 }

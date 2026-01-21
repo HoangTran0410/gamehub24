@@ -25,6 +25,7 @@ import {
 import useLanguage from "../../stores/languageStore";
 import type { GameUIProps } from "../types";
 import { useAlertStore } from "../../stores/alertStore";
+import { createPortal } from "react-dom";
 
 // Property color display
 const getPropertyColorStyle = (color?: PropertyColor): string => {
@@ -65,7 +66,7 @@ const animationStyles = `
 
 export default function MonopolyUI({
   game: baseGame,
-  currentUserId,
+  currentUserId = "",
 }: GameUIProps) {
   const game = baseGame as Monopoly;
   const { confirm: showConfirm } = useAlertStore();
@@ -1388,7 +1389,7 @@ export default function MonopolyUI({
                 <div className="flex-1">
                   {(() => {
                     const validation = game.canBuildHouse(
-                      currentUserId!,
+                      currentUserId,
                       selectedProperty.id,
                     );
                     return (
@@ -1562,8 +1563,6 @@ export default function MonopolyUI({
   };
 
   const renderGameRules = () => {
-    if (!showRules) return null;
-
     return (
       <div
         className="fixed inset-0 z-60 flex items-center justify-center bg-black/80 p-4"
@@ -2094,20 +2093,8 @@ export default function MonopolyUI({
         {renderHistoryLog()}
       </div>
 
-      {/* Game Rules Modal */}
-      {renderGameRules()}
-
       {/* Property Detail Modal */}
       {renderPropertyDetail()}
-
-      {/* Floating Rules Button */}
-      <button
-        onClick={() => setShowRules(true)}
-        className="fixed bottom-4 right-4 z-40 bg-slate-800 hover:bg-slate-700 text-white p-3 rounded-full shadow-xl border border-slate-600 transition-transform hover:scale-110"
-        title={ti({ en: "Game Rules", vi: "Luật Chơi" }) as string}
-      >
-        <BookOpen className="w-6 h-6 text-yellow-500" />
-      </button>
 
       {/* Hover Connection Line Layer */}
       {lineCoords && (
@@ -2153,6 +2140,17 @@ export default function MonopolyUI({
           </circle>
         </svg>
       )}
+
+      {/* Floating Rules Button */}
+      <button
+        onClick={() => setShowRules(true)}
+        className="fixed bottom-4 right-4 z-40 bg-slate-800 hover:bg-slate-700 text-white p-3 rounded-full shadow-xl border border-slate-600 transition-transform hover:scale-110"
+        title={ti({ en: "Game Rules", vi: "Luật Chơi" }) as string}
+      >
+        <BookOpen className="w-6 h-6 text-yellow-500" />
+      </button>
+
+      {showRules && createPortal(renderGameRules(), document.body)}
     </div>
   );
 }

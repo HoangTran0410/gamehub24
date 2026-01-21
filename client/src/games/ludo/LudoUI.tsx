@@ -6,6 +6,7 @@ import { Play, RefreshCw, Dices, BookOpen, X } from "lucide-react";
 import { useAlertStore } from "../../stores/alertStore";
 import type { GameUIProps } from "../types";
 import useLanguage from "../../stores/languageStore";
+import { createPortal } from "react-dom";
 
 // Color mappings for CSS
 const COLOR_CLASSES: Record<
@@ -498,8 +499,6 @@ export default function LudoUI({ game: baseGame, currentUserId }: GameUIProps) {
   };
 
   const renderGameRules = () => {
-    if (!showRules) return null;
-
     return (
       <div
         className="fixed inset-0 z-60 flex items-center justify-center bg-black/80 p-4"
@@ -596,7 +595,6 @@ export default function LudoUI({ game: baseGame, currentUserId }: GameUIProps) {
   return (
     <div className="flex flex-col items-center gap-4 p-4 w-full max-w-2xl mx-auto">
       <style dangerouslySetInnerHTML={{ __html: animationStyles }} />
-      {renderGameRules()}
 
       {/* Token Selection Popup */}
       {tokenSelectPopup && (
@@ -693,15 +691,6 @@ export default function LudoUI({ game: baseGame, currentUserId }: GameUIProps) {
             )}
         </div>
       )}
-
-      {/* Rules Button */}
-      <button
-        onClick={() => setShowRules(true)}
-        className="fixed bottom-4 right-4 p-3 bg-slate-700 hover:bg-slate-600 rounded-full text-yellow-500 transition-colors z-40 shadow-lg border border-slate-500"
-        title={ts({ en: "Rules", vi: "Luật chơi" })}
-      >
-        <BookOpen size={24} />
-      </button>
 
       {/* Game Over */}
       {state.gamePhase === "ended" && (
@@ -1230,6 +1219,16 @@ export default function LudoUI({ game: baseGame, currentUserId }: GameUIProps) {
           {ti({ en: "New Game", vi: "Ván mới" })}
         </button>
       )}
+
+      {/* Rules Button */}
+      <button
+        onClick={() => setShowRules(true)}
+        className="fixed bottom-4 right-4 p-3 bg-slate-700 hover:bg-slate-600 rounded-full text-yellow-500 transition-colors z-40 shadow-lg border border-slate-500"
+        title={ts({ en: "Rules", vi: "Luật chơi" })}
+      >
+        <BookOpen size={24} />
+      </button>
+      {showRules && createPortal(renderGameRules(), document.body)}
     </div>
   );
 }

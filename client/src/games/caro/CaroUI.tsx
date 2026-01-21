@@ -15,6 +15,7 @@ import { useUserStore } from "../../stores/userStore";
 import useLanguage from "../../stores/languageStore";
 import type { GameUIProps } from "../types";
 import { useAlertStore } from "../../stores/alertStore";
+import { createPortal } from "react-dom";
 
 const BOARD_SIZE = 50;
 const CELL_SIZE = 40;
@@ -480,8 +481,6 @@ export default function CaroUI({ game: baseGame }: GameUIProps) {
 
   return (
     <div className="flex flex-col gap-3 p-2 md:p-4 w-full">
-      {showRules && renderGameRules()}
-
       {/* Player List */}
       <div className="flex flex-col gap-2 p-3 bg-slate-800 rounded-lg w-full max-w-[400px] mx-auto">
         {(["X", "O"] as const).map((symbol) => {
@@ -793,6 +792,7 @@ export default function CaroUI({ game: baseGame }: GameUIProps) {
       >
         <BookOpen size={24} />
       </button>
+      {showRules && createPortal(renderGameRules(), document.body)}
     </div>
   );
 }

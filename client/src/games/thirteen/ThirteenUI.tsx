@@ -18,6 +18,7 @@ import { useUserStore } from "../../stores/userStore";
 import { useAlertStore } from "../../stores/alertStore";
 import useLanguage from "../../stores/languageStore";
 import type { GameUIProps } from "../types";
+import { createPortal } from "react-dom";
 
 export default function ThirteenUI({ game: baseGame }: GameUIProps) {
   const game = baseGame as Thirteen;
@@ -314,7 +315,6 @@ export default function ThirteenUI({ game: baseGame }: GameUIProps) {
 
   return (
     <div className="flex flex-col h-full p-2 md:p-4 gap-2 md:gap-4 overflow-hidden md:min-h-[500px] pb-10">
-      {renderGameRules()}
       {/* Mobile: Top row with 3 opponents */}
       <div className="flex md:hidden justify-center gap-2">
         {renderPlayerSlot(1, true)}
@@ -528,6 +528,7 @@ export default function ThirteenUI({ game: baseGame }: GameUIProps) {
       >
         <BookOpen size={24} />
       </button>
+      {showRules && createPortal(renderGameRules(), document.body)}
     </div>
   );
 }

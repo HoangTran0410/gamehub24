@@ -425,8 +425,6 @@ const OAnQuanUI: React.FC<GameUIProps> = ({
 
   return (
     <div className="flex flex-col items-center justify-center p-4 w-full max-w-4xl mx-auto touch-none md:min-h-[500px]">
-      {renderGameRules()}
-
       {/* Persistent Flying Cluster Overlay */}
       {createPortal(
         <div
@@ -449,15 +447,6 @@ const OAnQuanUI: React.FC<GameUIProps> = ({
         </div>,
         document.body,
       )}
-
-      {/* Rules Button */}
-      <button
-        onClick={() => setShowRules(true)}
-        className="absolute bottom-2 right-2 p-3 bg-slate-700 hover:bg-slate-600 rounded-full text-yellow-500 transition-colors z-20"
-        title={ts({ en: "Rules", vi: "Luật chơi" })}
-      >
-        <BookOpen size={20} />
-      </button>
 
       <div className="flex flex-col items-center">
         <div className="text-xl font-bold bg-slate-700 px-4 py-1 rounded-full mb-2">
@@ -663,6 +652,16 @@ const OAnQuanUI: React.FC<GameUIProps> = ({
           )}
         </div>
       </div>
+
+      {/* Rules Button */}
+      <button
+        onClick={() => setShowRules(true)}
+        className="absolute bottom-2 right-2 p-3 bg-slate-700 hover:bg-slate-600 rounded-full text-yellow-500 transition-colors z-20"
+        title={ts({ en: "Rules", vi: "Luật chơi" })}
+      >
+        <BookOpen size={20} />
+      </button>
+      {showRules && createPortal(renderGameRules(), document.body)}
     </div>
   );
 };

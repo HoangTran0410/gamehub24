@@ -12,6 +12,7 @@ import "chessground/assets/chessground.cburnett.css";
 import { useUserStore } from "../../stores/userStore";
 import useLanguage from "../../stores/languageStore";
 import type { GameUIProps } from "../types";
+import { createPortal } from "react-dom";
 
 export default function ChessUI({ game: baseGame }: GameUIProps) {
   const game = baseGame as ChessGame;
@@ -226,17 +227,6 @@ export default function ChessUI({ game: baseGame }: GameUIProps) {
 
   return (
     <div className="flex flex-col items-center gap-4 p-4 w-full max-w-2xl mx-auto">
-      {showRules && renderGameRules()}
-
-      {/* Rules Button */}
-      <button
-        onClick={() => setShowRules(true)}
-        className="fixed bottom-4 right-4 p-3 bg-slate-700 hover:bg-slate-600 rounded-full text-yellow-500 transition-colors z-40 shadow-lg border border-slate-500"
-        title={ts({ en: "Rules", vi: "Luật chơi" })}
-      >
-        <BookOpen size={24} />
-      </button>
-
       {/* Status Header */}
       <div className="flex flex-col gap-2 p-4 bg-slate-800 rounded-lg w-full max-w-[400px] mx-auto">
         <h3 className="text-sm font-medium text-gray-400 mb-1">
@@ -435,7 +425,7 @@ export default function ChessUI({ game: baseGame }: GameUIProps) {
 
       {/* Captured Pieces */}
       <div className="w-full flex justify-between gap-4 text-sm">
-        <div className="bg-slate-800 rounded-lg p-2 flex-1 bg-slate-400">
+        <div className="rounded-lg p-2 flex-1 bg-slate-400">
           <div className="text-xs text-slate-100 mb-1">
             {ti({ en: "White captured:", vi: "Trắng bắt:" })}{" "}
           </div>
@@ -466,6 +456,16 @@ export default function ChessUI({ game: baseGame }: GameUIProps) {
           </div>
         </div>
       </div>
+
+      {/* Rules Button */}
+      <button
+        onClick={() => setShowRules(true)}
+        className="fixed bottom-4 right-4 p-3 bg-slate-700 hover:bg-slate-600 rounded-full text-yellow-500 transition-colors z-40 shadow-lg border border-slate-500"
+        title={ts({ en: "Rules", vi: "Luật chơi" })}
+      >
+        <BookOpen size={24} />
+      </button>
+      {showRules && createPortal(renderGameRules(), document.body)}
     </div>
   );
 }

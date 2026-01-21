@@ -24,6 +24,7 @@ import { useUserStore } from "../../stores/userStore";
 import { useAlertStore } from "../../stores/alertStore";
 import useLanguage from "../../stores/languageStore";
 import type { GameUIProps } from "../types";
+import { createPortal } from "react-dom";
 
 export default function UnoUI({ game: baseGame }: GameUIProps) {
   const game = baseGame as Uno;
@@ -553,7 +554,6 @@ export default function UnoUI({ game: baseGame }: GameUIProps) {
       ref={containerRef}
       className="relative flex flex-col h-full p-2 md:p-4 gap-2 md:gap-4 overflow-hidden"
     >
-      {renderGameRules()}
       {/* Mobile: Top row with 3 opponents */}
       <div className="flex md:hidden justify-center gap-2">
         {renderPlayerSlot(1, true, mobileSlotRefs)}
@@ -782,15 +782,6 @@ export default function UnoUI({ game: baseGame }: GameUIProps) {
         </div>
       )}
 
-      {/* Rules Button */}
-      <button
-        onClick={() => setShowRules(true)}
-        className="fixed bottom-4 right-4 p-3 bg-slate-700 hover:bg-slate-600 rounded-full text-yellow-500 transition-colors z-40 shadow-lg border border-slate-500"
-        title={ts({ en: "Rules", vi: "Luật chơi" })}
-      >
-        <BookOpen size={24} />
-      </button>
-
       {/* Flying Card Animation */}
       {flyingCard && (
         <FlyingCard
@@ -809,6 +800,16 @@ export default function UnoUI({ game: baseGame }: GameUIProps) {
           direction={flyingCard.direction}
         />
       )}
+
+      {/* Rules Button */}
+      <button
+        onClick={() => setShowRules(true)}
+        className="fixed bottom-4 right-4 p-3 bg-slate-700 hover:bg-slate-600 rounded-full text-yellow-500 transition-colors z-40 shadow-lg border border-slate-500"
+        title={ts({ en: "Rules", vi: "Luật chơi" })}
+      >
+        <BookOpen size={24} />
+      </button>
+      {showRules && createPortal(renderGameRules(), document.body)}
     </div>
   );
 }

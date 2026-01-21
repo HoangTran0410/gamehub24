@@ -1998,8 +1998,6 @@ const WerewolfUI: React.FC<GameUIProps> = ({ game, currentUserId = "" }) => {
     <div
       className={`relative flex flex-col h-full ${currentBg} rounded-lg text-white overflow-hidden`}
     >
-      {showRules && renderGameRules()}
-
       {/* Background Animation Curtain */}
       {animatingBg && (
         <div
@@ -2188,7 +2186,6 @@ const WerewolfUI: React.FC<GameUIProps> = ({ game, currentUserId = "" }) => {
       {showHistory && renderHistoryModal()}
 
       {/* Rules Button */}
-      {showRules && renderGameRules()}
       <button
         onClick={() => setShowRules(true)}
         className="fixed bottom-4 right-4 p-3 bg-slate-700 hover:bg-slate-600 rounded-full text-yellow-500 transition-colors z-40 shadow-lg border border-slate-500"
@@ -2196,6 +2193,7 @@ const WerewolfUI: React.FC<GameUIProps> = ({ game, currentUserId = "" }) => {
       >
         <BookOpen size={24} />
       </button>
+      {showRules && createPortal(renderGameRules(), document.body)}
     </div>
   );
 };

@@ -181,7 +181,7 @@ export default function RoomPage() {
       if (connectionTimeoutId) clearTimeout(connectionTimeoutId);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roomId, currentRoom?.id, socket]);
+  }, [roomId, currentRoom?.id]);
 
   // Effect for room event listeners
   useEffect(() => {
@@ -201,6 +201,7 @@ export default function RoomPage() {
     });
 
     socket.on("room:deleted", (data) => {
+      leaveRef.current = true;
       showAlert(
         data.reason ||
           ts({ en: "Room deleted by host", vi: "Phòng đã bị chủ xóa" }),
@@ -228,6 +229,7 @@ export default function RoomPage() {
       );
       setCurrentRoom(null);
       clearMessages();
+      leaveRef.current = true;
       navigate("/", { replace: true });
     });
 

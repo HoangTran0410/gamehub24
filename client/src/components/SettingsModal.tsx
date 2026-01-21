@@ -109,11 +109,11 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
   return (
     <div
       className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 animate-fadeIn"
-      onClick={onClose}
+      // onClick={onClose}
     >
       <div
         className="relative bg-background-secondary border border-white/10 rounded-2xl p-6 max-w-md w-full shadow-2xl mx-4 animate-scaleIn max-h-[90vh] overflow-y-auto overflow-x-hidden"
-        onClick={(e) => e.stopPropagation()}
+        // onClick={(e) => e.stopPropagation()}
       >
         {/* Close button top-left */}
         <button

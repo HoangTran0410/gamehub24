@@ -10,13 +10,16 @@ export type BauCuaSymbol =
   | "deer";
 
 // Symbol display names
-export const SYMBOL_NAMES: Record<BauCuaSymbol, { en: string; vi: string }> = {
-  gourd: { en: "Gourd", vi: "Bầu" },
-  crab: { en: "Crab", vi: "Cua" },
-  shrimp: { en: "Shrimp", vi: "Tôm" },
-  fish: { en: "Fish", vi: "Cá" },
-  chicken: { en: "Chicken", vi: "Gà" },
-  deer: { en: "Deer", vi: "Nai" },
+export const SYMBOL_NAMES: Record<
+  BauCuaSymbol,
+  { en: string; vi: string; emoji: string }
+> = {
+  gourd: { en: "Gourd", vi: "Bầu", emoji: "🎃" },
+  crab: { en: "Crab", vi: "Cua", emoji: "🦀" },
+  shrimp: { en: "Shrimp", vi: "Tôm", emoji: "🦐" },
+  fish: { en: "Fish", vi: "Cá", emoji: "🐟" },
+  chicken: { en: "Chicken", vi: "Gà", emoji: "🐔" },
+  deer: { en: "Deer", vi: "Nai", emoji: "🦌" },
 };
 
 // All symbols in order
@@ -51,6 +54,71 @@ export type DiceRoll = [BauCuaSymbol, BauCuaSymbol, BauCuaSymbol];
 // Game phases
 export type GamePhase = "waiting" | "betting" | "rolling" | "results" | "ended";
 
+// Power-up types
+export type PowerUpType = "double_down" | "insurance" | "reveal_one";
+
+export interface PowerUp {
+  type: PowerUpType;
+  cooldown: number; // Rounds until available again
+  lastUsedRound: number; // Track when it was last used
+}
+
+// Power-up activation timing
+export type PowerUpTiming = "pre_roll" | "post_roll";
+
+// Power-up prediction (for pre-roll powers like reveal_one)
+export interface PowerUpPrediction {
+  symbol: BauCuaSymbol;
+  accuracy: number; // Probability (0.5 to 0.9)
+  actuallyCorrect?: boolean; // Set after roll completes
+}
+
+// Power-up full configuration
+export interface PowerUpConfig {
+  cooldown: number;
+  timing: PowerUpTiming;
+  accuracy?: [number, number]; // For prediction-based powers
+}
+
+// Power-up configuration (centralized)
+export const POWERUP_CONFIG: Record<PowerUpType, PowerUpConfig> = {
+  double_down: { cooldown: 3, timing: "post_roll" },
+  insurance: { cooldown: 2, timing: "post_roll" },
+  reveal_one: { cooldown: 3, timing: "pre_roll", accuracy: [0.6, 0.9] },
+};
+
+// Power-up display names
+export const POWERUP_NAMES: Record<PowerUpType, { en: string; vi: string }> = {
+  double_down: { en: "Double Down", vi: "Nhân Đôi" },
+  insurance: { en: "Insurance", vi: "Bảo Hiểm" },
+  reveal_one: { en: "God Eyes", vi: "Mắt Thần" },
+};
+
+// Power-up descriptions
+export const POWERUP_DESCRIPTIONS: Record<
+  PowerUpType,
+  { en: string; vi: string }
+> = {
+  double_down: {
+    en: `2x payout if you win. Cooldown: ${POWERUP_CONFIG.double_down.cooldown} rounds`,
+    vi: `Gấp đôi tiền thắng. Hồi chiêu: ${POWERUP_CONFIG.double_down.cooldown} vòng`,
+  },
+  insurance: {
+    en: `50% refund if you lose. Cooldown: ${POWERUP_CONFIG.insurance.cooldown} rounds`,
+    vi: `Hoàn 50% nếu thua. Hồi chiêu: ${POWERUP_CONFIG.insurance.cooldown} vòng`,
+  },
+  reveal_one: {
+    en: `Predict result (60-90% accuracy). Cooldown: ${POWERUP_CONFIG.reveal_one.cooldown} rounds`,
+    vi: `Dự đoán kết quả (60-90% chính xác). Hồi chiêu: ${POWERUP_CONFIG.reveal_one.cooldown} vòng`,
+  },
+};
+
+// Hot streak tracking
+export interface HotStreak {
+  symbol: BauCuaSymbol;
+  count: number; // Times appeared in last 10 rounds
+}
+
 // Main game state
 export interface BauCuaState {
   gamePhase: GamePhase;
@@ -72,12 +140,37 @@ export interface BauCuaState {
 
   // Winner if game ended
   winner: string | null;
+
+  // Power-ups per player
+  playerPowerUps: Record<
+    string,
+    {
+      double_down: PowerUp;
+      insurance: PowerUp;
+      reveal_one: PowerUp;
+    }
+  >;
+
+  // Active power-ups this round (playerId -> powerUpType)
+  activePowerUps: Record<string, PowerUpType | null>;
+
+  // Power-up predictions (for pre-roll powers)
+  powerUpPredictions: Record<string, PowerUpPrediction>;
+
+  // Last 10 rounds dice results for hot streaks
+  recentRolls: DiceRoll[];
+
+  // Mega roll tracking
+  isMegaRound: boolean;
+  jackpotPool: number;
 }
 
 // Game constants
 export const INITIAL_BALANCE = 1000;
 export const MIN_BET = 10;
 export const MAX_BET = 500;
+export const JACKPOT_PERCENTAGE = 0.1;
+export const MEGA_ROUND_INTERVAL = 5;
 
 // Actions
 export interface PlaceBetAction {
@@ -124,6 +217,17 @@ export interface RemoveBotAction {
   playerId: string;
 }
 
+export interface ActivatePowerUpAction {
+  type: "ACTIVATE_POWERUP";
+  playerId: string;
+  powerUpType: PowerUpType;
+}
+
+export interface DeactivatePowerUpAction {
+  type: "DEACTIVATE_POWERUP";
+  playerId: string;
+}
+
 export type BauCuaAction =
   | PlaceBetAction
   | ClearBetsAction
@@ -133,4 +237,6 @@ export type BauCuaAction =
   | StartNewRoundAction
   | ResetGameAction
   | AddBotAction
-  | RemoveBotAction;
+  | RemoveBotAction
+  | ActivatePowerUpAction
+  | DeactivatePowerUpAction;

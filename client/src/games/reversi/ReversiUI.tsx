@@ -13,6 +13,7 @@ import {
 import type { GameUIProps } from "../types";
 import useLanguage from "../../stores/languageStore";
 import { useAlertStore } from "../../stores/alertStore";
+import { createPortal } from "react-dom";
 
 // CSS for flip animation
 const flipStyle = `
@@ -199,7 +200,6 @@ export default function ReversiUI({
 
   return (
     <div className="flex flex-col items-center gap-4 p-4 w-full max-w-2xl mx-auto pb-14">
-      {renderGameRules()}
       {/* Inject flip animation CSS */}
       <style dangerouslySetInnerHTML={{ __html: flipStyle }} />
 
@@ -430,6 +430,13 @@ export default function ReversiUI({
         )}
       </div>
 
+      {/* Game Board */}
+      <div className="grid grid-cols-8 gap-0 rounded-lg overflow-hidden shadow-xl border-4 border-green-900 w-full max-w-[500px]">
+        {state.board.map((row, ri) =>
+          row.map((cell, ci) => renderCell(cell, ri, ci)),
+        )}
+      </div>
+
       {/* Rules Button */}
       <button
         onClick={() => setShowRules(true)}
@@ -438,13 +445,7 @@ export default function ReversiUI({
       >
         <BookOpen size={24} />
       </button>
-
-      {/* Game Board */}
-      <div className="grid grid-cols-8 gap-0 rounded-lg overflow-hidden shadow-xl border-4 border-green-900 w-full max-w-[500px]">
-        {state.board.map((row, ri) =>
-          row.map((cell, ci) => renderCell(cell, ri, ci)),
-        )}
-      </div>
+      {showRules && createPortal(renderGameRules(), document.body)}
     </div>
   );
 }
