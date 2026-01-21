@@ -205,7 +205,7 @@ export default function Lobby() {
             </div>
 
             <div
-              className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 md:gap-6 gap-3 transition-opacity duration-300 ${
+              className={`grid grid-cols-1 md:grid-cols-3 md:gap-6 gap-3 transition-opacity duration-300 ${
                 isAnimating ? "opacity-0" : "opacity-100"
               }`}
             >
@@ -282,7 +282,7 @@ export default function Lobby() {
                       {game.isAvailable ? (
                         <button
                           onClick={() => handleSelectGame(game.id)}
-                          className="w-full px-4 py-2 bg-white/5 hover:bg-white/10 text-white text-white font-semibold rounded-lg transition-colors cursor-pointer"
+                          className="w-full px-4 py-2 bg-white/5 hover:bg-white/10 text-white font-semibold rounded-lg transition-colors cursor-pointer"
                         >
                           {ti({ en: "Create Room", vi: "Tạo Phòng" })}
                         </button>
@@ -329,7 +329,7 @@ export default function Lobby() {
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {publicRooms.map((room) => (
                   <RoomListItem key={room.id} room={room} />
                 ))}
@@ -433,7 +433,7 @@ function RoomListItem({ room }: { room: Room }) {
         {/* Info */}
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-2 mb-2">
-            <h4 className="font-display text-lg text-text-primary leading-tight break-words">
+            <h4 className="font-display text-lg text-text-primary leading-tight wrap-break-word">
               {room.name}
             </h4>
             {room.password && (

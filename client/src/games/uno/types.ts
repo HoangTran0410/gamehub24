@@ -159,7 +159,7 @@ export const COLOR_BG_CLASSES: Record<CardColor, string> = {
   [CardColor.BLUE]: "bg-blue-500",
   [CardColor.GREEN]: "bg-green-500",
   [CardColor.YELLOW]: "bg-yellow-500",
-  [CardColor.WILD]: "bg-gradient-to-br from-red-500 via-blue-500 to-green-500",
+  [CardColor.WILD]: "bg-linear-to-br from-red-500 via-blue-500 to-green-500",
 };
 
 export const TYPE_DISPLAY: Record<CardType, string> = {

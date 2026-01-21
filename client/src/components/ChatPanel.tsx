@@ -129,7 +129,7 @@ function UserMessage({
 
   return (
     <div className="flex gap-3">
-      <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
+      <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
         <span className="text-xs font-bold text-primary">
           {message.username[0].toUpperCase()}
         </span>
@@ -140,9 +140,9 @@ function UserMessage({
             {message.username}
             {isHost ? " 👑" : ""}
           </span>
-          <span className="text-xs text-text-muted flex-shrink-0">{time}</span>
+          <span className="text-xs text-text-muted shrink-0">{time}</span>
         </div>
-        <p className="text-text-secondary text-sm break-words text-left">
+        <p className="text-text-secondary text-sm wrap-break-word text-left">
           {message.message}
         </p>
       </div>

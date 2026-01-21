@@ -126,7 +126,7 @@ export default function Connect4UI({
 
     return (
       <div
-        className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4"
+        className="fixed inset-0 z-60 flex items-center justify-center bg-black/80 p-4"
         onClick={() => setShowRules(false)}
       >
         <div

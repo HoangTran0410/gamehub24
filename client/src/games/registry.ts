@@ -16,9 +16,7 @@ import {
   Moon,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-
 import type { ComponentType } from "react";
-
 import type { BaseGame } from "./BaseGame";
 import type { GameUIProps } from "./types";
 import type { Player } from "../stores/roomStore";
@@ -385,6 +383,26 @@ games.set("werewolf", {
     return new Werewolf(roomId, socket, isHost, userId, players);
   },
   loadUI: () => import("./werewolf/WerewolfUI").then((m) => m.default),
+});
+
+// Register Bầu Cua (Vietnamese Tet Dice Game)
+games.set("baucua", {
+  id: "baucua",
+  name: { en: "Bầu Cua", vi: "Bầu Cua" },
+  description: {
+    en: "Traditional Vietnamese Tet dice betting game. Bet on symbols and roll the dice!",
+    vi: "Trò chơi xúc xắc Tết truyền thống Việt Nam. Đặt cược và lắc xúc xắc!",
+  },
+  icon: Dices,
+  categories: ["party", "relax"],
+  minPlayers: 1,
+  maxPlayers: 20,
+  isAvailable: true,
+  createGame: async (roomId, socket, isHost, userId, players) => {
+    const { default: BauCua } = await import("./baucua/BauCua");
+    return new BauCua(roomId, socket, isHost, userId, players);
+  },
+  loadUI: () => import("./baucua/BauCuaUI").then((m) => m.default),
 });
 
 // Registry functions

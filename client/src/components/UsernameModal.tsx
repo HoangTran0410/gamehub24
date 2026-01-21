@@ -39,7 +39,7 @@ export default function UsernameModal({
     inputValue.trim().length >= 2 && inputValue.trim().length <= 20;
 
   return (
-    <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-[100] animate-fadeIn">
+    <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-100 animate-fadeIn">
       <div className="bg-background-secondary border border-white/10 rounded-2xl p-8 max-w-md w-full shadow-2xl mx-4 animate-scaleIn">
         <div className="flex flex-col items-center text-center mb-6">
           <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4 text-primary">

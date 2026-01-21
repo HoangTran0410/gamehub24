@@ -346,7 +346,7 @@ export default function MonopolyUI({
         id={`monopoly-board-space-${space.id}`}
         className={`relative flex flex-col overflow-hidden cursor-pointer transition-all duration-300 ${
           space.id === hoveredPropertyId || space.id === selectedProperty?.id
-            ? "z-[49] scale-110 ring-4 ring-yellow-400 shadow-[0_0_20px_rgba(250,204,21,0.6)] bg-slate-600"
+            ? "z-49 scale-110 ring-4 ring-yellow-400 shadow-[0_0_20px_rgba(250,204,21,0.6)] bg-slate-600"
             : "bg-slate-700 border border-slate-600 hover:bg-slate-600"
         }`}
         style={{
@@ -364,21 +364,21 @@ export default function MonopolyUI({
         {/* Property color bar */}
         {space.type === "property" && space.color && (
           <div
-            className="w-full h-[15%] min-h-[2px] flex-shrink-0"
+            className="w-full h-[15%] min-h-[2px] shrink-0"
             style={{ backgroundColor: getPropertyColorStyle(space.color) }}
           />
         )}
 
         {/* Space name */}
         <div className="flex-1 flex items-center justify-center p-0.5 overflow-hidden">
-          <span className="text-[5px] md:text-[6px] md:text-[8px] text-white text-center leading-tight line-clamp-2 font-medium">
+          <span className="text-[5px] md:text-[8px] text-white text-center leading-tight line-clamp-2 font-medium">
             {ti(space.name || space.name)}
           </span>
         </div>
 
         {/* Houses/Hotel indicator */}
         {ownership && ownership.houses > 0 && (
-          <div className="absolute bottom-0 left-0 right-0 flex justify-center gap-[1px] md:gap-0.5 p-[1px] md:p-0.5">
+          <div className="absolute bottom-0 left-0 right-0 flex justify-center gap-px md:gap-0.5 p-px md:p-0.5">
             {ownership.houses === 5 ? (
               <div
                 className="w-2 h-1.5 md:w-3 md:h-2 bg-red-500 rounded-sm"
@@ -979,7 +979,7 @@ export default function MonopolyUI({
 
     return (
       <div
-        className="fixed inset-0 z-50 flex md:items-center items-start justify-center justify-start bg-black/60 p-4"
+        className="fixed inset-0 z-50 flex md:items-center items-start justify-start bg-black/60 p-4"
         onClick={() => setSelectedProperty(null)}
       >
         <div
@@ -1491,7 +1491,7 @@ export default function MonopolyUI({
                         : "bg-slate-700/30 border-gray-500 text-gray-400"
                   }`}
                 >
-                  <span className="opacity-40 mr-1.5 min-w-[38px] flex-shrink-0">
+                  <span className="opacity-40 mr-1.5 min-w-[38px] shrink-0">
                     {new Date(log.timestamp).toLocaleTimeString([], {
                       hour: "2-digit",
                       minute: "2-digit",
@@ -1499,7 +1499,7 @@ export default function MonopolyUI({
                       hour12: false,
                     })}
                   </span>
-                  <span className="break-words text-left">
+                  <span className="wrap-break-word text-left">
                     {ti(log.message)}
                   </span>
                 </div>
@@ -1521,7 +1521,7 @@ export default function MonopolyUI({
         <h3 className="text-lg font-bold text-orange-400 mb-4 border-b border-orange-400/30 pb-2">
           {ti({ en: "Chance Cards", vi: "Thẻ Cơ Hội" })} (?)
         </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 md:grid-cols-3 gap-2">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
           {CHANCE_CARDS.map((card) => (
             <div
               key={card.id}
@@ -1544,7 +1544,7 @@ export default function MonopolyUI({
         <h3 className="text-lg font-bold text-yellow-400 mb-4 border-b border-yellow-400/30 pb-2">
           {ti({ en: "Community Chest Cards", vi: "Thẻ Khí Vận" })} (chest)
         </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 md:grid-cols-3 gap-2">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
           {CHEST_CARDS.map((card) => (
             <div
               key={card.id}
@@ -1566,7 +1566,7 @@ export default function MonopolyUI({
 
     return (
       <div
-        className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4"
+        className="fixed inset-0 z-60 flex items-center justify-center bg-black/80 p-4"
         onClick={() => setShowRules(false)}
       >
         <div
@@ -2056,7 +2056,7 @@ export default function MonopolyUI({
         <div className="relative bg-slate-900 rounded-lg md:rounded-xl p-0.5 md:p-1 shadow-2xl border-2 md:border-4 border-slate-700 overflow-hidden w-full max-w-[95vw]">
           {/* Grid board */}
           <div
-            className="grid gap-[1px] md:gap-0.5 w-full"
+            className="grid gap-px md:gap-0.5 w-full"
             style={{
               gridTemplateColumns: "repeat(11, 1fr)",
               gridTemplateRows: "repeat(11, 1fr)",
@@ -2066,14 +2066,14 @@ export default function MonopolyUI({
 
             {/* Center area - game controls go here */}
             <div
-              className="bg-gradient-to-br from-slate-800 to-slate-900 flex flex-col items-center justify-center overflow-auto"
+              className="bg-linear-to-br from-slate-800 to-slate-900 flex flex-col items-center justify-center overflow-auto"
               style={{
                 gridRow: "2 / 11",
                 gridColumn: "2 / 11",
               }}
             >
               {/* Title */}
-              <h2 className="text-xs md:text-lg md:text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-red-500 mb-1 md:mb-2">
+              <h2 className="text-xs md:text-xl font-bold text-transparent bg-clip-text bg-linear-to-r from-yellow-400 to-red-500 mb-1 md:mb-2">
                 CỜ TỶ PHÚ
               </h2>
 
@@ -2088,7 +2088,7 @@ export default function MonopolyUI({
       </div>
 
       {/* Side Panel */}
-      <div className="flex flex-col gap-4 flex-shrink-0 md:w-64 w-full">
+      <div className="flex flex-col gap-4 shrink-0 md:w-64 w-full">
         {renderPlayerPanel()}
         {renderMyProperties()}
         {renderHistoryLog()}
@@ -2111,7 +2111,7 @@ export default function MonopolyUI({
 
       {/* Hover Connection Line Layer */}
       {lineCoords && (
-        <svg className="absolute inset-0 pointer-events-none z-[49] overflow-visible w-full h-full">
+        <svg className="absolute inset-0 pointer-events-none z-49 overflow-visible w-full h-full">
           <defs>
             <marker
               id="arrowhead"

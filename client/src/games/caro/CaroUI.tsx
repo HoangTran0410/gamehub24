@@ -399,7 +399,7 @@ export default function CaroUI({ game: baseGame }: GameUIProps) {
   };
 
   const renderGameRules = () => (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-100 flex items-center justify-center p-4">
       <div className="bg-slate-900 border border-slate-700 rounded-xl max-w-lg w-full max-h-[80vh] overflow-y-auto shadow-2xl relative">
         <button
           onClick={() => setShowRules(false)}

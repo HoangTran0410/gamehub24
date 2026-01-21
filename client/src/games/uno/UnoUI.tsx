@@ -294,7 +294,7 @@ export default function UnoUI({ game: baseGame }: GameUIProps) {
                 ref={drawRef}
                 onClick={handleDraw}
                 disabled={!isMyTurn}
-                className={`relative ${pileDims} bg-gradient-to-br from-slate-700 to-slate-900 rounded-xl border-2 border-slate-600 flex items-center justify-center hover:border-slate-400 transition-all disabled:opacity-50`}
+                className={`relative ${pileDims} bg-linear-to-br from-slate-700 to-slate-900 rounded-xl border-2 border-slate-600 flex items-center justify-center hover:border-slate-400 transition-all disabled:opacity-50`}
               >
                 <Layers className={`${iconSize} text-slate-400`} />
                 <span className="absolute bottom-1 text-xs text-slate-400">
@@ -420,7 +420,7 @@ export default function UnoUI({ game: baseGame }: GameUIProps) {
 
     return (
       <div
-        className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4"
+        className="fixed inset-0 z-60 flex items-center justify-center bg-black/80 p-4"
         onClick={() => setShowRules(false)}
       >
         <div
@@ -848,7 +848,7 @@ function UnoCardDisplay({
         overflow-hidden
       `}
       >
-        <div className="absolute inset-1 rounded border-2 border-slate-600 flex items-center justify-center bg-gradient-to-br from-slate-800 to-black">
+        <div className="absolute inset-1 rounded border-2 border-slate-600 flex items-center justify-center bg-linear-to-br from-slate-800 to-black">
           <span className="text-slate-700/50 font-bold transform -rotate-45 select-none text-sm md:text-base">
             UNO
           </span>

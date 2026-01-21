@@ -189,7 +189,7 @@ export default function GameContainer({
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center h-[400px]">
-        <p className="text-text-secondary text-red-500">{error}</p>
+        <p className="text-red-500">{error}</p>
 
         <button
           onClick={onShowChangeGameModal}

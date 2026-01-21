@@ -285,7 +285,7 @@ const OAnQuanUI: React.FC<GameUIProps> = ({
 
     return (
       <div
-        className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4"
+        className="fixed inset-0 z-60 flex items-center justify-center bg-black/80 p-4"
         onClick={() => setShowRules(false)}
       >
         <div
@@ -431,7 +431,7 @@ const OAnQuanUI: React.FC<GameUIProps> = ({
       {createPortal(
         <div
           ref={flyingRef}
-          className="fixed z-[100] pointer-events-none"
+          className="fixed z-100 pointer-events-none"
           style={{
             // Hidden by default, shown by active animation only when needed
             // WAAPI will animate the position, but we handle opacity imperatively

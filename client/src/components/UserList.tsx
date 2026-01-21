@@ -39,7 +39,7 @@ export default function UserList() {
           en: `Kick ${name} from the room?`,
           vi: `Đuổi ${name} khỏi phòng?`,
         }),
-        ts({ en: "Kick", vi: "Đuổi" })
+        ts({ en: "Kick", vi: "Đuổi" }),
       ))
     )
       return;
@@ -55,7 +55,7 @@ export default function UserList() {
             type: "success",
           });
         }
-      }
+      },
     );
   };
 
@@ -66,7 +66,7 @@ export default function UserList() {
           en: `Move ${name} to spectator?`,
           vi: `Chuyển ${name} sang khán giả?`,
         }),
-        ts({ en: "Move to spectator", vi: "Chuyển sang khán giả" })
+        ts({ en: "Move to spectator", vi: "Chuyển sang khán giả" }),
       ))
     )
       return;
@@ -80,7 +80,7 @@ export default function UserList() {
         if (!response.success && response.error) {
           showAlert(response.error, { type: "error" });
         }
-      }
+      },
     );
   };
 
@@ -91,7 +91,7 @@ export default function UserList() {
           en: `Move ${name} to players?`,
           vi: `Chuyển ${name} thành người chơi?`,
         }),
-        ts({ en: "Move to players", vi: "Chuyển thành người chơi" })
+        ts({ en: "Move to players", vi: "Chuyển thành người chơi" }),
       ))
     )
       return;
@@ -103,7 +103,7 @@ export default function UserList() {
         if (!response.success && response.error) {
           showAlert(response.error, { type: "error" });
         }
-      }
+      },
     );
   };
 
@@ -153,7 +153,7 @@ export default function UserList() {
               >
                 <div className="flex items-center gap-2.5 min-w-0">
                   {/* Avatar/Icon */}
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
+                  <div className="w-8 h-8 rounded-full bg-linear-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
                     {p.isHost ? (
                       <Crown className="w-4 h-4 text-white" />
                     ) : (

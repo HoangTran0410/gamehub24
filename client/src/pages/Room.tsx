@@ -388,14 +388,14 @@ export default function RoomPage() {
 
       <div className="min-h-screen bg-background-primary flex flex-col">
         {/* Room Header */}
-        <header className="z-40 glass-card border-b border-white/10 flex-shrink-0">
+        <header className="z-40 glass-card border-b border-white/10 shrink-0">
           <div className="w-full px-3 md:px-4 py-2">
             <div className="flex items-center justify-between gap-2">
               {/* Left side: Back button + Room info */}
               <div className="flex items-center gap-2 md:gap-4 min-w-0 flex-1">
                 <button
                   onClick={handleLeaveRoom}
-                  className="p-1.5 md:p-2 hover:bg-white/10 rounded-lg transition-colors cursor-pointer flex-shrink-0"
+                  className="p-1.5 md:p-2 hover:bg-white/10 rounded-lg transition-colors cursor-pointer shrink-0"
                   aria-label="Leave room"
                 >
                   <ArrowLeft className="w-5 h-5 text-text-secondary" />
@@ -407,7 +407,7 @@ export default function RoomPage() {
                     </h1>
                     <button
                       onClick={() => setShowShareModal(true)}
-                      className="p-1 md:p-1.5 hover:bg-white/10 rounded-lg transition-colors cursor-pointer flex-shrink-0"
+                      className="p-1 md:p-1.5 hover:bg-white/10 rounded-lg transition-colors cursor-pointer shrink-0"
                       aria-label="Share room"
                       title="Share room link"
                     >
@@ -465,7 +465,7 @@ export default function RoomPage() {
                   <button
                     onClick={handleUserTouch}
                     onMouseEnter={handleUserTouch}
-                    className="flex items-center gap-1.5 md:gap-2 text-xs md:text-sm flex-shrink-0 cursor-pointer hover:bg-white/10 rounded-lg px-2 py-1 -mx-2 -my-1 transition-colors"
+                    className="flex items-center gap-1.5 md:gap-2 text-xs md:text-sm shrink-0 cursor-pointer hover:bg-white/10 rounded-lg px-2 py-1 -mx-2 -my-1 transition-colors"
                   >
                     <User className="w-3.5 h-3.5 md:w-4 md:h-4 text-text-muted" />
                     <span className="max-w-[80px] md:max-w-none truncate">
@@ -586,14 +586,14 @@ export default function RoomPage() {
         )}
 
         {/* Main Content */}
-        <main className="flex-1 w-full px-2 py-6 overflow-hidden lg:py-6 py-0">
+        <main className="flex-1 w-full px-2 overflow-hidden md:py-4 py-2">
           <div
-            className="flex flex-col lg:flex-row md:gap-1 gap-4 h-full"
+            className="flex flex-col md:flex-row md:gap-1 gap-4 h-full"
             ref={containerRef}
           >
             {/* Game Container */}
             <div
-              className={`flex-1 min-w-0 glass-card rounded-2xl p-2 md:p-4 overflow-hidden flex-col relative ${
+              className={`flex-1 min-w-0 glass-card rounded-2xl p-2 md:p-4 overflow-hidden flex-col relative @container ${
                 isDesktop ? "flex" : mobileTab === "game" ? "flex" : "hidden"
               }`}
             >
@@ -613,7 +613,7 @@ export default function RoomPage() {
             {/* Resize Handle (Desktop Only) */}
             {isDesktop && (
               <div
-                className={`flex w-4 cursor-col-resize items-center justify-center hover:bg-white/10 rounded transition-colors flex-shrink-0 ${
+                className={`flex w-4 cursor-col-resize items-center justify-center hover:bg-white/10 rounded transition-colors shrink-0 ${
                   isResizing ? "bg-white/10" : ""
                 }`}
                 onMouseDown={startResizing}
@@ -625,7 +625,7 @@ export default function RoomPage() {
             {/* Side Panel (Desktop only: chat + users with internal tabs) */}
             {isDesktop && (
               <div
-                className="flex-shrink-0 glass-card rounded-2xl flex flex-col overflow-hidden"
+                className="shrink-0 glass-card rounded-2xl flex flex-col overflow-hidden"
                 style={{
                   width: chatPanelWidth,
                 }}
@@ -637,7 +637,7 @@ export default function RoomPage() {
             {/* Chat Panel (Mobile only: tab content) */}
             {!isDesktop && (
               <div
-                className={`flex-shrink-0 glass-card rounded-2xl flex-col overflow-hidden w-full ${
+                className={`shrink-0 glass-card rounded-2xl flex-col overflow-hidden w-full ${
                   mobileTab === "chat" ? "flex" : "hidden"
                 }`}
               >
@@ -648,7 +648,7 @@ export default function RoomPage() {
             {/* User List (Mobile only: tab content) */}
             {!isDesktop && (
               <div
-                className={`flex-shrink-0 glass-card rounded-2xl flex-col overflow-hidden w-full ${
+                className={`shrink-0 glass-card rounded-2xl flex-col overflow-hidden w-full ${
                   mobileTab === "user" ? "flex" : "hidden"
                 }`}
               >
@@ -658,7 +658,7 @@ export default function RoomPage() {
           </div>
         </main>
 
-        <footer className="p-4 flex-shrink-0">
+        <footer className="p-4 shrink-0">
           <p className="text-text-muted text-xs">
             &copy; {new Date().getFullYear()} GameHub24. Made with ❤️ by{" "}
             <span className="text-primary">
@@ -718,7 +718,7 @@ function PasswordPromptModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100] animate-fadeIn">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-100 animate-fadeIn">
       <div className="bg-background-secondary border border-white/10 rounded-2xl p-8 max-w-md w-full shadow-2xl mx-4 animate-scaleIn">
         <div className="flex flex-col items-center text-center mb-6">
           <div className="w-16 h-16 rounded-full bg-yellow-500/10 flex items-center justify-center mb-4 text-yellow-500">
@@ -797,7 +797,7 @@ function ChangeGameModal({
 
   return (
     <div
-      className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100] animate-fadeIn"
+      className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-100 animate-fadeIn"
       onClick={onClose}
     >
       <div

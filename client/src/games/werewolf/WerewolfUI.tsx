@@ -85,16 +85,16 @@ const getPhaseLabel = (phase: GamePhase): { en: string; vi: string } => {
 const getPhaseBackground = (phase: GamePhase): string => {
   switch (phase) {
     case "setup":
-      return "bg-gradient-to-b from-slate-900 to-slate-800";
+      return "bg-linear-to-b from-slate-900 to-slate-800";
     case "night":
-      return "bg-gradient-to-b from-slate-950 to-indigo-950";
+      return "bg-linear-to-b from-slate-950 to-indigo-950";
     case "voting":
-      return "bg-gradient-to-b from-orange-950 to-blue-800";
+      return "bg-linear-to-b from-orange-950 to-blue-800";
     case "elimination":
-      return "bg-gradient-to-b from-red-950 to-brown-800";
+      return "bg-linear-to-b from-red-950 to-brown-800";
     default:
       // Day phases - slightly brighter but still dark theme
-      return "bg-gradient-to-b from-slate-800 to-slate-700";
+      return "bg-linear-to-b from-slate-800 to-slate-700";
   }
 };
 
@@ -265,7 +265,7 @@ const GameHistoryPanel: React.FC<{
                               className="px-2 py-1 hover:bg-white/5 rounded transition-colors"
                             >
                               <div className="flex justify-between items-baseline gap-2">
-                                <p className="text-sm text-white/90 break-words leading-tight flex-1">
+                                <p className="text-sm text-white/90 wrap-break-word leading-tight flex-1">
                                   {msg.content}
                                 </p>
                                 <span className="text-[10px] text-white/40 shrink-0">
@@ -355,11 +355,11 @@ const PlayerHistoryModal: React.FC<{
   const isMe = userId === player.id;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+    <div className="fixed inset-0 z-100 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
       <div className="bg-slate-800 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
         <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between bg-slate-900">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center font-bold text-base">
+            <div className="w-8 h-8 rounded-full bg-linear-to-br from-purple-500 to-pink-500 flex items-center justify-center font-bold text-base">
               {player.username.charAt(0).toUpperCase()}
             </div>
             <div>
@@ -662,7 +662,7 @@ const UnifiedPlayerCard: React.FC<{
           className={`relative w-12 h-12 rounded-full flex items-center justify-center text-xl ${
             isDead
               ? "bg-gray-700"
-              : "bg-gradient-to-br from-green-500 to-blue-500"
+              : "bg-linear-to-br from-green-500 to-blue-500"
           }`}
         >
           {showRole && roleInfo ? (
@@ -950,7 +950,7 @@ const SetupPhase: React.FC<{
           >
             {player.id ? (
               <>
-                <div className="w-10 h-10 mx-auto rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-xl">
+                <div className="w-10 h-10 mx-auto rounded-full bg-linear-to-br from-purple-500 to-pink-500 flex items-center justify-center text-xl">
                   {player.isBot ? (
                     <Bot className="w-5 h-5" />
                   ) : (
@@ -1038,7 +1038,7 @@ const SetupPhase: React.FC<{
             disabled={!game.canStartGame()}
             className={`w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 ${
               game.canStartGame()
-                ? "bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600"
+                ? "bg-linear-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600"
                 : "bg-gray-600 text-gray-400 cursor-not-allowed"
             }`}
           >
@@ -1265,7 +1265,7 @@ const NightPhase: React.FC<{
             ? !selectedTarget || !secondSelectedTarget
             : myRole !== "witch" && !selectedTarget
         }
-        className="w-full py-3 rounded-xl font-bold bg-gradient-to-r from-indigo-500 to-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
+        className="w-full py-3 rounded-xl font-bold bg-linear-to-r from-indigo-500 to-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <Check className="w-5 h-5 inline mr-2" />
         {ti({ vi: "Xác nhận", en: "Confirm" })}
@@ -1535,8 +1535,8 @@ const VotingPhase: React.FC<{
           disabled={!selectedTarget}
           className={`flex-1 py-3 rounded-xl font-bold disabled:opacity-50 ${
             isHunterRevenge
-              ? "bg-gradient-to-r from-red-600 to-red-800"
-              : "bg-gradient-to-r from-orange-500 to-red-500"
+              ? "bg-linear-to-r from-red-600 to-red-800"
+              : "bg-linear-to-r from-orange-500 to-red-500"
           }`}
         >
           {isHunterRevenge
@@ -1579,7 +1579,7 @@ const GameEnd: React.FC<{
       {showResetButton && (
         <button
           onClick={() => game.requestResetGame()}
-          className="mt-4 px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-500 rounded-xl font-bold flex items-center gap-2"
+          className="mt-4 px-6 py-3 bg-linear-to-r from-green-500 to-emerald-500 rounded-xl font-bold flex items-center gap-2"
         >
           <RotateCcw className="w-5 h-5" /> Chơi lại
         </button>
@@ -1744,7 +1744,7 @@ const WerewolfUI: React.FC<GameUIProps> = ({ game, currentUserId = "" }) => {
     <div
       className={`${
         fixed
-          ? "fixed top-0 left-0 right-0 z-[100] bg-slate-900/95 backdrop-blur-md border-b border-white/10 py-2 animate-in slide-in-from-top duration-300 shadow-2xl"
+          ? "fixed top-0 left-0 right-0 z-100 bg-slate-900/95 backdrop-blur-md border-b border-white/10 py-2 animate-in slide-in-from-top duration-300 shadow-2xl"
           : "mb-3"
       } flex justify-center w-full`}
     >
@@ -1829,12 +1829,12 @@ const WerewolfUI: React.FC<GameUIProps> = ({ game, currentUserId = "" }) => {
   );
 
   const renderHistoryModal = () => (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-100 flex items-center justify-center p-4">
       <div className="bg-slate-900 border border-white/10 rounded-2xl max-w-lg w-full h-[80vh] max-h-[90%] overflow-hidden shadow-2xl flex flex-col">
         {/* Header matching PlayerHistoryModal */}
         <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between bg-slate-900">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center font-bold text-base">
+            <div className="w-8 h-8 rounded-full bg-linear-to-br from-blue-500 to-cyan-500 flex items-center justify-center font-bold text-base">
               <History className="w-4 h-4 text-white" />
             </div>
             <div>
@@ -1862,7 +1862,7 @@ const WerewolfUI: React.FC<GameUIProps> = ({ game, currentUserId = "" }) => {
   );
 
   const renderGameRules = () => (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-100 flex items-center justify-center p-4">
       <div className="bg-slate-900 border border-slate-700 rounded-xl max-w-lg w-full max-h-[80vh] overflow-y-auto shadow-2xl relative">
         <button
           onClick={() => setShowRules(false)}
