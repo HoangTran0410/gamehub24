@@ -1,9 +1,9 @@
 // Game constants
 export const INITIAL_BALANCE = 1000;
 export const MIN_BET = 10;
-export const MAX_BET = 500;
 export const JACKPOT_PERCENTAGE = 0.1;
 export const MEGA_ROUND_INTERVAL = 5;
+export const MAX_SYMBOLS_PER_PLAYER = 3;
 
 // The 6 traditional Bầu Cua symbols
 export type BauCuaSymbol =

@@ -12,7 +12,6 @@ import {
   ALL_SYMBOLS,
   POWERUP_CONFIG,
   MIN_BET,
-  MAX_BET,
   JACKPOT_PERCENTAGE,
   MEGA_ROUND_INTERVAL,
 } from "./types";
@@ -136,7 +135,7 @@ export default class BauCua extends BaseGame<BauCuaState> {
 
     // Still enforce minimum/maximum
     if (actualAmount < MIN_BET) return;
-    if (actualAmount > MAX_BET) return;
+    // if (actualAmount > MAX_BET) return;
 
     // Find existing bet on this symbol
     const existingBetIndex = currentBets.findIndex(
@@ -423,8 +422,7 @@ export default class BauCua extends BaseGame<BauCuaState> {
     this.state.powerUpPredictions = {};
 
     this.state.gamePhase = "results";
-    this.state.currentRound++;
-    this.state.isMegaRound = this.state.currentRound % 5 === 0;
+    // this.state.currentRound++;
 
     // Check if any player is out of money
     this.checkGameOver();
@@ -452,6 +450,7 @@ export default class BauCua extends BaseGame<BauCuaState> {
     this.state.playersReady = {};
     // Keep isMegaRound consistent with currentRound (set in calculateResults)
     // or recalculate it here to be safe
+    this.state.currentRound++;
     this.state.isMegaRound =
       this.state.currentRound > 0 &&
       this.state.currentRound % MEGA_ROUND_INTERVAL === 0;
@@ -574,19 +573,25 @@ export default class BauCua extends BaseGame<BauCuaState> {
       const strategy = Math.random();
       let numBets = 1;
 
-      if (strategy < 0.3) {
-        // Conservative: 1-2 bets
-        numBets = Math.random() < 0.5 ? 1 : 2;
-      } else if (strategy < 0.7) {
-        // Moderate: 2-3 bets
-        numBets = Math.random() < 0.5 ? 2 : 3;
-      } else {
-        // Aggressive: 3-4 bets
-        numBets = Math.random() < 0.5 ? 3 : 4;
-      }
+      // Conservative: 1-2 bets
+      if (strategy < 0.5) numBets = Math.random() < 0.5 ? 1 : 2;
+      // Moderate: 2-3 bets
+      else numBets = Math.random() < 0.5 ? 2 : 3;
 
+      // risk level
+      const riskRatio =
+        strategy < 0.3
+          ? randInRange(0.3, 0.5) // conservative bot
+          : strategy < 0.7
+            ? randInRange(0.5, 0.75) // normal bot
+            : randInRange(0.7, 0.95); // aggressive bot
+
+      const totalBetBudget = Math.max(
+        1,
+        Math.floor(bot.currentBalance * riskRatio),
+      );
+      const betAmount = Math.max(MIN_BET, Math.floor(totalBetBudget / numBets));
       const availableSymbols = [...ALL_SYMBOLS];
-      const betAmount = Math.floor(bot.currentBalance / (numBets * 2));
 
       for (let i = 0; i < numBets && availableSymbols.length > 0; i++) {
         const symbolIndex = Math.floor(Math.random() * availableSymbols.length);

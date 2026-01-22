@@ -15,6 +15,7 @@ import {
   POWERUP_CONFIG,
   JACKPOT_PERCENTAGE,
   MEGA_ROUND_INTERVAL,
+  MAX_SYMBOLS_PER_PLAYER,
 } from "./types";
 import { useAlertStore } from "../../stores/alertStore";
 import useLanguage from "../../stores/languageStore";
@@ -32,7 +33,7 @@ import {
   Star,
 } from "lucide-react";
 import { createPortal } from "react-dom";
-import { formatNumber } from "../../utils";
+import { formatPrice } from "../../utils";
 import BettingModal from "./BettingModal";
 
 // Get power-up icon
@@ -271,10 +272,8 @@ export default function BauCuaUI({
 
     if (finalBetAmount < MIN_BET) {
       setBetError(
-        ts({
-          en: `Minimum bet is ${formatNumber(MIN_BET)}`,
-          vi: `Cược tối thiểu ${formatNumber(MIN_BET)}`,
-        }),
+        ts({ en: `Minimum bet is `, vi: `Cược tối thiểu ` }) +
+          formatPrice(MIN_BET),
       );
       return;
     }
@@ -282,6 +281,17 @@ export default function BauCuaUI({
     // Update local state for instant UI feedback (both host and guests)
     // Only sync to server when ready button is pressed
     if (!isReady) {
+      console.log(localBets);
+      if (localBets.length >= MAX_SYMBOLS_PER_PLAYER) {
+        setBetError(
+          ts({
+            en: "Maximum 3 bets only",
+            vi: "Chỉ được đặt tối đa 3 linh vật ",
+          }),
+        );
+        return;
+      }
+
       const existingBetIndex = localBets.findIndex((b) => b.symbol === symbol);
       const newLocalBets = [...localBets];
 
@@ -350,6 +360,46 @@ export default function BauCuaUI({
     return getBetsOnSymbol(symbol).reduce((sum, bet) => sum + bet.amount, 0);
   };
 
+  // Handle roll dice with confirmation if guests haven't bet
+  const handleRollDice = async () => {
+    if (!game.isHost) return;
+
+    // Sync host's local bets if they have any local bets pending
+    if (localBets.length > 0 && !isReady) {
+      game.requestSyncBets(localBets);
+    }
+
+    // Check if any human players (non-bots) haven't placed bets
+    const humanPlayers = Object.values(state.playerBalances).filter(
+      (p) => !p.isBot,
+    );
+    const playersWithoutBet = humanPlayers.filter((p) => {
+      // Exclude host from this check if they have local bets (which we just synced)
+      // or if they are already ready
+      if (p.playerId === userId && (localBets.length > 0 || isReady)) {
+        return false;
+      }
+      return (
+        (state.currentBets[p.playerId] || []).length === 0 ||
+        !state.playersReady[p.playerId]
+      );
+    });
+
+    if (playersWithoutBet.length > 0) {
+      const confirmed = await showConfirm(
+        ts({
+          vi: `Có ${playersWithoutBet.length} người chưa sẵn sàng (${playersWithoutBet.map((p) => p.username).join(", ")}). Bạn có muốn lắc xúc xắc luôn không? `,
+          en: `${playersWithoutBet.length} player(s) haven't ready yet (${playersWithoutBet.map((p) => p.username).join(", ")}). Roll dice anyway? `,
+        }),
+        ts({ vi: "Lắc xúc xắc", en: "Roll Dice" }),
+      );
+
+      if (!confirmed) return;
+    }
+
+    game.requestRollDice();
+  };
+
   // Generate mini sparkline SVG for a player's balance history
   const renderMiniSparkline = (history: number[]): React.ReactElement => {
     if (history.length < 2) {
@@ -392,46 +442,6 @@ export default function BauCuaUI({
     );
   };
 
-  // Handle roll dice with confirmation if guests haven't bet
-  const handleRollDice = async () => {
-    if (!game.isHost) return;
-
-    // Sync host's local bets if they have any local bets pending
-    if (localBets.length > 0 && !isReady) {
-      game.requestSyncBets(localBets);
-    }
-
-    // Check if any human players (non-bots) haven't placed bets
-    const humanPlayers = Object.values(state.playerBalances).filter(
-      (p) => !p.isBot,
-    );
-    const playersWithoutBet = humanPlayers.filter((p) => {
-      // Exclude host from this check if they have local bets (which we just synced)
-      // or if they are already ready
-      if (p.playerId === userId && (localBets.length > 0 || isReady)) {
-        return false;
-      }
-      return (
-        (state.currentBets[p.playerId] || []).length === 0 ||
-        !state.playersReady[p.playerId]
-      );
-    });
-
-    if (playersWithoutBet.length > 0) {
-      const confirmed = await showConfirm(
-        ts({
-          vi: `Có ${playersWithoutBet.length} người chưa sẵn sàng (${playersWithoutBet.map((p) => p.username).join(", ")}). Bạn có muốn lắc xúc xắc luôn không? `,
-          en: `${playersWithoutBet.length} player(s) haven't ready yet (${playersWithoutBet.map((p) => p.username).join(", ")}). Roll dice anyway? `,
-        }),
-        ts({ vi: "Lắc xúc xắc", en: "Roll Dice" }),
-      );
-
-      if (!confirmed) return;
-    }
-
-    game.requestRollDice();
-  };
-
   const renderGameRules = () => (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-100 flex items-center justify-center p-4">
       <div className="bg-slate-900 border border-slate-700 rounded-xl max-w-lg w-full max-h-[80vh] overflow-y-auto shadow-2xl relative">
@@ -468,20 +478,26 @@ export default function BauCuaUI({
               <ul className="space-y-2 list-disc pl-4">
                 <li>
                   {ti({
-                    en: "One symbol matches: Win 1x your bet.",
-                    vi: "Trúng 1 linh vật: Ăn 1 lần tiền cược.",
+                    en: "Max 3 bets each round.",
+                    vi: "Đặt cược nhiều nhất 3 linh vật mỗi vòng.",
                   })}
                 </li>
                 <li>
                   {ti({
-                    en: "Two symbols match: Win 2x your bet.",
-                    vi: "Trúng 2 linh vật: Ăn 2 lần tiền cược.",
+                    en: "Press Ready and wait host to roll dices.",
+                    vi: "Bấm sẵn sàng và đợi chủ phòng quay xúc xắc.",
                   })}
                 </li>
                 <li>
                   {ti({
-                    en: "Three symbols match: Win 3x your bet + Jackpot chance!",
-                    vi: "Trúng 3 linh vật: Ăn 3 lần tiền cược + Cơ hội nổ hũ!",
+                    en: "Each symbol matches: Win 2x your bet.",
+                    vi: "Cược đúng linh vật: Nhận x2 tiền cược của linh vật đó.",
+                  })}
+                </li>
+                <li>
+                  {ti({
+                    en: "Each symbol not matches: Lose bet on that symbol.",
+                    vi: "Cược sai linh vật: Mất tiền cược.",
                   })}
                 </li>
               </ul>
@@ -640,6 +656,7 @@ export default function BauCuaUI({
           );
           setSelectedSymbolForBet(null);
         }}
+        currentBets={localBets}
         symbol={selectedSymbolForBet}
         currentBalance={myBalance ? myBalance.currentBalance - myTotalBet : 0}
         currentBet={myBetOnSelectedSymbol}
@@ -684,10 +701,8 @@ export default function BauCuaUI({
               <span className="animate-bounce">🌟</span>
             </h2>
             <p className="text-center text-lg font-bold mt-2">
-              {ti({
-                vi: `Hũ: ${state.jackpotPool} 💎`,
-                en: `Jackpot: ${state.jackpotPool} 💎`,
-              })}
+              {ti({ vi: `Hũ: `, en: `Jackpot: ` })}
+              {formatPrice(state.jackpotPool)}
             </p>
             <p className="text-center text-sm opacity-90">
               {ti({
@@ -707,7 +722,7 @@ export default function BauCuaUI({
                 en: `Round ${state.currentRound}`,
               })}
               {state.jackpotPool > 0 &&
-                ` • ${ti({ vi: "Hũ", en: "Jackpot" })}: ${state.jackpotPool} 💎`}
+                ` • ${ti({ vi: "Hũ", en: "Jackpot" })}: ${formatPrice(state.jackpotPool)} 💎`}
             </p>
           </div>
         )}
@@ -742,7 +757,7 @@ export default function BauCuaUI({
                           {player.username}
                         </p>
                         <p className="text-xs text-slate-400">
-                          {formatNumber(player.currentBalance)}💰
+                          {formatPrice(player.currentBalance)}💰
                         </p>
                       </div>
                       {player.isBot && <span className="text-lg ml-2">🤖</span>}
@@ -799,7 +814,7 @@ export default function BauCuaUI({
                         {ti({ vi: "Số dư", en: "Your Balance" })}
                       </p>
                       <p className="text-2xl font-bold text-green-400 flex items-center gap-0">
-                        {formatNumber(myBalance.currentBalance)}
+                        {formatPrice(myBalance.currentBalance)}
                         {myBalance.balanceHistory.length > 1 && (
                           <span
                             className={`ml-2 text-sm font-bold animate-pulse ${
@@ -809,7 +824,7 @@ export default function BauCuaUI({
                             }`}
                           >
                             {myLastProfit >= 0 ? "+" : ""}
-                            {formatNumber(myLastProfit)}
+                            {formatPrice(myLastProfit)}
                           </span>
                         )}
                       </p>
@@ -819,7 +834,7 @@ export default function BauCuaUI({
                         {ti({ vi: "Tổng cược", en: "Total Bet" })}
                       </p>
                       <p className="text-xl font-semibold text-orange-400">
-                        {formatNumber(myTotalBet)}
+                        {formatPrice(myTotalBet)}
                       </p>
                     </div>
                   </div>
@@ -936,11 +951,17 @@ export default function BauCuaUI({
                     streakRank >= 4 && state.recentRolls.length >= 3;
                   const hasAllIn =
                     // i am all-in
-                    betOnThis >= (myBalance?.currentBalance || 0) ||
+                    ((isReady || game.isHost) &&
+                      betOnThis >= (myBalance?.currentBalance || 0)) ||
                     // some player is all-in on this symbol
                     betsOnSymbol.filter((bet) => {
                       const player = state.playerBalances[bet.playerId];
-                      return player && player.totalBet >= player.currentBalance;
+                      const bets = state.currentBets[bet.playerId];
+                      return (
+                        player &&
+                        player.totalBet >= player.currentBalance &&
+                        bets.length === 1
+                      );
                     }).length > 0;
 
                   return (
@@ -1001,7 +1022,7 @@ export default function BauCuaUI({
                       {/* My bet */}
                       {betOnThis > 0 && (
                         <div className="absolute @md:top-2 @md:right-2 top-1 right-1 bg-white text-black px-2 py-1 rounded-full text-xs font-bold">
-                          {formatNumber(betOnThis)}
+                          {formatPrice(betOnThis)}
                         </div>
                       )}
 
@@ -1009,10 +1030,8 @@ export default function BauCuaUI({
                       {betsOnSymbol.length > 0 && (
                         <div className="mt-2 space-y-1">
                           <div className="text-xs font-bold text-yellow-400 border-t border-slate-600 pt-2">
-                            {ti({
-                              vi: `Tổng: ${totalBets}`,
-                              en: `Total: ${totalBets}`,
-                            })}
+                            {ti({ vi: `Tổng: `, en: `Total: ` })}
+                            {formatPrice(totalBets)}
                           </div>
                           <div className="max-h-20 overflow-y-auto space-y-0.5">
                             {betsOnSymbol.map((bet) => (
@@ -1025,7 +1044,7 @@ export default function BauCuaUI({
                                   {bet.isBot && " 🤖"}
                                 </span>
                                 <span className="font-semibold text-green-400">
-                                  {formatNumber(bet.amount)}
+                                  {formatPrice(bet.amount)}
                                 </span>
                               </div>
                             ))}
@@ -1259,7 +1278,7 @@ export default function BauCuaUI({
                           </p>
                           <p className="text-xs text-slate-400">
                             {ti({ vi: `Cược: `, en: `Bet: ` })}
-                            {formatNumber(player.totalBet)}
+                            {formatPrice(player.totalBet)}
                             {state.playersReady[player.playerId] && " ✓"}
                           </p>
                         </div>
@@ -1270,7 +1289,7 @@ export default function BauCuaUI({
                           renderMiniSparkline(player.balanceHistory)}
                         <div className="text-right">
                           <p className="text-lg font-bold text-green-400">
-                            {formatNumber(player.currentBalance)}
+                            {formatPrice(player.currentBalance)}
                           </p>
                         </div>
                       </div>
