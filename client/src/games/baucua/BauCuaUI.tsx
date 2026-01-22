@@ -54,7 +54,7 @@ export default function BauCuaUI({
   const game = baseGame as BauCua;
   const [state, setState] = useState<BauCuaState>(game.getState());
   // Removed global betAmount state as it's now handled in the modal
-  const { confirm: showConfirm } = useAlertStore();
+  const { confirm: showConfirm, show: showAlert } = useAlertStore();
   const { ti, ts } = useLanguage();
   const { currentRoom } = useRoomStore();
 
@@ -118,6 +118,10 @@ export default function BauCuaUI({
   const myLastProfit = myBalance
     ? myBalance.currentBalance -
       myBalance.balanceHistory[myBalance.balanceHistory.length - 2]
+    : 0;
+
+  const availableBalance = myBalance
+    ? myBalance.currentBalance - myTotalBet
     : 0;
 
   useEffect(() => {
@@ -254,6 +258,23 @@ export default function BauCuaUI({
   const handleSymbolClick = (symbol: BauCuaSymbol) => {
     if (state.gamePhase !== "betting") return;
     if (!myBalance) return;
+
+    // Check if user has enough money to place a minimum bet
+    const availableBalance = myBalance.currentBalance - myTotalBet;
+    if (availableBalance < MIN_BET) {
+      showAlert(
+        ts({
+          vi:
+            "Bạn không đủ tiền để đặt cược (tối thiểu " +
+            formatPrice(MIN_BET) +
+            ")",
+          en: "Insufficient funds (minimum " + formatPrice(MIN_BET) + ")",
+        }),
+        { type: "error", title: ts({ vi: "Hết tiền!", en: "Out of money!" }) },
+      );
+      return;
+    }
+
     setSelectedSymbolForBet(symbol);
   };
 
@@ -377,6 +398,10 @@ export default function BauCuaUI({
       // Exclude host from this check if they have local bets (which we just synced)
       // or if they are already ready
       if (p.playerId === userId && (localBets.length > 0 || isReady)) {
+        return false;
+      }
+      // exclude players with no money
+      if (p.currentBalance < MIN_BET) {
         return false;
       }
       return (
@@ -571,6 +596,11 @@ export default function BauCuaUI({
                 ? state.diceRoll[reelIndex]
                 : reel[reel.length - 1];
 
+              const isCorrectBet =
+                !isRolling &&
+                state.diceRoll &&
+                myBets.some((bet) => bet.symbol === finalSymbol);
+
               return (
                 <div
                   key={reelIndex}
@@ -593,7 +623,11 @@ export default function BauCuaUI({
                       ))}
                     </div>
                   ) : (
-                    <div className="w-20 h-20 flex items-center justify-center text-5xl">
+                    <div
+                      className={`w-20 h-20 flex items-center justify-center text-5xl ${
+                        isCorrectBet ? "animate-bounce" : ""
+                      }`}
+                    >
                       {SYMBOL_NAMES[finalSymbol].emoji}
                     </div>
                   )}
@@ -608,10 +642,15 @@ export default function BauCuaUI({
                     en: "Waiting for host roll...",
                   })
                 : !myBets.length
-                  ? ti({
-                      vi: "Vui lòng đặt cược trước...",
-                      en: "Please place bets first...",
-                    })
+                  ? availableBalance < MIN_BET
+                    ? ti({
+                        vi: "Bạn đã hết tiền...",
+                        en: "You are out of money...",
+                      })
+                    : ti({
+                        vi: "Vui lòng đặt cược trước...",
+                        en: "Please place bets first...",
+                      })
                   : !game.isHost
                     ? ti({
                         vi: "Vui lòng bấm Sẵn sàng...",
@@ -664,31 +703,6 @@ export default function BauCuaUI({
       <div
         className={`relative w-full h-full flex flex-col @md:gap-4 gap-2 @md:p-2 pb-20 overflow-y-auto`}
       >
-        {/* Game Ended */}
-        {state.gamePhase === "ended" && (
-          <div className="bg-linear-to-br from-yellow-600 to-orange-600 rounded-xl p-8 text-center border-4 border-yellow-400">
-            <h2 className="text-3xl font-bold mb-4">
-              🎉 {ti({ vi: "Kết thúc!", en: "Game Over!" })} 🎉
-            </h2>
-            {state.winner && (
-              <p className="text-xl mb-6">
-                {ti({
-                  vi: `Người chiến thắng: ${state.playerBalances[state.winner]?.username}`,
-                  en: `Winner: ${state.playerBalances[state.winner]?.username}`,
-                })}
-              </p>
-            )}
-            {game.isHost && (
-              <button
-                onClick={() => game.requestResetGame()}
-                className="px-6 py-3 bg-white text-black rounded-lg font-bold hover:bg-slate-200 transition-colors"
-              >
-                {ti({ vi: "Chơi lại", en: "Play Again" })}
-              </button>
-            )}
-          </div>
-        )}
-
         {/* Header */}
         {state.isMegaRound &&
         (state.gamePhase === "betting" ||
@@ -724,6 +738,31 @@ export default function BauCuaUI({
               {state.jackpotPool > 0 &&
                 ` • ${ti({ vi: "Hũ", en: "Jackpot" })}: ${formatPrice(state.jackpotPool)} 💎`}
             </p>
+          </div>
+        )}
+
+        {/* Game Ended */}
+        {state.gamePhase === "ended" && (
+          <div className="bg-linear-to-br from-yellow-600 to-orange-600 rounded-xl p-8 text-center border-4 border-yellow-400">
+            <h2 className="text-3xl font-bold mb-4">
+              🎉 {ti({ vi: "Kết thúc!", en: "Game Over!" })} 🎉
+            </h2>
+            {state.winner && (
+              <p className="text-xl mb-6">
+                {ti({
+                  vi: `Người chiến thắng: ${state.playerBalances[state.winner]?.username}`,
+                  en: `Winner: ${state.playerBalances[state.winner]?.username}`,
+                })}
+              </p>
+            )}
+            {game.isHost && (
+              <button
+                onClick={() => game.requestResetGame()}
+                className="px-6 py-3 bg-white text-black rounded-lg font-bold hover:bg-slate-200 transition-colors"
+              >
+                {ti({ vi: "Chơi lại", en: "Play Again" })}
+              </button>
+            )}
           </div>
         )}
 
@@ -799,9 +838,7 @@ export default function BauCuaUI({
         )}
 
         {/* Main Game Area */}
-        {(state.gamePhase === "betting" ||
-          state.gamePhase === "rolling" ||
-          state.gamePhase === "results") && (
+        {state.gamePhase !== "waiting" && (
           <div className="flex flex-col @md:grid @md:grid-cols-[1fr_300px] gap-4">
             {/* Left Column: Betting Interface */}
             <div className="flex flex-col gap-4">
@@ -841,8 +878,6 @@ export default function BauCuaUI({
 
                   {state.gamePhase === "betting" && (
                     <>
-                      {/* Removed old slider control */}
-
                       <div className="flex gap-2">
                         {!isReady && (
                           <button
@@ -882,19 +917,31 @@ export default function BauCuaUI({
                           >
                             {isReady
                               ? ti({ vi: "Huỷ sẵn sàng", en: "Cancel Ready" })
-                              : ti({ vi: "Sẵn sàng", en: "Ready" })}
+                              : availableBalance < MIN_BET &&
+                                  myBets.length === 0
+                                ? ti({ vi: "Hết tiền", en: "Out of money" })
+                                : ti({ vi: "Sẵn sàng", en: "Ready" })}
                           </button>
                         )}
                       </div>
 
                       {/* notify user to select */}
                       {myBets.length === 0 ? (
-                        <p className="text-sm text-orange-500 pt-2 animate-bounce">
-                          {ti({
-                            vi: "Vui lòng chọn linh vật",
-                            en: "Please select a symbol",
-                          })}
-                        </p>
+                        availableBalance < MIN_BET ? (
+                          <p className="text-sm text-red-500 pt-2 animate-bounce">
+                            {ti({
+                              vi: "Bạn không đủ tiền cược",
+                              en: "Insufficient funds",
+                            })}
+                          </p>
+                        ) : (
+                          <p className="text-sm text-orange-500 pt-2 animate-bounce">
+                            {ti({
+                              vi: "Vui lòng chọn linh vật",
+                              en: "Please select a symbol",
+                            })}
+                          </p>
+                        )
                       ) : !isReady && !game.isHost ? (
                         <p className="text-sm text-orange-500 pt-2 animate-bounce">
                           {ti({
@@ -952,6 +999,7 @@ export default function BauCuaUI({
                   const hasAllIn =
                     // i am all-in
                     ((isReady || game.isHost) &&
+                      myBalance?.currentBalance &&
                       betOnThis >= (myBalance?.currentBalance || 0)) ||
                     // some player is all-in on this symbol
                     betsOnSymbol.filter((bet) => {
