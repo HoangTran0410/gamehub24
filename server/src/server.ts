@@ -28,6 +28,10 @@ const io = new Server(httpServer, {
     methods: ["GET", "POST"],
     credentials: true,
   },
+  transports: ["websocket", "polling", "webtransport"],
+  pingInterval: 20000,
+  pingTimeout: 180000,
+  allowEIO3: true,
 });
 
 // Initialize managers
@@ -75,6 +79,9 @@ io.on("connection", (socket: Socket) => {
 
   // Update socket ID if user reconnects
   roomManager.updatePlayerSocketId(userId, socket.id);
+
+  // heartbeat
+  socket.on("heartbeat", () => {});
 
   // Get online users count
   socket.on("stats:online", (callback) => {

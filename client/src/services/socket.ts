@@ -38,6 +38,10 @@ export const initSocket = (): Socket => {
       userId,
       username,
     },
+    transports: ["websocket", "polling", "webtransport"], // ưu tiên websocket
+    reconnection: true,
+    reconnectionAttempts: Infinity,
+    reconnectionDelay: 2000,
     autoConnect: false, // Don't auto-connect, wait for manual connection after username is set
   });
 
@@ -68,11 +72,21 @@ export const getSocket = (): Socket => {
 };
 
 // Connect to server
+let heartBeatTimeout = 0;
 export const connectSocket = (): void => {
   const socket = getSocket();
   if (!socket.connected) {
     socket.connect();
   }
+
+  if (heartBeatTimeout) clearInterval(heartBeatTimeout);
+  heartBeatTimeout = setInterval(() => {
+    try {
+      socket.emit("heartbeat");
+    } catch (e) {
+      console.log("Heartbeat failed", e);
+    }
+  }, 15000);
 };
 
 // Disconnect from server

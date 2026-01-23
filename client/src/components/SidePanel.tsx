@@ -12,7 +12,7 @@ export default function SidePanel() {
   const { messages } = useChatStore();
   const { currentRoom } = useRoomStore();
   const [lastReadMessageTime, setLastReadMessageTime] = useState<number>(
-    Date.now()
+    Date.now(),
   );
   const [lastSeenParticipantCount, setLastSeenParticipantCount] =
     useState<number>(0);
