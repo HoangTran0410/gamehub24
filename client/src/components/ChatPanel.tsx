@@ -41,7 +41,7 @@ export default function ChatPanel() {
 
   useEffect(() => {
     // Auto-scroll to bottom when new messages arrive
-    // messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
   const handleSend = () => {
@@ -69,7 +69,7 @@ export default function ChatPanel() {
   return (
     <div className="flex flex-col h-full w-full">
       {/* Messages */}
-      <div className="flex-1 p-4 overflow-y-auto space-y-3">
+      <div className="flex-1 p-4 overflow-y-auto space-y-3 max-h-[70vh]">
         {messages.length === 0 && (
           <p className="text-text-muted text-sm text-center">
             {ti({ en: "No messages yet.", vi: "Không có tin nhắn" })}
