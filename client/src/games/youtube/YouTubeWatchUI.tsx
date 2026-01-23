@@ -86,6 +86,17 @@ export default function YouTubeWatchUI({ game: baseGame }: GameUIProps) {
     const pState = event.data;
     const currentTime = event.target.getCurrentTime();
 
+    // Prevent pause when switching tabs
+    // Only force play if we are supposed to be playing
+    if (
+      pState === 2 &&
+      document.visibilityState === "hidden" &&
+      game.getState().isPlaying
+    ) {
+      event.target.playVideo();
+      return;
+    }
+
     const canControl = game.isHost || state.allowGuestControl;
 
     if (!canControl) {
@@ -131,6 +142,9 @@ export default function YouTubeWatchUI({ game: baseGame }: GameUIProps) {
       controls: 1,
       modestbranding: 1,
       rel: 0,
+      playsinline: 1,
+      origin:
+        typeof window !== "undefined" ? window.location.origin : undefined,
     },
   };
 
