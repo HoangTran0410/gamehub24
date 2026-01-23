@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { Filter, Star } from "lucide-react";
 import useLanguage from "../stores/languageStore";
 import {
@@ -20,6 +21,9 @@ export default function GameCategoryFilter({
 }: GameCategoryFilterProps) {
   const { ti } = useLanguage();
 
+  const games = useMemo(() => getAllGames(), []);
+  const allCategories = useMemo(() => getAllCategories(), []);
+
   return (
     <div className="flex items-center gap-2 flex-wrap">
       <Filter className="w-4 h-4 text-text-muted" />
@@ -31,7 +35,7 @@ export default function GameCategoryFilter({
             : "bg-white/5 text-text-secondary border-white/10 hover:bg-white/10"
         }`}
       >
-        {ti({ en: "All", vi: "Tất cả" })} ({getAllGames().length})
+        {ti({ en: "All", vi: "Tất cả" })} ({games.length})
       </button>
 
       {/* Favorites Filter */}
@@ -49,8 +53,8 @@ export default function GameCategoryFilter({
         {ti({ en: "Favorites", vi: "Yêu thích" })} ({favoritesCount})
       </button>
 
-      {getAllCategories().map((category) => {
-        const count = getAllGames().filter((g) =>
+      {allCategories.map((category) => {
+        const count = games.filter((g) =>
           g.categories.includes(category),
         ).length;
         return (

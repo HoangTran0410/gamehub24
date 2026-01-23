@@ -446,12 +446,8 @@ export default function RoomPage() {
                       ) : (
                         <Gamepad className="w-3.5 h-3.5 md:w-4 md:h-4" />
                       )}
-                      <p className="capitalize font-medium">
-                        {ti(
-                          getAllGames().find(
-                            (g) => g.id === currentRoom.gameType,
-                          )?.name || "",
-                        )}
+                      <p className="capitalize font-medium text-left">
+                        {ti(game?.name || "")}
                       </p>
                       {isHost && (
                         <span className="text-[10px] opacity-70">▼</span>

@@ -425,10 +425,13 @@ function RoomListItem({ room }: { room: Room }) {
     socket.emit("room:leave", { roomId: room.id });
   };
 
+  const game = useMemo(
+    () => getAllGames().find((g) => g.id === room.gameType),
+    [room.gameType],
+  );
   const host = room.players.find((p) => p.isHost);
   const hostName = host?.username || "Unknown";
   const isHost = host?.username === username;
-  const game = getAllGames().find((g) => g.id === room.gameType);
   const GameIcon = game?.icon || Gamepad;
 
   return (
@@ -524,12 +527,13 @@ function CreateRoomModal({
     if (gameType) localStorage.setItem("gamehub24_lastGameId", gameType);
   }, [gameType]);
 
+  const allGames = useMemo(() => getAllGames(), []);
+
   const handleCreate = () => {
     const socket = getSocket();
     if (!socket || !isConnected)
       return showAlert("Socket not connected", { type: "error" });
 
-    const allGames = getAllGames();
     const game = allGames.find((g) => g.id === gameType) || allGames[0];
     if (!game) return showAlert("Game not found", { type: "error" });
 
@@ -592,7 +596,7 @@ function CreateRoomModal({
               onChange={(e) => setGameType(e.target.value)}
               className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent cursor-pointer"
             >
-              {getAllGames().map((game) => (
+              {allGames.map((game) => (
                 <option key={game.id} value={game.id}>
                   {ts(game.name)}
                 </option>
