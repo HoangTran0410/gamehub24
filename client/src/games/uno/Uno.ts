@@ -589,17 +589,21 @@ export default class Uno extends BaseGame<UnoState> {
   }
 
   updatePlayers(players: Player[]): void {
-    let playerIdx = 0;
+    // Determine which players are currently in slots
     for (let i = 0; i < 4; i++) {
       const slot = this.state.players[i];
-      if (!slot.isBot) {
-        if (playerIdx < players.length) {
-          slot.id = players[playerIdx].id;
-          slot.username = players[playerIdx].username;
-          playerIdx++;
+      if (!slot.isBot && slot.id) {
+        // Check if this player is still in the room
+        const existingPlayer = players.find((p) => p.id === slot.id);
+        if (existingPlayer) {
+          // Update details if they are still here
+          slot.username = existingPlayer.username;
         } else {
+          // Player left the room, clear the slot
           slot.id = null;
           slot.username = `Slot ${i + 1}`;
+          slot.hand = [];
+          slot.calledUno = false;
         }
       }
     }

@@ -21,6 +21,7 @@ import {
   BookOpen,
 } from "lucide-react";
 import { useUserStore } from "../../stores/userStore";
+import { useRoomStore } from "../../stores/roomStore";
 import { useAlertStore } from "../../stores/alertStore";
 import useLanguage from "../../stores/languageStore";
 import type { GameUIProps } from "../types";
@@ -71,8 +72,13 @@ export default function UnoUI({ game: baseGame }: GameUIProps) {
   const isHost = game.isHost;
   const myIndex = game.getMyPlayerIndex();
   const mySlot = myIndex >= 0 ? state.players[myIndex] : null;
+
   const isMyTurn = state.currentTurnIndex === myIndex;
   const canStart = game.canStartGame();
+  const currentRoom = useRoomStore((state) => state.currentRoom);
+  const isRoomPlayer = useMemo(() => {
+    return currentRoom?.players.some((p) => p.id === game.getUserId()) ?? false;
+  }, [currentRoom, game]);
 
   // Track previous discard pile length to detect new cards
   const prevDiscardLengthRef = useRef(state.discardPile.length);
@@ -225,6 +231,12 @@ export default function UnoUI({ game: baseGame }: GameUIProps) {
           onRemove={() => game.requestRemovePlayer(player.actualIndex)}
           compact={compact}
           isInGame={isInGame}
+          canJoin={
+            !isHost &&
+            state.gamePhase === "waiting" &&
+            !isInGame &&
+            isRoomPlayer
+          }
         />
       </div>
     );
@@ -1036,7 +1048,8 @@ function PlayerSlotDisplay({
   onJoinSlot,
   onRemove,
   compact = false,
-  isInGame,
+  // isInGame,
+  canJoin = false,
 }: {
   slot: PlayerSlot;
   index: number;
@@ -1048,10 +1061,11 @@ function PlayerSlotDisplay({
   onRemove: () => void;
   compact?: boolean;
   isInGame: boolean;
+  canJoin?: boolean;
 }) {
   const isEmpty = slot.id === null;
   const canAddBot = isHost && gamePhase === "waiting";
-  const canJoin = !isHost && gamePhase === "waiting" && !isInGame;
+  // const canJoin = !isHost && gamePhase === "waiting" && !isInGame;
 
   return (
     <div

@@ -445,19 +445,19 @@ io.on("connection", (socket: Socket) => {
 
   // Relay game actions
   socket.on("game:action", (data: { roomId: string; action: any }) => {
-    console.log("game:action", data);
+    console.log("game:action", JSON.stringify(data, null, 2));
     socket.to(data.roomId).emit("game:action", data);
   });
 
   // Relay game state
   socket.on("game:state", (data: { roomId: string; state: any }) => {
-    console.log("game:state", data);
+    console.log("game:state", JSON.stringify(data, null, 2));
     socket.to(data.roomId).emit("game:state", data);
   });
 
   // Relay game end
   socket.on("game:end", (data: { roomId: string; result: any }) => {
-    console.log("game:end", data);
+    console.log("game:end", JSON.stringify(data, null, 2));
     socket.to(data.roomId).emit("game:end", data);
   });
 

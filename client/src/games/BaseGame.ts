@@ -111,16 +111,20 @@ export abstract class BaseGame<T> {
     };
   }
 
+  protected hasSomeoneElseInRoom(): boolean {
+    const room = useRoomStore.getState().currentRoom;
+    const userCount =
+      (room?.spectators?.length || 0) + (room?.players?.length || 0);
+    return userCount > 1;
+  }
+
   // host broadcast state to all guests
   public broadcastState(): void {
     if (this.isHost) {
       const state = this.getState();
 
       // only emit if there are someone else in the room
-      const room = useRoomStore.getState().currentRoom;
-      const userCount =
-        (room?.spectators?.length || 0) + (room?.players?.length || 0);
-      if (userCount > 1) {
+      if (this.hasSomeoneElseInRoom()) {
         this.socket.emit("game:state", {
           roomId: this.roomId,
           state: { ...state },
@@ -134,10 +138,14 @@ export abstract class BaseGame<T> {
 
   // Send action to all players (including self via server relay)
   protected sendSocketGameAction(action: GameAction): void {
-    this.socket.emit("game:action", {
-      roomId: this.roomId,
-      action,
-    });
+    if (this.hasSomeoneElseInRoom()) {
+      this.socket.emit("game:action", {
+        roomId: this.roomId,
+        action,
+      });
+    } else {
+      this.onSocketGameAction({ action });
+    }
   }
 
   // Client receives state update from host
