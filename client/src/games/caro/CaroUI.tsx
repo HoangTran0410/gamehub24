@@ -481,7 +481,7 @@ export default function CaroUI({ game: baseGame }: GameUIProps) {
   );
 
   return (
-    <div className="flex flex-col gap-3 p-2 md:p-4 w-full">
+    <div className="flex flex-col gap-3 p-2 @md:p-4 w-full">
       {/* Player List */}
       <div className="flex flex-col gap-2 p-3 bg-slate-800 rounded-lg w-full max-w-[400px] mx-auto">
         {(["X", "O"] as const).map((symbol) => {
@@ -641,7 +641,7 @@ export default function CaroUI({ game: baseGame }: GameUIProps) {
           </div>
 
           {/* Controls */}
-          <div className="flex gap-1 md:gap-2 text-xs">
+          <div className="flex gap-1 @md:gap-2 text-xs">
             {!state.gameOver && Object.keys(board).length > 0 ? (
               <button
                 onClick={focusLastMove}

@@ -326,19 +326,21 @@ export default function ThirteenUI({ game: baseGame }: GameUIProps) {
   };
 
   return (
-    <div className="flex flex-col h-full p-2 md:p-4 gap-2 md:gap-4 overflow-hidden md:min-h-[500px] pb-10">
+    <div className="flex flex-col h-full p-2 @md:p-4 gap-2 @md:gap-4 overflow-hidden @md:min-h-[500px] pb-10">
       {/* Mobile: Top row with 3 opponents */}
-      <div className="flex md:hidden justify-center gap-2">
+      <div className="flex @md:hidden justify-center gap-2">
         {renderPlayerSlot(1, true)}
         {renderPlayerSlot(2, true)}
         {renderPlayerSlot(3, true)}
       </div>
 
       {/* Desktop: Top Player */}
-      <div className="hidden md:flex justify-center">{renderPlayerSlot(2)}</div>
+      <div className="hidden @md:flex justify-center">
+        {renderPlayerSlot(2)}
+      </div>
 
       {/* Desktop: Middle Row with Left/Right players and Play Area */}
-      <div className="hidden md:flex flex-1 items-center justify-between gap-4">
+      <div className="hidden @md:flex flex-1 items-center justify-between gap-4">
         {renderPlayerSlot(1)}
 
         {/* Play Area - Desktop */}
@@ -374,7 +376,7 @@ export default function ThirteenUI({ game: baseGame }: GameUIProps) {
       </div>
 
       {/* Mobile: Play Area */}
-      <div className="flex md:hidden flex-1 flex-col items-center justify-center gap-2 bg-slate-800/30 rounded-xl p-2 min-h-[120px]">
+      <div className="flex @md:hidden flex-1 flex-col items-center justify-center gap-2 bg-slate-800/30 rounded-xl p-2 min-h-[120px]">
         {state.gamePhase === "waiting" && (
           <div className="flex flex-col items-center gap-2">
             <span className="text-slate-400 text-sm">
@@ -401,16 +403,16 @@ export default function ThirteenUI({ game: baseGame }: GameUIProps) {
       </div>
 
       {/* Bottom: My Slot and Hand */}
-      <div className="flex flex-col items-center gap-2 md:gap-4">
+      <div className="flex flex-col items-center gap-2 @md:gap-4">
         {/* Desktop: My Player Slot */}
-        <div className="hidden md:block">{renderPlayerSlot(0)}</div>
+        <div className="hidden @md:block">{renderPlayerSlot(0)}</div>
 
         {/* Mobile: My Player Slot */}
-        <div className="flex md:hidden">{renderPlayerSlot(0, true)}</div>
+        <div className="flex @md:hidden">{renderPlayerSlot(0, true)}</div>
 
         {/* My Hand */}
         {mySlot && state.gamePhase === "playing" && (
-          <div className="flex justify-center max-w-full overflow-x-auto overflow-y-visible pt-4 p-0 md:p-4 pb-1">
+          <div className="flex justify-center max-w-full overflow-x-auto overflow-y-visible pt-4 p-0 @md:p-4 pb-1">
             {mySlot.hand.map((card, index) => (
               <CardDisplay
                 key={`${card.rank}-${card.suit}`}
@@ -429,12 +431,12 @@ export default function ThirteenUI({ game: baseGame }: GameUIProps) {
           <div className="flex flex-col items-center gap-2">
             {/* Validation Message */}
             {validation?.valid && (
-              <span className="text-green-400 text-xs md:text-sm font-medium">
+              <span className="text-green-400 text-xs @md:text-sm font-medium">
                 ✓ Valid play
               </span>
             )}
             {validation?.valid === false && (
-              <span className="text-red-400 text-xs md:text-sm font-medium">
+              <span className="text-red-400 text-xs @md:text-sm font-medium">
                 ⚠️ {validation.error}
               </span>
             )}
@@ -443,7 +445,7 @@ export default function ThirteenUI({ game: baseGame }: GameUIProps) {
               <button
                 onClick={handlePlay}
                 disabled={selectedCards.length === 0 || !validation?.valid}
-                className="px-4 py-1.5 md:px-6 md:py-2 bg-slate-700 hover:bg-slate-600 disabled:bg-slate-900 disabled:cursor-not-allowed rounded-lg font-medium flex items-center gap-1 md:gap-2 text-sm"
+                className="px-4 py-1.5 @md:px-6 @md:py-2 bg-slate-700 hover:bg-slate-600 disabled:bg-slate-900 disabled:cursor-not-allowed rounded-lg font-medium flex items-center gap-1 @md:gap-2 text-sm"
               >
                 <Play className="w-4 h-4" />
                 Play
@@ -461,7 +463,7 @@ export default function ThirteenUI({ game: baseGame }: GameUIProps) {
                       handlePass();
                     }
                   }}
-                  className="px-4 py-1.5 md:px-6 md:py-2 bg-red-700 hover:bg-red-600 rounded-lg font-medium flex items-center gap-1 md:gap-2 text-sm"
+                  className="px-4 py-1.5 @md:px-6 @md:py-2 bg-red-700 hover:bg-red-600 rounded-lg font-medium flex items-center gap-1 @md:gap-2 text-sm"
                 >
                   <SkipForward className="w-4 h-4" />
                   Pass
@@ -489,9 +491,9 @@ export default function ThirteenUI({ game: baseGame }: GameUIProps) {
                     game.requestNewGame();
                   }
                 }}
-                className="px-3 py-1.5 md:px-4 md:py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-xs md:text-sm flex items-center gap-1 md:gap-2"
+                className="px-3 py-1.5 @md:px-4 @md:py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-xs @md:text-sm flex items-center gap-1 @md:gap-2"
               >
-                <RefreshCcw className="w-3 h-3 md:w-4 md:h-4" />
+                <RefreshCcw className="w-3 h-3 @md:w-4 @md:h-4" />
                 New game
               </button>
             )}
@@ -502,17 +504,17 @@ export default function ThirteenUI({ game: baseGame }: GameUIProps) {
       {/* New Game Request Modal (Host Only) */}
       {isHost && state.newGameRequest && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-800 rounded-xl p-4 md:p-6 max-w-sm w-full shadow-xl">
-            <h3 className="text-base md:text-lg font-bold mb-3 md:mb-4">
+          <div className="bg-slate-800 rounded-xl p-4 @md:p-6 max-w-sm w-full shadow-xl">
+            <h3 className="text-base @md:text-lg font-bold mb-3 @md:mb-4">
               New Game Request
             </h3>
-            <p className="text-slate-300 mb-4 md:mb-6 text-sm md:text-base">
+            <p className="text-slate-300 mb-4 @md:mb-6 text-sm @md:text-base">
               <span className="font-medium text-white">
                 {state.newGameRequest.fromName}
               </span>{" "}
               wants to start a new game.
             </p>
-            <div className="flex gap-2 md:gap-3">
+            <div className="flex gap-2 @md:gap-3">
               <button
                 onClick={() => game.declineNewGame()}
                 className="flex-1 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg font-medium flex items-center justify-center gap-2 text-sm"
@@ -565,7 +567,7 @@ function CardDisplay({
       : "text-slate-800";
 
   // Overlap cards: negative margin based on index
-  const marginLeft = index === 0 ? "ml-0" : "-ml-5 md:-ml-9";
+  const marginLeft = index === 0 ? "ml-0" : "-ml-5 @md:-ml-9";
 
   return (
     <button
@@ -574,8 +576,8 @@ function CardDisplay({
       style={{ zIndex: index }}
       className={`
         ${marginLeft}
-        w-10 h-16 md:w-16 md:h-20
-        bg-white rounded-md md:rounded-lg shadow-lg
+        w-10 h-16 @md:w-16 @md:h-20
+        bg-white rounded-md @md:rounded-lg shadow-lg
         border-2 transition-all duration-150 font-bold shrink-0 relative
         ${
           selected
@@ -593,10 +595,10 @@ function CardDisplay({
       <div
         className={`absolute top-0.5 left-1 flex flex-col items-center leading-none ${suitColor}`}
       >
-        <span className="text-sm md:text-lg font-bold">
+        <span className="text-sm @md:text-lg font-bold">
           {RANK_DISPLAY[card.rank]}
         </span>
-        <span className="text-sm md:text-sm">{SUIT_SYMBOLS[card.suit]}</span>
+        <span className="text-sm @md:text-sm">{SUIT_SYMBOLS[card.suit]}</span>
       </div>
     </button>
   );
@@ -617,15 +619,15 @@ function TableCard({
       ? "text-red-500"
       : "text-slate-800";
 
-  const marginLeft = index === 0 ? "ml-0" : "-ml-6 md:-ml-9";
+  const marginLeft = index === 0 ? "ml-0" : "-ml-6 @md:-ml-9";
 
   return (
     <div
       style={{ animationDelay: `${delay}ms` }}
       className={`
         ${marginLeft}
-        w-10 h-14 md:w-16 md:h-20
-        bg-white rounded-md md:rounded-lg shadow-lg
+        w-10 h-14 @md:w-16 @md:h-20
+        bg-white rounded-md @md:rounded-lg shadow-lg
         border-2 border-slate-200 font-bold shrink-0 relative
         animate-[cardPlay_0.3s_ease-out_forwards]
       `}
@@ -633,10 +635,10 @@ function TableCard({
       <div
         className={`absolute top-0.5 left-1 flex flex-col items-center leading-none ${suitColor}`}
       >
-        <span className="text-xs md:text-lg font-bold">
+        <span className="text-xs @md:text-lg font-bold">
           {RANK_DISPLAY[card.rank]}
         </span>
-        <span className="text-[10px] md:text-sm">
+        <span className="text-[10px] @md:text-sm">
           {SUIT_SYMBOLS[card.suit]}
         </span>
       </div>
@@ -678,9 +680,9 @@ function PlayerSlotDisplay({
         ${
           compact
             ? "p-2 min-w-[90px]"
-            : "p-2 md:p-3 min-w-[100px] md:min-w-[120px]"
+            : "p-2 @md:p-3 min-w-[100px] @md:min-w-[120px]"
         }
-        rounded-lg md:rounded-xl transition-all border-2
+        rounded-lg @md:rounded-xl transition-all border-2
         ${
           slot.passed && gamePhase === "playing"
             ? "border-slate-600 bg-slate-900/70 opacity-50"

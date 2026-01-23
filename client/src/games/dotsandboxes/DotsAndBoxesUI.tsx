@@ -146,7 +146,7 @@ export default function DotsAndBoxesUI({
         <h2 className="text-3xl font-bold text-white">Dots & Boxes</h2>
 
         {/* Score Board & Player List */}
-        <div className="flex gap-4 md:gap-8 bg-slate-800 p-4 rounded-xl shadow-lg border border-slate-700 w-full justify-center">
+        <div className="flex gap-4 @md:gap-8 bg-slate-800 p-4 rounded-xl shadow-lg border border-slate-700 w-full justify-center">
           {state.players.map((p, index) => (
             <div
               key={`player-${index}`}

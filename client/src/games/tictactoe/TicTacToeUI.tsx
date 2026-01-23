@@ -42,7 +42,7 @@ export default function TicTacToeUI({ game: baseGame }: GameUIProps) {
   };
 
   return (
-    <div className="flex flex-col items-center gap-3 md:p-4 w-full max-w-sm mx-auto">
+    <div className="flex flex-col items-center gap-3 @md:p-4 w-full max-w-sm mx-auto">
       {/* Player List */}
       <div className="flex flex-col gap-2 p-4 bg-slate-800 rounded-lg w-full max-w-[400px] mx-auto">
         <h3 className="text-sm font-medium text-gray-400 mb-1">
@@ -192,7 +192,7 @@ export default function TicTacToeUI({ game: baseGame }: GameUIProps) {
               onClick={() => handleCellClick(index)}
               disabled={!canInteract}
               className={`
-                w-20 h-20 md:w-24 md:h-24 rounded-lg flex items-center justify-center text-4xl transition-all
+                w-20 h-20 @md:w-24 @md:h-24 rounded-lg flex items-center justify-center text-4xl transition-all
                 border border-slate-700
                 ${
                   cell

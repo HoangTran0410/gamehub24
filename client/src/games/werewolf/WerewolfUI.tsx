@@ -836,7 +836,7 @@ const PlayerGrid: React.FC<{
   ]);
 
   return (
-    <div className="relative flex flex-wrap justify-center gap-1 md:gap-2 md:p-2">
+    <div className="relative flex flex-wrap justify-center gap-1 @md:gap-2 @md:p-2">
       <RelationshipOverlay
         players={activePlayers}
         hoveredPlayerId={hoveredPlayerId}
@@ -938,7 +938,7 @@ const SetupPhase: React.FC<{
       </div>
 
       {/* Player Slots */}
-      <div className="flex flex-wrap justify-center gap-1 md:gap-2 mb-4">
+      <div className="flex flex-wrap justify-center gap-1 @md:gap-2 mb-4">
         {state.players.slice(0, 12).map((player, index) => (
           <div
             key={index}
@@ -1364,7 +1364,7 @@ const DiscussionPhase: React.FC<{
       </button>
 
       {showQuickMessages && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-2">
+        <div className="grid grid-cols-2 @md:grid-cols-4 gap-2 mb-2">
           {QUICK_MESSAGES.map((qm) => (
             <button
               key={qm.id}
@@ -1757,7 +1757,7 @@ const WerewolfUI: React.FC<GameUIProps> = ({ game, currentUserId = "" }) => {
       >
         <div className="flex items-center gap-2">
           {getPhaseIcon(state.phase)}
-          <div className="flex flex-col md:flex-row md:items-center md:gap-2">
+          <div className="flex flex-col @md:flex-row @md:items-center @md:gap-2">
             <span className="font-bold">{ti(getPhaseLabel(state.phase))}</span>
             {state.day > 0 && (
               <span className="text-white/60 text-sm">

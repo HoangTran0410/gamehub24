@@ -393,9 +393,9 @@ export default function CanvasGameUI({
   };
 
   return (
-    <div className="flex flex-col items-center gap-2 md:gap-4 p-2 md:p-4 w-full h-full max-w-full md:max-w-2xl mx-auto">
+    <div className="flex flex-col items-center gap-2 @md:gap-4 p-2 @md:p-4 w-full h-full max-w-full @md:max-w-2xl mx-auto">
       {/* Toolbar */}
-      <div className="flex items-center gap-1.5 md:gap-1 p-1.5 md:p-2 bg-slate-800 rounded-lg w-full justify-center">
+      <div className="flex items-center gap-1.5 @md:gap-1 p-1.5 @md:p-2 bg-slate-800 rounded-lg w-full justify-center">
         {/* Mobile: Color picker button */}
         <button
           onClick={() => setShowColorModal(true)}
@@ -404,8 +404,8 @@ export default function CanvasGameUI({
           title={ts({ en: "Pick color", vi: "Chọn màu" })}
         />
         {/* Desktop: Inline color palette */}
-        <Palette className="w-4 h-4 text-slate-400 hidden md:block" />
-        <div className="hidden md:flex items-center gap-1">
+        <Palette className="w-4 h-4 text-slate-400 hidden @md:block" />
+        <div className="hidden @md:flex items-center gap-1">
           {COLORS.map((color) => (
             <button
               key={color}
@@ -420,13 +420,13 @@ export default function CanvasGameUI({
             />
           ))}
         </div>
-        <div className="w-px h-6 md:h-8 bg-slate-700 mx-0.5 md:mx-1" />
+        <div className="w-px h-6 @md:h-8 bg-slate-700 mx-0.5 @md:mx-1" />
         {/* Stroke Size Selector */}
         {STROKE_SIZES.map((size) => (
           <button
             key={size.value}
             onClick={() => setCurrentStrokeWidth(size.value)}
-            className={`w-7 h-7 md:w-8 md:h-8 rounded-lg border-2 transition-all flex items-center justify-center text-xs font-bold ${
+            className={`w-7 h-7 @md:w-8 @md:h-8 rounded-lg border-2 transition-all flex items-center justify-center text-xs font-bold ${
               currentStrokeWidth === size.value
                 ? "border-white bg-slate-600 text-white"
                 : "border-slate-600 bg-slate-700 text-slate-400 hover:border-slate-500"
@@ -436,7 +436,7 @@ export default function CanvasGameUI({
             {size.label}
           </button>
         ))}
-        <div className="w-px h-6 md:h-8 bg-slate-700 mx-0.5 md:mx-1" />
+        <div className="w-px h-6 @md:h-8 bg-slate-700 mx-0.5 @md:mx-1" />
         <button
           onClick={() => game.undo()}
           className="p-2 hover:bg-slate-700 rounded-lg transition-colors text-slate-400 hover:text-yellow-400"
@@ -465,7 +465,7 @@ export default function CanvasGameUI({
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
-        className="w-full flex-1 md:flex-none border-2 border-slate-700 rounded-lg bg-white cursor-crosshair touch-none shadow-lg"
+        className="w-full flex-1 @md:flex-none border-2 border-slate-700 rounded-lg bg-white cursor-crosshair touch-none shadow-lg"
         style={{ aspectRatio: "4/3", minHeight: "200px" }} // Changed Aspect Ratio to 4:3
       />
 

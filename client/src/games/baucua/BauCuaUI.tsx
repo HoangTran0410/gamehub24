@@ -1475,7 +1475,7 @@ export default function BauCuaUI({
           {/* Dice in fixed modal for mobile */}
           {createPortal(
             <div
-              className={`fixed top-0 left-0 right-0 bottom-0 bg-slate-900/90 backdrop-blur-sm rounded-xl p-2 z-50 md:hidden ${isRolling ? "flex" : "hidden"} items-center justify-center`}
+              className={`fixed top-0 left-0 right-0 bottom-0 bg-slate-900/90 backdrop-blur-sm rounded-xl p-2 z-50 ${isRolling ? "flex" : "hidden"} md:hidden items-center justify-center`}
             >
               <div className="flex items-center justify-between">
                 {renderDices()}
@@ -1524,7 +1524,7 @@ export default function BauCuaUI({
             </h2>
             <p className="text-center text-lg font-bold mt-2">
               {ti({ vi: `Hũ: `, en: `Jackpot: ` })}
-              {formatPrice(state.jackpotPool)}
+              {formatPrice(state.jackpotPool)} 💎
             </p>
             <p className="text-center text-sm opacity-90">
               {ti({

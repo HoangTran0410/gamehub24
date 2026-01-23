@@ -416,7 +416,7 @@ const OAnQuanUI: React.FC<GameUIProps> = ({
   };
 
   return (
-    <div className="flex flex-col items-center justify-center p-4 w-full max-w-4xl mx-auto touch-none md:min-h-[500px]">
+    <div className="flex flex-col items-center justify-center p-4 w-full max-w-4xl mx-auto touch-none @md:min-h-[500px]">
       {/* Persistent Flying Cluster Overlay */}
       {createPortal(
         <div
@@ -519,7 +519,7 @@ const OAnQuanUI: React.FC<GameUIProps> = ({
         </div>
 
         {/* Board */}
-        <div className="relative bg-amber-100 p-2 md:p-4 rounded-xl select-none overflow-x-auto max-w-full">
+        <div className="relative bg-amber-100 p-2 @md:p-4 rounded-xl select-none overflow-x-auto max-w-full">
           <div className="flex flex-row items-center gap-2 justify-center">
             <MandarinSquare
               count={displayBoard[0]}
@@ -529,8 +529,8 @@ const OAnQuanUI: React.FC<GameUIProps> = ({
               left={true}
             />
 
-            <div className="flex flex-col md:gap-2 gap-1">
-              <div className="flex md:gap-2 gap-1">
+            <div className="flex flex-col @md:gap-2 gap-1">
+              <div className="flex @md:gap-2 gap-1">
                 {[11, 10, 9, 8, 7].map((idx) => (
                   <RiceField
                     key={idx}
@@ -551,7 +551,7 @@ const OAnQuanUI: React.FC<GameUIProps> = ({
                 ))}
               </div>
 
-              <div className="flex md:gap-2 gap-1">
+              <div className="flex @md:gap-2 gap-1">
                 {[1, 2, 3, 4, 5].map((idx) => (
                   <RiceField
                     key={idx}
@@ -680,7 +680,7 @@ const RiceField: React.FC<{
       ref={forwardRef}
       onClick={onClick}
       className={`
-                w-10 h-10 md:w-16 md:h-16 flex items-center justify-center rounded-lg border-2 relative transition-all
+                w-10 h-10 @md:w-16 @md:h-16 flex items-center justify-center rounded-lg border-2 relative transition-all
                 ${
                   isSelected
                     ? "border-yellow-400 ring-2 ring-yellow-400 bg-amber-200 z-10"
@@ -710,7 +710,7 @@ const MandarinSquare: React.FC<{
     <div
       ref={forwardRef}
       className={`
-             w-16 h-24 md:w-20 md:h-32 flex flex-col items-center justify-center ${left ? "rounded-l-full" : "rounded-r-full"} border-2 border-amber-900
+             w-16 h-24 @md:w-20 @md:h-32 flex flex-col items-center justify-center ${left ? "rounded-l-full" : "rounded-r-full"} border-2 border-amber-900
              bg-amber-400 text-white font-bold text-xl relative shadow-inner
         `}
     >
@@ -745,7 +745,7 @@ const StoneCluster: React.FC<{
           key={i}
           className={`
                     rounded-full shadow-sm border border-black/10
-                    ${isBig && i < Math.floor(count / 10) ? "w-4 h-4 bg-red-500" : "w-2 h-2 md:w-2.5 md:h-2.5 bg-slate-700"}
+                    ${isBig && i < Math.floor(count / 10) ? "w-4 h-4 bg-red-500" : "w-2 h-2 @md:w-2.5 @md:h-2.5 bg-slate-700"}
                  `}
         />
       ))}

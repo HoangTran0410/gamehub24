@@ -415,6 +415,8 @@ export const getGame = (gameType: string): GameModule | undefined => {
 
 export const getAllGames = (): GameModule[] => {
   return Array.from(games.values());
+  // show recent added game first?
+  // .reverse();
 };
 
 export const getAllCategories = (): GameCategory[] => {

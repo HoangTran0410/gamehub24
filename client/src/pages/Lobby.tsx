@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Gamepad,
@@ -40,6 +40,18 @@ export default function Lobby() {
   >(null);
   const { favorites, toggleFavorite, favoritesCount } = useGameFavorites();
   const [isAnimating, setIsAnimating] = useState(false);
+
+  const gamesToShow = useMemo(
+    () =>
+      getAllGames().filter((game) =>
+        selectedCategory === "favorites"
+          ? favorites.includes(game.id)
+          : selectedCategory
+            ? game.categories.includes(selectedCategory)
+            : true,
+      ),
+    [selectedCategory, favorites],
+  );
 
   useEffect(() => {
     const socket = getSocket();
@@ -209,94 +221,91 @@ export default function Lobby() {
                 isAnimating ? "opacity-0" : "opacity-100"
               }`}
             >
-              {getAllGames()
-                .filter((game) =>
-                  selectedCategory === "favorites"
-                    ? favorites.includes(game.id)
-                    : selectedCategory
-                      ? game.categories.includes(selectedCategory)
-                      : true,
-                )
-                .map((game) => {
-                  const Icon = game.icon;
-                  return (
-                    <div
-                      key={game.id}
-                      className={`glass-card rounded-2xl p-6 hover:border-primary/30 transition-all duration-200 ${
-                        !game.isAvailable ? "opacity-50" : ""
-                      } relative group`}
+              {gamesToShow.length <= 0 && (
+                <p className="text-text-muted text-center">
+                  {ti({ en: "No games available", vi: "Không có trò chơi" })}
+                </p>
+              )}
+              {gamesToShow.map((game) => {
+                const Icon = game.icon;
+                return (
+                  <div
+                    key={game.id}
+                    className={`glass-card rounded-2xl p-6 hover:border-primary/30 transition-all duration-200 ${
+                      !game.isAvailable ? "opacity-50" : ""
+                    } relative group`}
+                  >
+                    {/* Favorite Button */}
+                    <button
+                      onClick={(e) => toggleFavorite(game.id, e)}
+                      className={`absolute top-4 right-4 p-2 rounded-full transition-all duration-200 z-10 ${
+                        favorites.includes(game.id)
+                          ? "text-yellow-500 bg-yellow-500/10 hover:bg-yellow-500/20"
+                          : "text-text-muted hover:text-yellow-500 hover:bg-white/5 md:opacity-0 group-hover:opacity-100"
+                      }`}
+                      title={ts({
+                        en: "Toggle Favorite",
+                        vi: "Đánh dấu yêu thích",
+                      })}
                     >
-                      {/* Favorite Button */}
-                      <button
-                        onClick={(e) => toggleFavorite(game.id, e)}
-                        className={`absolute top-4 right-4 p-2 rounded-full transition-all duration-200 z-10 ${
-                          favorites.includes(game.id)
-                            ? "text-yellow-500 bg-yellow-500/10 hover:bg-yellow-500/20"
-                            : "text-text-muted hover:text-yellow-500 hover:bg-white/5 md:opacity-0 group-hover:opacity-100"
-                        }`}
-                        title={ts({
-                          en: "Toggle Favorite",
-                          vi: "Đánh dấu yêu thích",
-                        })}
-                      >
-                        <Star
-                          className={`w-5 h-5 ${favorites.includes(game.id) ? "fill-current" : ""}`}
-                        />
-                      </button>
+                      <Star
+                        className={`w-5 h-5 ${favorites.includes(game.id) ? "fill-current" : ""}`}
+                      />
+                    </button>
 
-                      {/* align center */}
-                      <div className="mb-4 flex items-center justify-center">
-                        <Icon className="w-12 h-12 text-primary" />
-                      </div>
-                      <h4 className="font-display text-xl text-text-primary mb-2">
-                        {ti(game.name)}
-                      </h4>
-                      <p className="text-sm text-text-secondary mb-3">
-                        {ti(game.description)}
-                      </p>
-                      {/* Category badges */}
-                      <div className="flex flex-wrap gap-1.5 mb-3 justify-center">
-                        {game.categories.map((cat) => (
-                          <span
-                            key={cat}
-                            className={`px-2 py-0.5 text-[10px] font-medium rounded-full border ${CATEGORY_CONFIG[cat].color}`}
-                          >
-                            {ti(CATEGORY_CONFIG[cat].label)}
-                          </span>
-                        ))}
-                      </div>
-                      <div className="flex items-center gap-2 text-xs text-text-muted mb-4 justify-center">
-                        <Users className="w-4 h-4" />
-                        <span>
-                          {game.minPlayers === game.maxPlayers
-                            ? `${game.minPlayers} ${ti({
-                                en: "Players",
-                                vi: "Người chơi",
-                              })}`
-                            : `${game.minPlayers}-${game.maxPlayers} ${ti({
-                                en: "Players",
-                                vi: "Người chơi",
-                              })}`}
-                        </span>
-                      </div>
-                      {game.isAvailable ? (
-                        <button
-                          onClick={() => handleSelectGame(game.id)}
-                          className="w-full px-4 py-2 bg-white/5 hover:bg-white/10 text-white font-semibold rounded-lg transition-colors cursor-pointer"
-                        >
-                          {ti({ en: "Create Room", vi: "Tạo Phòng" })}
-                        </button>
-                      ) : (
-                        <button
-                          disabled
-                          className="w-full px-4 py-2 bg-white/5 text-text-muted font-semibold rounded-lg cursor-not-allowed"
-                        >
-                          {ti({ en: "Coming Soon", vi: "Sắp Ra Mắt" })}
-                        </button>
-                      )}
+                    {/* align center */}
+                    <div className="mb-4 flex items-center justify-center">
+                      <Icon className="w-12 h-12 text-primary" />
                     </div>
-                  );
-                })}
+                    <h4 className="font-display text-xl text-text-primary mb-2">
+                      {ti(game.name)}
+                    </h4>
+                    <p className="text-sm text-text-secondary mb-3">
+                      {ti(game.description)}
+                    </p>
+                    {/* Category badges */}
+                    <div className="flex flex-wrap gap-1.5 mb-3 justify-center">
+                      {game.categories.map((cat) => (
+                        <span
+                          key={cat}
+                          className={`px-2 py-0.5 text-[10px] font-medium rounded-full border ${CATEGORY_CONFIG[cat].color}`}
+                        >
+                          {ti(CATEGORY_CONFIG[cat].label)}
+                        </span>
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-text-muted mb-4 justify-center">
+                      <Users className="w-4 h-4" />
+                      <span>
+                        {game.minPlayers === game.maxPlayers
+                          ? `${game.minPlayers} ${ti({
+                              en: "Players",
+                              vi: "Người chơi",
+                            })}`
+                          : `${game.minPlayers}-${game.maxPlayers} ${ti({
+                              en: "Players",
+                              vi: "Người chơi",
+                            })}`}
+                      </span>
+                    </div>
+                    {game.isAvailable ? (
+                      <button
+                        onClick={() => handleSelectGame(game.id)}
+                        className="w-full px-4 py-2 bg-white/5 hover:bg-white/10 text-white font-semibold rounded-lg transition-colors cursor-pointer"
+                      >
+                        {ti({ en: "Create Room", vi: "Tạo Phòng" })}
+                      </button>
+                    ) : (
+                      <button
+                        disabled
+                        className="w-full px-4 py-2 bg-white/5 text-text-muted font-semibold rounded-lg cursor-not-allowed"
+                      >
+                        {ti({ en: "Coming Soon", vi: "Sắp Ra Mắt" })}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </section>
 

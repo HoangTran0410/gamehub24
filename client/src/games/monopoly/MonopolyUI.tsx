@@ -372,17 +372,17 @@ export default function MonopolyUI({
 
         {/* Space name */}
         <div className="flex-1 flex items-center justify-center p-0.5 overflow-hidden">
-          <span className="text-[5px] md:text-[8px] text-white text-center leading-tight line-clamp-2 font-medium">
+          <span className="text-[5px] @md:text-[8px] text-white text-center leading-tight line-clamp-2 font-medium">
             {ti(space.name || space.name)}
           </span>
         </div>
 
         {/* Houses/Hotel indicator */}
         {ownership && ownership.houses > 0 && (
-          <div className="absolute bottom-0 left-0 right-0 flex justify-center gap-px md:gap-0.5 p-px md:p-0.5">
+          <div className="absolute bottom-0 left-0 right-0 flex justify-center gap-px @md:gap-0.5 p-px @md:p-0.5">
             {ownership.houses === 5 ? (
               <div
-                className="w-2 h-1.5 md:w-3 md:h-2 bg-red-500 rounded-sm"
+                className="w-2 h-1.5 @md:w-3 @md:h-2 bg-red-500 rounded-sm"
                 title="Hotel"
               >
                 {/* 🏨 */}
@@ -391,7 +391,7 @@ export default function MonopolyUI({
               Array.from({ length: ownership.houses }).map((_, i) => (
                 <div
                   key={i}
-                  className="w-1 h-1 md:w-1.5 md:h-1.5 bg-green-500 rounded-sm"
+                  className="w-1 h-1 @md:w-1.5 @md:h-1.5 bg-green-500 rounded-sm"
                   title="House"
                 >
                   {/* 🏠 */}
@@ -404,7 +404,7 @@ export default function MonopolyUI({
         {/* Owner indicator */}
         {owner && (
           <div
-            className="absolute top-0 right-0 w-1.5 h-1.5 md:w-2 md:h-2 rounded-full border border-white"
+            className="absolute top-0 right-0 w-1.5 h-1.5 @md:w-2 @md:h-2 rounded-full border border-white"
             style={{ backgroundColor: owner.color }}
             title={owner.username}
           />
@@ -413,7 +413,7 @@ export default function MonopolyUI({
         {/* Mortgaged indicator */}
         {ownership?.mortgaged && (
           <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-            <Lock className="w-2 h-2 md:w-3 md:h-3 text-white" />
+            <Lock className="w-2 h-2 @md:w-3 @md:h-3 text-white" />
           </div>
         )}
       </div>
@@ -980,7 +980,7 @@ export default function MonopolyUI({
 
     return (
       <div
-        className="fixed inset-0 z-50 flex md:items-center items-start justify-start bg-black/60 p-4"
+        className="fixed inset-0 z-50 flex @md:items-center items-start justify-start bg-black/60 p-4"
         onClick={() => setSelectedProperty(null)}
       >
         <div
@@ -1461,7 +1461,7 @@ export default function MonopolyUI({
     return (
       <div
         className={`bg-slate-800 rounded-lg p-2 w-full flex flex-col transition-all duration-300 ${
-          isHistoryExpanded ? "h-40 md:h-56" : "h-auto"
+          isHistoryExpanded ? "h-40 @md:h-56" : "h-auto"
         }`}
       >
         <h3
@@ -1522,7 +1522,7 @@ export default function MonopolyUI({
         <h3 className="text-lg font-bold text-orange-400 mb-4 border-b border-orange-400/30 pb-2">
           {ti({ en: "Chance Cards", vi: "Thẻ Cơ Hội" })} (?)
         </h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+        <div className="grid grid-cols-1 @md:grid-cols-3 gap-2">
           {CHANCE_CARDS.map((card) => (
             <div
               key={card.id}
@@ -1545,7 +1545,7 @@ export default function MonopolyUI({
         <h3 className="text-lg font-bold text-yellow-400 mb-4 border-b border-yellow-400/30 pb-2">
           {ti({ en: "Community Chest Cards", vi: "Thẻ Khí Vận" })} (chest)
         </h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+        <div className="grid grid-cols-1 @md:grid-cols-3 gap-2">
           {CHEST_CARDS.map((card) => (
             <div
               key={card.id}
@@ -2006,7 +2006,7 @@ export default function MonopolyUI({
           return (
             <div
               key={player.id}
-              className={`absolute w-3 h-3 md:w-5 md:h-5 rounded-full border-2 border-white shadow-lg flex items-center justify-center transform -translate-x-1/2 -translate-y-1/2 transition-all duration-700 cubic-bezier(0.34, 1.56, 0.64, 1) ${
+              className={`absolute w-3 h-3 @md:w-5 @md:h-5 rounded-full border-2 border-white shadow-lg flex items-center justify-center transform -translate-x-1/2 -translate-y-1/2 transition-all duration-700 cubic-bezier(0.34, 1.56, 0.64, 1) ${
                 isCurrentPlayer
                   ? "z-50 ring-4 ring-yellow-400 ring-offset-2 ring-offset-slate-700 scale-150 shadow-[0_0_20px_rgba(250,204,21,0.8)]"
                   : "z-30"
@@ -2019,7 +2019,7 @@ export default function MonopolyUI({
               title={player.username}
             >
               {/* Helper avatar icon */}
-              <span className="text-[6px] md:text-[9px] font-bold text-white drop-shadow-md select-none">
+              <span className="text-[6px] @md:text-[9px] font-bold text-white drop-shadow-md select-none">
                 {player.username.charAt(0).toUpperCase()}
               </span>
 
@@ -2036,7 +2036,7 @@ export default function MonopolyUI({
 
   return (
     <div
-      className="relative flex flex-col md:flex-row gap-2 p-0 w-full max-w-6xl mx-auto pb-16 @md:pb-0"
+      className="relative flex flex-col @md:flex-row gap-2 p-0 w-full max-w-6xl mx-auto pb-16 @md:pb-0"
       ref={gameContainerRef}
     >
       {renderTradeOffers()}
@@ -2044,10 +2044,10 @@ export default function MonopolyUI({
 
       {/* Main Board */}
       <div className="flex flex-col items-center gap-2 flex-1">
-        <div className="relative bg-slate-900 rounded-lg md:rounded-xl p-0.5 md:p-1 shadow-2xl border-2 md:border-4 border-slate-700 overflow-hidden w-full max-w-[95vw]">
+        <div className="relative bg-slate-900 rounded-lg @md:rounded-xl p-0.5 @md:p-1 shadow-2xl border-2 @md:border-4 border-slate-700 overflow-hidden w-full max-w-[95vw]">
           {/* Grid board */}
           <div
-            className="grid gap-px md:gap-0.5 w-full"
+            className="grid gap-px @md:gap-0.5 w-full"
             style={{
               gridTemplateColumns: "repeat(11, 1fr)",
               gridTemplateRows: "repeat(11, 1fr)",
@@ -2064,7 +2064,7 @@ export default function MonopolyUI({
               }}
             >
               {/* Title */}
-              <h2 className="text-xs md:text-xl font-bold text-transparent bg-clip-text bg-linear-to-r from-yellow-400 to-red-500 mb-1 md:mb-2">
+              <h2 className="text-xs @md:text-xl font-bold text-transparent bg-clip-text bg-linear-to-r from-yellow-400 to-red-500 mb-1 @md:mb-2">
                 CỜ TỶ PHÚ
               </h2>
 
@@ -2079,7 +2079,7 @@ export default function MonopolyUI({
       </div>
 
       {/* Side Panel */}
-      <div className="flex flex-col gap-4 shrink-0 md:w-64 w-full">
+      <div className="flex flex-col gap-4 shrink-0 @md:w-64 w-full">
         {renderPlayerPanel()}
         {renderMyProperties()}
         {renderHistoryLog()}

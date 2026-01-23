@@ -239,8 +239,8 @@ export default function UnoUI({ game: baseGame }: GameUIProps) {
     const pileDims = isMobile ? "w-14 h-20" : "w-20 h-28";
     const iconSize = isMobile ? "w-5 h-5" : "w-8 h-8";
     const containerClass = isMobile
-      ? "flex md:hidden flex-1 flex-col items-center justify-center gap-2 bg-slate-800/30 rounded-xl p-2 min-h-[120px]"
-      : "hidden md:flex flex-1 flex-col items-center justify-center gap-4 min-h-[200px] bg-slate-800/30 rounded-2xl p-4";
+      ? "flex @md:hidden flex-1 flex-col items-center justify-center gap-2 bg-slate-800/30 rounded-xl p-2 min-h-[120px]"
+      : "hidden @md:flex flex-1 flex-col items-center justify-center gap-4 min-h-[200px] bg-slate-800/30 rounded-2xl p-4";
 
     return (
       <div className={containerClass}>
@@ -544,22 +544,22 @@ export default function UnoUI({ game: baseGame }: GameUIProps) {
   return (
     <div
       ref={containerRef}
-      className="relative flex flex-col h-full p-2 md:p-4 gap-2 md:gap-4 overflow-hidden"
+      className="relative flex flex-col h-full p-2 @md:p-4 gap-2 @md:gap-4 overflow-hidden"
     >
       {/* Mobile: Top row with 3 opponents */}
-      <div className="flex md:hidden justify-center gap-2">
+      <div className="flex @md:hidden justify-center gap-2">
         {renderPlayerSlot(1, true, mobileSlotRefs)}
         {renderPlayerSlot(2, true, mobileSlotRefs)}
         {renderPlayerSlot(3, true, mobileSlotRefs)}
       </div>
 
       {/* Desktop: Top Player */}
-      <div className="hidden md:flex justify-center">
+      <div className="hidden @md:flex justify-center">
         {renderPlayerSlot(2, false, desktopSlotRefs)}
       </div>
 
       {/* Desktop: Middle Row */}
-      <div className="hidden md:flex flex-1 items-center justify-between gap-4">
+      <div className="hidden @md:flex flex-1 items-center justify-between gap-4">
         {renderPlayerSlot(1, false, desktopSlotRefs)}
 
         {renderPlayArea(false, desktopDiscardPileRef, desktopDrawPileRef)}
@@ -571,11 +571,11 @@ export default function UnoUI({ game: baseGame }: GameUIProps) {
       {renderPlayArea(true, mobileDiscardPileRef, mobileDrawPileRef)}
 
       {/* Bottom: My Slot and Hand */}
-      <div className="flex flex-col items-center gap-2 md:gap-4">
-        <div className="hidden md:block">
+      <div className="flex flex-col items-center gap-2 @md:gap-4">
+        <div className="hidden @md:block">
           {renderPlayerSlot(0, false, desktopSlotRefs)}
         </div>
-        <div className="flex md:hidden">
+        <div className="flex @md:hidden">
           {renderPlayerSlot(0, true, mobileSlotRefs)}
         </div>
 
@@ -593,7 +593,7 @@ export default function UnoUI({ game: baseGame }: GameUIProps) {
                     onClick={() => handleCardClick(card)}
                     disabled={!isMyTurn || !canPlay}
                     className={`transition-transform duration-150 ${
-                      index > 0 ? "-ml-6 md:-ml-8" : ""
+                      index > 0 ? "-ml-6 @md:-ml-8" : ""
                     } ${
                       canPlay
                         ? "-translate-y-2 hover:-translate-y-3 cursor-pointer"
@@ -615,7 +615,7 @@ export default function UnoUI({ game: baseGame }: GameUIProps) {
             {(state.pendingDraw > 0 || !game.hasPlayableCardCheck()) && (
               <button
                 onClick={handleDraw}
-                className="px-4 py-1.5 md:px-6 md:py-2 bg-red-600 hover:bg-red-500 rounded-lg font-medium flex items-center gap-1 md:gap-2 text-sm"
+                className="px-4 py-1.5 @md:px-6 @md:py-2 bg-red-600 hover:bg-red-500 rounded-lg font-medium flex items-center gap-1 @md:gap-2 text-sm"
               >
                 <Layers className="w-4 h-4" />
                 {ti({ en: "Draw", vi: "Rút" })} {state.pendingDraw || ""}
@@ -624,7 +624,7 @@ export default function UnoUI({ game: baseGame }: GameUIProps) {
             {state.hasDrawn && (
               <button
                 onClick={handleDraw}
-                className="px-4 py-1.5 md:px-6 md:py-2 bg-slate-600 hover:bg-slate-500 rounded-lg font-medium flex items-center gap-1 md:gap-2 text-sm"
+                className="px-4 py-1.5 @md:px-6 @md:py-2 bg-slate-600 hover:bg-slate-500 rounded-lg font-medium flex items-center gap-1 @md:gap-2 text-sm"
               >
                 {ti({ en: "Pass", vi: "Bỏ qua" })}
               </button>
@@ -632,7 +632,7 @@ export default function UnoUI({ game: baseGame }: GameUIProps) {
             {mySlot && mySlot.hand.length <= 2 && !mySlot.calledUno && (
               <button
                 onClick={handleCallUno}
-                className="px-4 py-1.5 md:px-6 md:py-2 bg-yellow-600 hover:bg-yellow-500 rounded-lg font-bold flex items-center gap-1 md:gap-2 text-sm animate-pulse"
+                className="px-4 py-1.5 @md:px-6 @md:py-2 bg-yellow-600 hover:bg-yellow-500 rounded-lg font-bold flex items-center gap-1 @md:gap-2 text-sm animate-pulse"
               >
                 <Hand className="w-4 h-4" />
                 UNO!
@@ -665,9 +665,9 @@ export default function UnoUI({ game: baseGame }: GameUIProps) {
                     game.requestNewGame();
                   }
                 }}
-                className="px-3 py-1.5 md:px-4 md:py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-xs md:text-sm flex items-center gap-1 md:gap-2"
+                className="px-3 py-1.5 @md:px-4 @md:py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-xs @md:text-sm flex items-center gap-1 @md:gap-2"
               >
-                <RefreshCcw className="w-3 h-3 md:w-4 md:h-4" />
+                <RefreshCcw className="w-3 h-3 @md:w-4 @md:h-4" />
                 {ti({ en: "New Game", vi: "Chơi lại" })}
               </button>
             )}
@@ -678,8 +678,8 @@ export default function UnoUI({ game: baseGame }: GameUIProps) {
       {/* Color Picker Modal */}
       {showColorPicker && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-800 rounded-xl p-4 md:p-6 shadow-xl">
-            <h3 className="text-base md:text-lg font-bold mb-4 text-center">
+          <div className="bg-slate-800 rounded-xl p-4 @md:p-6 shadow-xl">
+            <h3 className="text-base @md:text-lg font-bold mb-4 text-center">
               {ti({ en: "Choose Color", vi: "Chọn Màu" })}
             </h3>
             <div className="grid grid-cols-2 gap-3">
@@ -688,7 +688,7 @@ export default function UnoUI({ game: baseGame }: GameUIProps) {
                   <button
                     key={color}
                     onClick={() => handleColorSelect(color)}
-                    className={`w-16 h-16 md:w-20 md:h-20 rounded-xl ${COLOR_BG_CLASSES[color]} hover:scale-110 transition-transform border-4 border-white/30`}
+                    className={`w-16 h-16 @md:w-20 @md:h-20 rounded-xl ${COLOR_BG_CLASSES[color]} hover:scale-110 transition-transform border-4 border-white/30`}
                   />
                 ),
               )}
@@ -709,17 +709,17 @@ export default function UnoUI({ game: baseGame }: GameUIProps) {
       {/* New Game Request Modal */}
       {isHost && state.newGameRequest && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-800 rounded-xl p-4 md:p-6 max-w-sm w-full shadow-xl">
-            <h3 className="text-base md:text-lg font-bold mb-3 md:mb-4">
+          <div className="bg-slate-800 rounded-xl p-4 @md:p-6 max-w-sm w-full shadow-xl">
+            <h3 className="text-base @md:text-lg font-bold mb-3 @md:mb-4">
               {ti({ en: "New Game Request", vi: "Yêu cầu chơi lại" })}
             </h3>
-            <p className="text-slate-300 mb-4 md:mb-6 text-sm md:text-base">
+            <p className="text-slate-300 mb-4 @md:mb-6 text-sm @md:text-base">
               <span className="font-medium text-white">
                 {state.newGameRequest.fromName}
               </span>{" "}
               {ti({ en: "wants to start a new game.", vi: "muốn chơi lại" })}
             </p>
-            <div className="flex gap-2 md:gap-3">
+            <div className="flex gap-2 @md:gap-3">
               <button
                 onClick={() => game.declineNewGame()}
                 className="flex-1 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg font-medium flex items-center justify-center gap-2 text-sm"
@@ -746,11 +746,11 @@ export default function UnoUI({ game: baseGame }: GameUIProps) {
           onClick={() => setShowDiscardHistory(false)}
         >
           <div
-            className="bg-slate-800 rounded-xl p-4 md:p-6 max-w-md w-full max-h-[80vh] shadow-xl"
+            className="bg-slate-800 rounded-xl p-4 @md:p-6 max-w-md w-full max-h-[80vh] shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-base md:text-lg font-bold">
+              <h3 className="text-base @md:text-lg font-bold">
                 {ti({
                   en: `Discard Pile (${state.discardPile.length} cards)`,
                   vi: `Lịch sử (${state.discardPile.length} lá bài)`,
@@ -763,7 +763,7 @@ export default function UnoUI({ game: baseGame }: GameUIProps) {
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="overflow-y-auto max-h-[60vh] grid grid-cols-4 md:grid-cols-5 gap-2">
+            <div className="overflow-y-auto max-h-[60vh] grid grid-cols-4 @md:grid-cols-5 gap-2">
               {[...state.discardPile].reverse().map((card, index) => (
                 <div key={`${card.id}-${index}`} className="relative">
                   <UnoCardDisplay card={card} size="small" />
@@ -818,13 +818,13 @@ function UnoCardDisplay({
 }) {
   const sizeClasses = {
     small: "w-10 h-14",
-    medium: "w-14 h-20 md:w-16 md:h-24",
+    medium: "w-14 h-20 @md:w-16 @md:h-24",
     large: "w-20 h-28",
   };
 
   const textSizes = {
     small: "text-lg",
-    medium: "text-xl md:text-2xl",
+    medium: "text-xl @md:text-2xl",
     large: "text-3xl",
   };
 
@@ -834,7 +834,7 @@ function UnoCardDisplay({
         className={`
         ${sizeClasses[size]}
         bg-slate-900
-        rounded-lg md:rounded-xl shadow-lg
+        rounded-lg @md:rounded-xl shadow-lg
         border-2 border-slate-700
         shrink-0
         relative
@@ -842,7 +842,7 @@ function UnoCardDisplay({
       `}
       >
         <div className="absolute inset-1 rounded border-2 border-slate-600 flex items-center justify-center bg-linear-to-br from-slate-800 to-black">
-          <span className="text-slate-700/50 font-bold transform -rotate-45 select-none text-sm md:text-base">
+          <span className="text-slate-700/50 font-bold transform -rotate-45 select-none text-sm @md:text-base">
             UNO
           </span>
         </div>
@@ -862,7 +862,7 @@ function UnoCardDisplay({
       className={`
         ${sizeClasses[size]}
         ${COLOR_BG_CLASSES[card.color]}
-        rounded-lg md:rounded-xl shadow-lg
+        rounded-lg @md:rounded-xl shadow-lg
         border-2 border-white/30
         font-bold text-white
         ${textSizes[size]}
@@ -1059,9 +1059,9 @@ function PlayerSlotDisplay({
         ${
           compact
             ? "p-2 min-w-[90px]"
-            : "p-2 md:p-3 min-w-[100px] md:min-w-[120px]"
+            : "p-2 @md:p-3 min-w-[100px] @md:min-w-[120px]"
         }
-        rounded-lg md:rounded-xl transition-all border-2
+        rounded-lg @md:rounded-xl transition-all border-2
         ${
           isCurrentTurn && gamePhase === "playing"
             ? "border-primary-600 bg-primary-500/10 animate-bounce"

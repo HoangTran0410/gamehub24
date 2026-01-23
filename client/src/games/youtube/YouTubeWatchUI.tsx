@@ -135,7 +135,7 @@ export default function YouTubeWatchUI({ game: baseGame }: GameUIProps) {
   };
 
   return (
-    <div className="flex flex-col items-center w-full h-full p-1 md:p-4 gap-4">
+    <div className="flex flex-col items-center w-full h-full p-1 @md:p-4 gap-4">
       {/* Host Controls */}
       <div className="flex flex-col gap-2 w-full max-w-4xl">
         {game.isHost && (

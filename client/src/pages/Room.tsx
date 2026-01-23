@@ -789,12 +789,16 @@ function ChangeGameModal({
   >(null);
   const { favorites, toggleFavorite, favoritesCount } = useGameFavorites();
 
-  const filteredGames = getAllGames().filter((game) =>
-    selectedCategory === "favorites"
-      ? favorites.includes(game.id)
-      : selectedCategory
-        ? game.categories.includes(selectedCategory)
-        : true,
+  const gamesToShow = useMemo(
+    () =>
+      getAllGames().filter((game) =>
+        selectedCategory === "favorites"
+          ? favorites.includes(game.id)
+          : selectedCategory
+            ? game.categories.includes(selectedCategory)
+            : true,
+      ),
+    [selectedCategory, favorites],
   );
 
   return (
@@ -803,7 +807,7 @@ function ChangeGameModal({
       onClick={onClose}
     >
       <div
-        className="bg-background-secondary border border-white/10 rounded-2xl p-6 max-w-2xl w-full max-h-[85vh] overflow-y-auto shadow-2xl mx-4 animate-scaleIn relative flex flex-col"
+        className="bg-background-secondary border border-white/10 rounded-2xl p-4 max-w-2xl w-full max-h-[85vh] overflow-y-auto shadow-2xl mx-4 animate-scaleIn relative flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         <button
@@ -825,8 +829,13 @@ function ChangeGameModal({
           />
         </div>
 
+        {gamesToShow.length <= 0 && (
+          <p className="text-text-secondary text-center w-full">
+            {ti({ en: "No games found", vi: "Không tìm thấy game" })}
+          </p>
+        )}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {filteredGames.map((game) => {
+          {gamesToShow.map((game) => {
             const Icon = game.icon;
             const isSelected = currentRoom.gameType === game.id;
             return (
@@ -876,7 +885,7 @@ function ChangeGameModal({
                     >
                       {ti(game.name)}
                     </h4>
-                    <p className="text-xs text-text-secondary line-clamp-2 mt-2 opacity-50">
+                    <p className="text-xs text-text-secondary line-clamp-2 opacity-50">
                       {ti(game.description)}
                     </p>
                   </div>
