@@ -73,8 +73,8 @@ export default class Monopoly extends BaseGame<MonopolyState> {
       const lastEntry = p.moneyHistory[p.moneyHistory.length - 1];
       if (lastEntry !== p.money) {
         p.moneyHistory.push(p.money);
-        // Cap at 50 items
-        if (p.moneyHistory.length > 50) {
+        // Cap at 30 items
+        if (p.moneyHistory.length > 30) {
           p.moneyHistory.shift();
         }
       }
@@ -91,6 +91,19 @@ export default class Monopoly extends BaseGame<MonopolyState> {
     price: number,
   ): void {
     if (!this.isHost) return;
+
+    // Cap active trade offers
+    if (this.state.tradeOffers.length >= 20) {
+      this.addLog(
+        {
+          en: "Too many active trade offers. Please cancel or reject some first.",
+          vi: "Quá nhiều lời mời giao dịch. Vui lòng hủy hoặc từ chối bớt.",
+        },
+        "alert",
+      );
+      this.notifyAndBroadcast();
+      return;
+    }
 
     // Validation:
     // 1. Property must exist.
@@ -587,9 +600,9 @@ export default class Monopoly extends BaseGame<MonopolyState> {
     };
     this.state.logs.push(log);
 
-    // Keep only last 50 logs to save bandwidth
-    if (this.state.logs.length > 50) {
-      this.state.logs = this.state.logs.slice(-50);
+    // Keep only last 30 logs to save bandwidth
+    if (this.state.logs.length > 30) {
+      this.state.logs = this.state.logs.slice(-30);
     }
 
     this.state.lastAction = message;
