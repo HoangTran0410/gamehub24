@@ -1128,16 +1128,16 @@ export default function BauCuaUI({
                     : "bg-slate-700/50"
                 }`}
               >
-                <div className="flex items-center gap-3 flex-1 text-left">
-                  <span className="text-xl font-bold text-slate-400">
+                <div className="flex items-center gap-3 flex-1 min-w-0 text-left">
+                  <span className="text-xl font-bold text-slate-400 shrink-0">
                     #{idx + 1}
                   </span>
-                  <div className="flex-1">
-                    <p className="font-semibold">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold wrap-break-word">
                       {pBalance.username}
                       {pBalance.isBot && " 🤖"}
                     </p>
-                    <p className="text-xs text-slate-400">
+                    <p className="text-xs text-slate-400 truncate">
                       {ti({ vi: `Cược: `, en: `Bet: ` })}
                       {formatPrice(pBalance.totalBet)}
                       {state.playersReady[pBalance.playerId] && " ✓"}

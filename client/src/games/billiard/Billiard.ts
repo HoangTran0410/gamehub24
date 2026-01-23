@@ -90,6 +90,7 @@ export default class Billiard extends BaseGame<BilliardState> {
           };
           this.state.isSimulating = true;
           this.applyShot(action.angle, action.power);
+          this.notifyListeners(this.state);
           this.runPhysicsLoop();
         }
         break;
@@ -124,6 +125,7 @@ export default class Billiard extends BaseGame<BilliardState> {
     this.state.isSimulating = true;
     this.state.foul = false;
     this.state.turnMessage = null;
+    this.notifyListeners(this.state);
 
     // Apply force to cue ball
     this.applyShot(angle, power);
@@ -387,13 +389,13 @@ export default class Billiard extends BaseGame<BilliardState> {
 
   private onSimulationEnd(): void {
     this.state.isSimulating = false;
+    this.notifyListeners(this.state);
 
     // Only the HOST determines game end and turn changes
     // Guests will receive the authoritative state via broadcast
     if (!this.isHost) {
       // Guest just updates local UI to show simulation stopped
       // but does NOT change turns - wait for host's state broadcast
-      this.notifyListeners(this.state);
       return;
     }
 

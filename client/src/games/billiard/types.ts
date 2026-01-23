@@ -81,9 +81,9 @@ export const TABLE_WIDTH = 800;
 export const TABLE_HEIGHT = 400;
 export const BALL_RADIUS = 16;
 export const POCKET_RADIUS = 20;
-export const FRICTION = 0.99;
+export const FRICTION = 0.9999;
 export const MIN_VELOCITY = 0.1;
-export const MAX_POWER = 30;
+export const MAX_POWER = 300;
 
 // Pocket positions (6 pockets)
 export const POCKETS = [

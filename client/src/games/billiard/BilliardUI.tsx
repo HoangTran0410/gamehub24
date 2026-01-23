@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import Billiard from "./Billiard";
 import type { BilliardState, Ball } from "./types";
 import {
@@ -9,16 +10,29 @@ import {
   POCKETS,
   BALL_COLORS,
 } from "./types";
-import { Bot, Play, RefreshCcw, Target } from "lucide-react";
+import {
+  Hand,
+  MousePointer2,
+  BookOpen,
+  X,
+  Bot,
+  RefreshCcw,
+  Play,
+  Target,
+  RotateCw,
+} from "lucide-react";
 import { useUserStore } from "../../stores/userStore";
 import useLanguage from "../../stores/languageStore";
 import type { GameUIProps } from "../types";
+import { useAlertStore } from "../../stores/alertStore";
 
 export default function BilliardUI({ game: baseGame }: GameUIProps) {
   const game = baseGame as Billiard;
   const [state, setState] = useState<BilliardState>(game.getState());
   const { username: myUsername } = useUserStore();
-  const { ti } = useLanguage();
+  const { ti, ts } = useLanguage();
+  const { confirm: showConfirm } = useAlertStore();
+  const [showRules, setShowRules] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -50,6 +64,9 @@ export default function BilliardUI({ game: baseGame }: GameUIProps) {
 
   // Canvas scale for responsive
   const [scale, setScale] = useState(1);
+  const [isVertical, setIsVertical] = useState(false);
+  const [controlMode, setControlMode] = useState<"drag" | "slider">("drag");
+  const [isDraggingAngle, setIsDraggingAngle] = useState(false);
 
   const isMyTurn = game.isMyTurn();
 
@@ -69,7 +86,20 @@ export default function BilliardUI({ game: baseGame }: GameUIProps) {
     const handleResize = () => {
       if (containerRef.current) {
         const containerWidth = containerRef.current.clientWidth - 16; // padding
-        const newScale = Math.min(1, containerWidth / TABLE_WIDTH);
+        const maxHeight = window.innerHeight * 0.8;
+        const maxWidth = window.innerWidth * (isVertical ? 0.6 : 0.8);
+
+        const widthToFit = isVertical ? TABLE_HEIGHT : TABLE_WIDTH;
+        const heightToFit = isVertical ? TABLE_WIDTH : TABLE_HEIGHT;
+
+        // Constraint by both container width AND max viewport width (80vw)
+        const allowedWidth = Math.min(containerWidth, maxWidth);
+
+        const widthScale = allowedWidth / widthToFit;
+        const heightScale = maxHeight / heightToFit;
+
+        // Fit to both width and height constraints
+        const newScale = Math.min(1, widthScale, heightScale);
         setScale(newScale);
       }
     };
@@ -77,73 +107,165 @@ export default function BilliardUI({ game: baseGame }: GameUIProps) {
     handleResize();
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
-  }, []);
+  }, [isVertical]);
 
   // Store refs for aim state to use in drawCanvas without stale closures
   const aimStateRef = useRef({ isAiming, aimAngle, aimPower, mousePos });
   aimStateRef.current = { isAiming, aimAngle, aimPower, mousePos };
   const scaleRef = useRef(scale);
   scaleRef.current = scale;
+  const isVerticalRef = useRef(isVertical);
+  isVerticalRef.current = isVertical;
+  const controlModeRef = useRef(controlMode);
+  controlModeRef.current = controlMode;
+  const isDraggingAngleRef = useRef(isDraggingAngle);
+  isDraggingAngleRef.current = isDraggingAngle;
 
-  // Draw a single ball with optional highlight
-  const drawBall = useCallback(
-    (ctx: CanvasRenderingContext2D, ball: Ball, highlightColor?: string) => {
-      const color = BALL_COLORS[ball.id] || "#FFF";
+  // Cache refs
+  const tableCacheRef = useRef<HTMLCanvasElement | null>(null);
+  const ballSpritesRef = useRef<Map<number, HTMLCanvasElement>>(new Map());
 
-      // Highlight glow effect (drawn first, behind the ball)
-      if (highlightColor) {
-        ctx.save();
-        ctx.shadowColor = highlightColor;
-        ctx.shadowBlur = 15;
-        ctx.fillStyle = highlightColor;
-        ctx.globalAlpha = 0.6;
-        ctx.beginPath();
-        ctx.arc(ball.x, ball.y, BALL_RADIUS + 4, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-      }
+  // Initialize/Update text cache for balls
+  useEffect(() => {
+    // Generate ball sprites
+    const sprites = new Map<number, HTMLCanvasElement>();
 
-      // Ball shadow
-      ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
-      ctx.beginPath();
-      ctx.arc(ball.x + 2, ball.y + 2, BALL_RADIUS, 0, Math.PI * 2);
-      ctx.fill();
+    // Helper to create sprite for a ball
+    const createBallSprite = (id: number) => {
+      const sprite = document.createElement("canvas");
+      // Add padding for shadow/glow if needed, but we draw shadow separately usually
+      // We will draw the ball at exactly RADIUS size
+      const size = BALL_RADIUS * 2;
+      sprite.width = size;
+      sprite.height = size;
+      const ctx = sprite.getContext("2d");
+      if (!ctx) return sprite;
+
+      const center = BALL_RADIUS;
+      const color = BALL_COLORS[id] || "#FFF";
 
       // Ball base
       ctx.fillStyle = color;
       ctx.beginPath();
-      ctx.arc(ball.x, ball.y, BALL_RADIUS, 0, Math.PI * 2);
+      ctx.arc(center, center, BALL_RADIUS, 0, Math.PI * 2);
       ctx.fill();
 
-      // Stripe pattern for striped balls
-      if (ball.id >= 9 && ball.id <= 15) {
-        // render white circle at center
+      // Stripe pattern
+      if (id >= 9 && id <= 15) {
         ctx.fillStyle = "white";
         ctx.beginPath();
-        ctx.arc(ball.x, ball.y, BALL_RADIUS * 0.7, 0, Math.PI * 2);
+        ctx.arc(center, center, BALL_RADIUS * 0.7, 0, Math.PI * 2);
         ctx.fill();
       }
 
-      // Ball number (except cue ball)
-      if (ball.id !== 0) {
-        ctx.fillStyle = ball.id >= 9 && ball.id <= 15 ? "black" : "white";
+      // Ball number
+      if (id !== 0) {
+        ctx.fillStyle = id >= 9 && id <= 15 ? "black" : "white";
         ctx.font = `bold ${BALL_RADIUS}px Arial`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.fillText(ball.id.toString(), ball.x, ball.y);
+
+        // Note: We don't rotate text here because the context rotates for the whole view
+        // If we want text to stay upright relative to screen while table rotates,
+        // we might need separate sprites for vertical mode or apply rotation here.
+        // Current logic: View Transform rotates everything.
+        // Original code:
+        // if (isVerticalRef.current) { rotate 90 deg }
+        // This implies the text tries to stay "upright" relative to the user?
+        // Actually, if the whole table rotates -90 deg, then text drawn normally also rotates -90 deg (reads sideways).
+        // The original code tried to COUNTER-rotate the text so it stays readable?
+        // Original: ctx.rotate(Math.PI / 2); (90 deg clockwise)
+        // If View is -90, Text +90 = 0 (Upright).
+        // So yes, we need to respect isVertical for text orientation.
+
+        ctx.save();
+        ctx.translate(center, center);
+        if (isVertical) {
+          ctx.rotate(Math.PI / 2);
+        }
+        ctx.fillText(id.toString(), 0, 0);
+        ctx.restore();
       }
 
-      // Highlight shine
+      // Highlight shine (static on the ball surface)
       ctx.fillStyle = "rgba(255, 255, 255, 0.3)";
       ctx.beginPath();
       ctx.arc(
-        ball.x - BALL_RADIUS * 0.3,
-        ball.y - BALL_RADIUS * 0.3,
+        center - BALL_RADIUS * 0.3,
+        center - BALL_RADIUS * 0.3,
         BALL_RADIUS * 0.3,
         0,
         Math.PI * 2,
       );
       ctx.fill();
+
+      return sprite;
+    };
+
+    for (let i = 0; i <= 15; i++) {
+      sprites.set(i, createBallSprite(i));
+    }
+    ballSpritesRef.current = sprites;
+  }, [isVertical]); // Re-generate sprites if orientation changes (for text rotation)
+
+  // Initialize/Update Table Cache
+  useEffect(() => {
+    if (!tableCacheRef.current) {
+      tableCacheRef.current = document.createElement("canvas");
+    }
+    const canvas = tableCacheRef.current;
+    // The cache stores the table in its LOGICAL dimensions (Height/Width irrelevant of rotation)
+    // Actually, drawCanvas rotates the context then draws.
+    // So we should cache the 'Logical' table (Horizontal).
+    canvas.width = TABLE_WIDTH;
+    canvas.height = TABLE_HEIGHT;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    // Clear and draw table
+    ctx.fillStyle = "#1a472a";
+    ctx.fillRect(0, 0, TABLE_WIDTH, TABLE_HEIGHT);
+
+    // Draw table border
+    ctx.strokeStyle = "#5d3a1a";
+    ctx.lineWidth = 20;
+    ctx.strokeRect(10, 10, TABLE_WIDTH - 20, TABLE_HEIGHT - 20);
+
+    // Draw pockets
+    ctx.fillStyle = "#111";
+    for (const pocket of POCKETS) {
+      ctx.beginPath();
+      ctx.arc(pocket.x, pocket.y, POCKET_RADIUS, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }, []); // Static, never changes
+
+  // Draw a single ball using sprite
+  const drawBall = useCallback(
+    (ctx: CanvasRenderingContext2D, ball: Ball, highlightColor?: string) => {
+      // Shadow
+      ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
+      ctx.beginPath();
+      ctx.arc(ball.x + 2, ball.y + 2, BALL_RADIUS, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Highlight Glow (behind ball)
+      if (highlightColor) {
+        ctx.save();
+        // Optimize: Use radial gradient or simple alpha circle instead of shadowBlur
+        ctx.globalAlpha = 0.6;
+        ctx.fillStyle = highlightColor;
+        ctx.beginPath();
+        ctx.arc(ball.x, ball.y, BALL_RADIUS + 7, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // Draw Sprite
+      const sprite = ballSpritesRef.current.get(ball.id);
+      if (sprite) {
+        ctx.drawImage(sprite, ball.x - BALL_RADIUS, ball.y - BALL_RADIUS);
+      }
     },
     [],
   );
@@ -164,27 +286,27 @@ export default function BilliardUI({ game: baseGame }: GameUIProps) {
     } = aimStateRef.current;
 
     // Set canvas size
-    canvas.width = TABLE_WIDTH * currentScale;
-    canvas.height = TABLE_HEIGHT * currentScale;
+    const vertical = isVerticalRef.current;
+    canvas.width = (vertical ? TABLE_HEIGHT : TABLE_WIDTH) * currentScale;
+    canvas.height = (vertical ? TABLE_WIDTH : TABLE_HEIGHT) * currentScale;
 
     ctx.save();
     ctx.scale(currentScale, currentScale);
 
-    // Clear and draw table
-    ctx.fillStyle = "#1a472a";
-    ctx.fillRect(0, 0, TABLE_WIDTH, TABLE_HEIGHT);
+    if (vertical) {
+      // Rotate 90 degrees counter-clockwise and translate to fit
+      // "Shooting Up" view: Cue ball area (Left) at Bottom, Rack (Right) at Top
+      ctx.translate(0, TABLE_WIDTH);
+      ctx.rotate(-Math.PI / 2);
+    }
 
-    // Draw table border
-    ctx.strokeStyle = "#5d3a1a";
-    ctx.lineWidth = 20;
-    ctx.strokeRect(10, 10, TABLE_WIDTH - 20, TABLE_HEIGHT - 20);
-
-    // Draw pockets
-    ctx.fillStyle = "#111";
-    for (const pocket of POCKETS) {
-      ctx.beginPath();
-      ctx.arc(pocket.x, pocket.y, POCKET_RADIUS, 0, Math.PI * 2);
-      ctx.fill();
+    // Draw Cached Table
+    if (tableCacheRef.current) {
+      ctx.drawImage(tableCacheRef.current, 0, 0);
+    } else {
+      // Fallback if cache missing
+      ctx.fillStyle = "#1a472a";
+      ctx.fillRect(0, 0, TABLE_WIDTH, TABLE_HEIGHT);
     }
 
     // Draw movement trails
@@ -271,7 +393,13 @@ export default function BilliardUI({ game: baseGame }: GameUIProps) {
     const cueBallForAim = ballsRef.current.find(
       (b) => b.id === 0 && !b.pocketed,
     );
-    if (aiming && cueBallForAim && power > 0) {
+    // In Slider mode, show aim line even if power is 0 so user can see where they are aiming
+    const showAim =
+      aiming &&
+      cueBallForAim &&
+      (power > 0 || controlModeRef.current === "slider");
+
+    if (showAim) {
       // Ray casting for trace line (multi-step)
       let rayX = cueBallForAim.x;
       let rayY = cueBallForAim.y;
@@ -295,60 +423,63 @@ export default function BilliardUI({ game: baseGame }: GameUIProps) {
         const cos = Math.cos(rayAngle);
         const sin = Math.sin(rayAngle);
 
-        // Check wall collisions based on current ray direction
-        // Right wall
+        // Optimizing Wall Check:
+        // Width checks
         if (cos > 0) {
           const d = (TABLE_WIDTH - BALL_RADIUS - rayX) / cos;
-          if (d > 0 && d < minDist) {
+          if (d < minDist) {
             minDist = d;
+            collisionType = "wall";
+            wallNormal = { x: -1, y: 0 };
             collisionPoint = {
               x: TABLE_WIDTH - BALL_RADIUS,
               y: rayY + d * sin,
             };
-            collisionType = "wall";
-            wallNormal = { x: -1, y: 0 };
           }
-        }
-        // Left wall
-        else if (cos < 0) {
+        } else {
           const d = (BALL_RADIUS - rayX) / cos;
-          if (d > 0 && d < minDist) {
+          if (d < minDist) {
             minDist = d;
-            collisionPoint = { x: BALL_RADIUS, y: rayY + d * sin };
             collisionType = "wall";
             wallNormal = { x: 1, y: 0 };
+            collisionPoint = { x: BALL_RADIUS, y: rayY + d * sin };
           }
         }
-        // Bottom wall
+        // Height checks
         if (sin > 0) {
           const d = (TABLE_HEIGHT - BALL_RADIUS - rayY) / sin;
-          if (d > 0 && d < minDist) {
+          if (d < minDist) {
             minDist = d;
+            collisionType = "wall";
+            wallNormal = { x: 0, y: -1 };
             collisionPoint = {
               x: rayX + d * cos,
               y: TABLE_HEIGHT - BALL_RADIUS,
             };
-            collisionType = "wall";
-            wallNormal = { x: 0, y: -1 };
           }
-        }
-        // Top wall
-        else if (sin < 0) {
+        } else {
           const d = (BALL_RADIUS - rayY) / sin;
-          if (d > 0 && d < minDist) {
+          if (d < minDist) {
             minDist = d;
-            collisionPoint = { x: rayX + d * cos, y: BALL_RADIUS };
             collisionType = "wall";
             wallNormal = { x: 0, y: 1 };
+            collisionPoint = { x: rayX + d * cos, y: BALL_RADIUS };
           }
         }
 
         // Check ball collisions
         // Only check ball collisions if we haven't already hit a wall closer than any possible ball
+        // Optimization: Use simple distance check first? No, ray intersection is needed.
         for (const ball of ballsRef.current) {
           if (ball.id === 0 || ball.pocketed) continue;
 
-          // Don't check collision with the ball we just bounced off (if any) - though simpler logic usually suffices
+          // Optimization: Bounding box check before complex math
+          if (
+            Math.abs(ball.x - rayX) > minDist &&
+            Math.abs(ball.y - rayY) > minDist
+          )
+            continue;
+
           // Quadratic equation for ray-sphere intersection
           const dx = rayX - ball.x;
           const dy = rayY - ball.y;
@@ -409,7 +540,19 @@ export default function BilliardUI({ game: baseGame }: GameUIProps) {
         ctx.font = "10px Arial";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.fillText((step + 1).toString(), collisionPoint.x, collisionPoint.y);
+        if (vertical) {
+          ctx.save();
+          ctx.translate(collisionPoint.x, collisionPoint.y);
+          ctx.rotate(Math.PI / 2);
+          ctx.fillText((step + 1).toString(), 0, 0);
+          ctx.restore();
+        } else {
+          ctx.fillText(
+            (step + 1).toString(),
+            collisionPoint.x,
+            collisionPoint.y,
+          );
+        }
         ctx.restore();
 
         // Handle collision
@@ -523,7 +666,66 @@ export default function BilliardUI({ game: baseGame }: GameUIProps) {
   // Update ref so callbacks always have the latest draw function
   drawCanvasRef.current = drawCanvas;
 
-  // Initial draw and redraw on state changes
+  // Animation running state
+  const animationRef = useRef<number | null>(null);
+
+  const startAnimationLoop = useCallback(() => {
+    if (animationRef.current) return;
+
+    const loop = () => {
+      let isAnimating = false;
+      const balls = ballsRef.current;
+
+      // 1. Update Trails
+      for (const ball of balls) {
+        const currentTrail = trailsRef.current.get(ball.id) || [];
+        const speed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
+        const isMoving = speed > 0.05 && !ball.pocketed;
+
+        if (isMoving) {
+          isAnimating = true;
+          currentTrail.push({ x: ball.x, y: ball.y });
+          if (currentTrail.length > 20) currentTrail.shift();
+          trailsRef.current.set(ball.id, currentTrail);
+        } else if (currentTrail.length > 0) {
+          // Decay trail
+          isAnimating = true; // Still animating decay
+          currentTrail.shift();
+          if (currentTrail.length === 0) {
+            trailsRef.current.delete(ball.id);
+          } else {
+            trailsRef.current.set(ball.id, currentTrail);
+          }
+        }
+      }
+
+      // 2. Check Ripples
+      if (ripplesRef.current.length > 0) {
+        isAnimating = true;
+      }
+
+      // 3. Check Moving Balls (Redundant with Step 1 logic but good to double check simply)
+      if (!isAnimating) {
+        const moving = balls.some(
+          (b) =>
+            !b.pocketed && (Math.abs(b.vx) > 0.05 || Math.abs(b.vy) > 0.05),
+        );
+        if (moving) isAnimating = true;
+      }
+
+      drawCanvasRef.current();
+
+      if (isAnimating) {
+        animationRef.current = requestAnimationFrame(loop);
+      } else {
+        animationRef.current = null;
+      }
+    };
+
+    animationRef.current = requestAnimationFrame(loop);
+  }, []);
+
+  // Initial draw and redraw on state changes (STATIC updates)
   useEffect(() => {
     drawCanvas();
   }, [drawCanvas, state, isAiming, aimAngle, aimPower, scale]);
@@ -534,7 +736,6 @@ export default function BilliardUI({ game: baseGame }: GameUIProps) {
       setState(newState);
       ballsRef.current = newState.balls;
 
-      // Clear trails on game reset
       if (
         newState.gamePhase === "waiting" ||
         (newState.currentTurn === 1 &&
@@ -544,11 +745,18 @@ export default function BilliardUI({ game: baseGame }: GameUIProps) {
         trailsRef.current.clear();
       }
 
-      drawCanvasRef.current();
+      if (newState.isSimulating) {
+        startAnimationLoop();
+      } else {
+        // Even if not simulating, draw once to reflect state
+        drawCanvasRef.current();
+      }
     });
 
     // Subscribe to frame updates for smooth 60fps physics
     game.onFrame((balls) => {
+      let shouldAnimate = false;
+
       // Detect newly pocketed balls and create ripple effects
       const currentPocketed = new Set(
         balls.filter((b) => b.pocketed).map((b) => b.id),
@@ -556,121 +764,86 @@ export default function BilliardUI({ game: baseGame }: GameUIProps) {
 
       for (const ball of balls) {
         if (ball.pocketed && !prevPocketedRef.current.has(ball.id)) {
-          // Find which pocket this ball went into
+          // New pocket event -> Start animation
           for (const pocket of POCKETS) {
             const dx = ball.x - pocket.x;
             const dy = ball.y - pocket.y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-
-            if (dist < POCKET_RADIUS * 2) {
-              // Create ripple at this pocket
-              const color = BALL_COLORS[ball.id] || "#FFF";
+            if (dx * dx + dy * dy < (POCKET_RADIUS * 2) ** 2) {
               ripplesRef.current.push({
                 x: pocket.x,
                 y: pocket.y,
-                color: color,
+                color: BALL_COLORS[ball.id] || "#FFF",
                 startTime: performance.now(),
                 duration: 2000,
               });
+              shouldAnimate = true;
               break;
             }
           }
+        }
+
+        // Check for movement to trigger loop
+        if (
+          !ball.pocketed &&
+          (Math.abs(ball.vx) > 0.01 || Math.abs(ball.vy) > 0.01)
+        ) {
+          shouldAnimate = true;
         }
       }
 
       prevPocketedRef.current = currentPocketed;
       ballsRef.current = balls;
+
+      if (shouldAnimate) {
+        startAnimationLoop();
+      } else if (animationRef.current) {
+        // If loop is running, let it decide when to stop (it checks trails/ripples too)
+      } else {
+        // Physics updated but idle? Just draw once to update positions
+        drawCanvasRef.current();
+      }
     });
 
     return () => {
       unsub();
     };
-  }, [game]);
+  }, [game, startAnimationLoop]);
 
-  // Animation loop for trails and ripples
+  // Cleanup animation on unmount
   useEffect(() => {
-    let animationId: number;
-
-    const loop = () => {
-      // Update trails
-      const balls = ballsRef.current;
-      for (const ball of balls) {
-        const currentTrail = trailsRef.current.get(ball.id) || [];
-
-        // Check if ball is moving and NOT pocketed
-        const speed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
-        const isMoving = speed > 0.2 && !ball.pocketed;
-
-        if (isMoving) {
-          // Add current position
-          currentTrail.push({ x: ball.x, y: ball.y });
-
-          // Limit trail length (keep last 20 points)
-          if (currentTrail.length > 20) {
-            currentTrail.shift();
-          }
-
-          trailsRef.current.set(ball.id, currentTrail);
-        } else if (currentTrail.length > 0) {
-          // Decay trail if ball stopped OR pocketed
-          currentTrail.shift();
-          if (currentTrail.length === 0) {
-            trailsRef.current.delete(ball.id);
-          } else {
-            trailsRef.current.set(ball.id, currentTrail);
-          }
-        }
-      }
-
-      drawCanvasRef.current();
-      animationId = requestAnimationFrame(loop);
-    };
-
-    animationId = requestAnimationFrame(loop);
-
     return () => {
-      cancelAnimationFrame(animationId);
+      if (animationRef.current) cancelAnimationFrame(animationRef.current);
     };
   }, []);
 
-  // Get coordinates from mouse/touch event
   const getCanvasCoords = useCallback(
     (clientX: number, clientY: number) => {
       const canvas = canvasRef.current;
       if (!canvas) return null;
 
       const rect = canvas.getBoundingClientRect();
+      const rawX = (clientX - rect.left) / scale;
+      const rawY = (clientY - rect.top) / scale;
+
+      if (isVertical) {
+        // Map visual coordinates back to game coordinates based on the transform:
+        // VisualX = GameY
+        // VisualY = TABLE_WIDTH - GameX
+        // => GameY = VisualX
+        // => GameX = TABLE_WIDTH - VisualY
+        return {
+          x: TABLE_WIDTH - rawY,
+          y: rawX,
+        };
+      }
+
       return {
-        x: (clientX - rect.left) / scale,
-        y: (clientY - rect.top) / scale,
+        x: rawX,
+        y: rawY,
       };
     },
-    [scale],
+    [scale, isVertical],
   );
-
-  const handleMouseDown = (e: React.MouseEvent | React.TouchEvent) => {
-    if (!isMyTurn || state.isSimulating) return;
-
-    const cueBallNow = ballsRef.current.find((b) => b.id === 0 && !b.pocketed);
-    if (!cueBallNow) return;
-
-    const clientX = "touches" in e ? e.touches[0].clientX : e.clientX;
-    const clientY = "touches" in e ? e.touches[0].clientY : e.clientY;
-    const coords = getCanvasCoords(clientX, clientY);
-    if (!coords) return;
-
-    // Check if clicking near cue ball
-    const dx = coords.x - cueBallNow.x;
-    const dy = coords.y - cueBallNow.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-
-    if (dist < BALL_RADIUS * 5) {
-      // More forgiving touch area
-      e.preventDefault();
-      setIsAiming(true);
-      setMousePos(coords);
-    }
-  };
 
   // Calculate aim from coordinates
   const updateAim = useCallback(
@@ -685,23 +858,74 @@ export default function BilliardUI({ game: baseGame }: GameUIProps) {
 
       setMousePos(coords);
 
-      // Calculate angle from cue ball to mouse (opposite direction for aiming)
-      const angle =
-        Math.atan2(coords.y - cueBallNow.y, coords.x - cueBallNow.x) + Math.PI;
-      setAimAngle(angle);
+      // Check Mode
+      if (controlModeRef.current === "slider") {
+        // Slider Mode: Angle matches cursor direction (Towards)
+        const angle = Math.atan2(
+          coords.y - cueBallNow.y,
+          coords.x - cueBallNow.x,
+        );
+        setAimAngle(angle);
+        // Power is separate
+      } else {
+        // Drag Mode: Angle is opposite (Pull back)
+        const angle =
+          Math.atan2(coords.y - cueBallNow.y, coords.x - cueBallNow.x) +
+          Math.PI;
+        setAimAngle(angle);
 
-      // Calculate power based on distance
-      const dx = coords.x - cueBallNow.x;
-      const dy = coords.y - cueBallNow.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      const power = Math.min(1, dist / 200);
-      setAimPower(power);
+        // Power based on distance
+        const dx = coords.x - cueBallNow.x;
+        const dy = coords.y - cueBallNow.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const power = Math.min(1, dist / 200);
+        setAimPower(power);
+      }
     },
     [getCanvasCoords],
   );
 
+  const handleMouseDown = (e: React.MouseEvent | React.TouchEvent) => {
+    if (!isMyTurn || state.isSimulating) return;
+
+    const cueBallNow = ballsRef.current.find((b) => b.id === 0 && !b.pocketed);
+    if (!cueBallNow) return;
+
+    const clientX = "touches" in e ? e.touches[0].clientX : e.clientX;
+    const clientY = "touches" in e ? e.touches[0].clientY : e.clientY;
+    const coords = getCanvasCoords(clientX, clientY);
+    if (!coords) return;
+
+    // Hit Testing
+    // In Slider mode, we can click anywhere on table to set aim
+    // In Drag mode, must click near ball
+    let shouldStart = false;
+
+    if (controlMode === "slider") {
+      shouldStart = true;
+    } else {
+      const dx = coords.x - cueBallNow.x;
+      const dy = coords.y - cueBallNow.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < BALL_RADIUS * 5) {
+        shouldStart = true;
+      }
+    }
+
+    if (shouldStart) {
+      e.preventDefault();
+      setIsAiming(true);
+      if (controlMode === "slider") setIsDraggingAngle(true);
+      updateAim(clientX, clientY);
+    }
+  };
+
   const handleMouseMove = (e: React.MouseEvent | React.TouchEvent) => {
     if (!isAiming) return;
+
+    // In Slider mode, only update if dragging angle
+    if (controlMode === "slider" && !isDraggingAngle) return;
+
     e.preventDefault();
 
     const clientX = "touches" in e ? e.touches[0].clientX : e.clientX;
@@ -710,20 +934,43 @@ export default function BilliardUI({ game: baseGame }: GameUIProps) {
   };
 
   const handleShoot = useCallback(() => {
-    if (aimPowerRef.current > 0.05) {
-      // Clear trails before new shot
-      trailsRef.current.clear();
-      game.shoot(aimAngleRef.current, aimPowerRef.current);
+    // Only auto-shoot on release if in Drag mode
+    if (controlModeRef.current === "drag") {
+      if (aimPowerRef.current > 0.05) {
+        trailsRef.current.clear();
+        game.shoot(aimAngleRef.current, aimPowerRef.current);
+        setIsAiming(false);
+        setAimPower(0);
+        setMousePos(null);
+      } else {
+        // Cancel shot if power too low
+        setIsAiming(false);
+        setMousePos(null);
+      }
+    } else {
+      // Slider mode: Release just stops dragging angle
+      setIsDraggingAngle(false);
     }
-    setIsAiming(false);
-    setAimPower(0);
-    setMousePos(null);
   }, [game]);
+
+  const handleSliderShoot = () => {
+    if (aimPower > 0.05) {
+      trailsRef.current.clear();
+      game.shoot(aimAngle, aimPower);
+      // Reset aiming state
+      setIsAiming(false);
+      // Keep power as is? Or reset? Usually reset for next shot
+      setAimPower(0);
+      setMousePos(null);
+    }
+  };
 
   // Document-level event listeners for mouse/touch up (works even outside canvas)
   useEffect(() => {
     const handleDocumentMouseMove = (e: MouseEvent) => {
       if (!isAimingRef.current) return;
+      if (controlModeRef.current === "slider" && !isDraggingAngleRef.current)
+        return;
       updateAim(e.clientX, e.clientY);
     };
 
@@ -735,6 +982,9 @@ export default function BilliardUI({ game: baseGame }: GameUIProps) {
     const handleDocumentTouchMove = (e: TouchEvent) => {
       if (!isAimingRef.current) return;
       if (e.touches.length > 0) {
+        if (!isAimingRef.current) return;
+        if (controlModeRef.current === "slider" && !isDraggingAngleRef.current)
+          return;
         updateAim(e.touches[0].clientX, e.touches[0].clientY);
       }
     };
@@ -744,7 +994,9 @@ export default function BilliardUI({ game: baseGame }: GameUIProps) {
       handleShoot();
     };
 
-    document.addEventListener("mousemove", handleDocumentMouseMove);
+    document.addEventListener("mousemove", handleDocumentMouseMove, {
+      passive: false,
+    });
     document.addEventListener("mouseup", handleDocumentMouseUp);
     document.addEventListener("touchmove", handleDocumentTouchMove, {
       passive: false,
@@ -758,6 +1010,85 @@ export default function BilliardUI({ game: baseGame }: GameUIProps) {
       document.removeEventListener("touchend", handleDocumentTouchEnd);
     };
   }, [updateAim, handleShoot]);
+
+  // Handle native touch events to allow scrolling when not aiming
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const onTouchStart = (e: TouchEvent) => {
+      // Check turn and state
+      if (!game.isMyTurn() || game.getState().isSimulating) return;
+
+      const cueBallNow = ballsRef.current.find(
+        (b) => b.id === 0 && !b.pocketed,
+      );
+      if (!cueBallNow) return;
+
+      if (e.touches.length === 0) return;
+      const clientX = e.touches[0].clientX;
+      const clientY = e.touches[0].clientY;
+
+      // Calculate coords manually to avoid stale state in closure if not using current refs
+      // But we can use the refs we set up: scaleRef, isVerticalRef
+      const rect = canvas.getBoundingClientRect();
+      const currentScale = scaleRef.current;
+      const vertical = isVerticalRef.current;
+      const mode = controlModeRef.current;
+
+      const rawX = (clientX - rect.left) / currentScale;
+      const rawY = (clientY - rect.top) / currentScale;
+
+      let x = rawX;
+      let y = rawY;
+
+      if (vertical) {
+        x = TABLE_WIDTH - rawY;
+        y = rawX;
+      }
+
+      let shouldCapture = false;
+
+      if (mode === "slider") {
+        // Capture all touches on canvas for Slider aiming
+        shouldCapture = true;
+      } else {
+        // Drag mode: Only near ball
+        const dx = x - cueBallNow.x;
+        const dy = y - cueBallNow.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < BALL_RADIUS * 3) {
+          shouldCapture = true;
+        }
+      }
+
+      if (shouldCapture) {
+        e.preventDefault(); // STOP SCROLLING
+        setIsAiming(true);
+        if (mode === "slider") setIsDraggingAngle(true);
+        setMousePos({ x, y });
+        // Trigger initial update
+        updateAim(clientX, clientY);
+      }
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (!isAimingRef.current) return;
+      if (controlModeRef.current === "slider" && !isDraggingAngleRef.current)
+        return;
+
+      e.preventDefault(); // STOP SCROLLING while aiming
+    };
+
+    // Passive: false is CRITICAL to allow preventDefault()
+    canvas.addEventListener("touchstart", onTouchStart, { passive: false });
+    canvas.addEventListener("touchmove", onTouchMove, { passive: false });
+
+    return () => {
+      canvas.removeEventListener("touchstart", onTouchStart);
+      canvas.removeEventListener("touchmove", onTouchMove);
+    };
+  }, [game, updateAim]);
 
   const getPlayerName = (slot: 1 | 2): string => {
     const player = state.players[slot];
@@ -780,9 +1111,116 @@ export default function BilliardUI({ game: baseGame }: GameUIProps) {
       : (ti({ en: "(Stripes 9-15)", vi: "(Sọc 9-15)" }) as string);
   };
 
+  const renderGameRules = () => (
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-100 flex items-center justify-center p-4 text-left">
+      <div className="bg-slate-900 border border-slate-700 rounded-xl max-w-lg w-full max-h-[85vh] overflow-y-auto shadow-2xl relative">
+        <div className="flex justify-between sticky top-0 p-4 pr-2 bg-slate-900 border-b border-slate-800">
+          <h2 className="text-xl font-bold text-white flex items-center gap-2">
+            <BookOpen className="w-6 h-6 text-yellow-500" />
+            {ti({
+              en: "Game Rules: Billiard (8-Ball)",
+              vi: "Luật Chơi: Bi-a (8 Bóng)",
+            })}
+          </h2>
+          <button
+            onClick={() => setShowRules(false)}
+            className="p-2 hover:bg-white/10 rounded-full transition-colors text-slate-400 hover:text-white"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="p-4 space-y-6 text-slate-300 leading-relaxed font-sans text-sm md:text-base">
+          <section>
+            <h3 className="text-lg font-bold text-yellow-400 mb-2">
+              {ti({ en: "Objective", vi: "Mục tiêu" })}
+            </h3>
+            <p>
+              {ti({
+                en: "Pocket all of your assigned balls (Solids or Stripes) and then pocket the 8-Ball to win.",
+                vi: "Đưa tất cả các bi mục tiêu của bạn (bi Trơn hoặc bi Sọc) vào lỗ và cuối cùng là bi số 8 để chiến thắng.",
+              })}
+            </p>
+          </section>
+
+          <section>
+            <h3 className="text-lg font-bold text-yellow-400 mb-2">
+              {ti({ en: "Key Rules", vi: "Quy Tắc Chính" })}
+            </h3>
+            <ul className="list-disc pl-5 space-y-1">
+              <li>
+                {ti({
+                  en: "First ball pocketed determines your group (Solids 1-7 or Stripes 9-15).",
+                  vi: "Bi đầu tiên vào lỗ sẽ quyết định nhóm bi của bạn (Trơn 1-7 hoặc Sọc 9-15).",
+                })}
+              </li>
+              <li>
+                {ti({
+                  en: "You must hit your own ball group first.",
+                  vi: "Ban phải chạm vào bi thuộc nhóm của mình trước.",
+                })}
+              </li>
+              <li>
+                {ti({
+                  en: "Pocketing the wrong ball or scratching (white ball in pocket) is a foul.",
+                  vi: "Đưa nhầm bi vào lỗ hoặc làm rơi bi trắng là phạm lỗi.",
+                })}
+              </li>
+              <li>
+                <strong className="text-red-400">
+                  {ti({
+                    en: "Do NOT pocket the 8-Ball early!",
+                    vi: "KHÔNG được làm rơi bi số 8 sớm!",
+                  })}
+                </strong>{" "}
+                {ti({
+                  en: "You lose instantly if the 8-Ball enters a pocket before your other balls are cleared.",
+                  vi: "Bạn sẽ thua ngay lập tức nếu bi số 8 vào lỗ trước khi bạn dọn sạch các bi khác.",
+                })}
+              </li>
+            </ul>
+          </section>
+
+          <section>
+            <h3 className="text-lg font-bold text-yellow-400 mb-2">
+              {ti({ en: "Controls", vi: "Điều Khiển" })}
+            </h3>
+            <div className="space-y-2">
+              <div>
+                <strong className="text-blue-400">
+                  {ti({
+                    en: "Drag Mode (Default):",
+                    vi: "Chế độ Kéo (Mặc định):",
+                  })}
+                </strong>
+                <p className="ml-2 text-slate-400 text-sm">
+                  {ti({
+                    en: "Click/Touch near the cue ball and pull back to aim and set power. Release to shoot.",
+                    vi: "Nhấp/Chạm gần bi trắng và kéo về phía sau để ngắm và chỉnh lực. Thả tay để bắn.",
+                  })}
+                </p>
+              </div>
+              <div>
+                <strong className="text-blue-400">
+                  {ti({ en: "Slider Mode:", vi: "Chế độ Thanh lực:" })}
+                </strong>
+                <p className="ml-2 text-slate-400 text-sm">
+                  {ti({
+                    en: "Click anywhere to place aim stick. Use the slider below to set power, then press SHOOT.",
+                    vi: "Nhấp bất kỳ đâu để đặt gậy ngắm. Dùng thanh trượt bên dưới để chỉnh lực, sau đó bấm nút BẮN.",
+                  })}
+                </p>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <div
-      className="flex flex-col items-center gap-4 p-4 w-full max-w-4xl mx-auto"
+      className="flex flex-col items-center gap-4 p-4 w-full max-w-4xl mx-auto pb-12"
       ref={containerRef}
     >
       {/* Player List */}
@@ -848,48 +1286,44 @@ export default function BilliardUI({ game: baseGame }: GameUIProps) {
         })}
       </div>
 
-      {/* Start Game Button */}
-      {state.gamePhase === "waiting" && game.isHost && (
-        <div className="flex flex-col items-center gap-2">
-          {game.canStartGame() ? (
-            <button
-              onClick={() => game.startGame()}
-              className="px-6 py-3 bg-green-600 hover:bg-green-500 rounded-lg text-white font-medium transition-colors flex items-center gap-2"
-            >
-              <Play className="w-5 h-5" />
-              {ti({ en: "Start Game", vi: "Bắt đầu" })}
-            </button>
-          ) : (
-            <span className="text-sm text-slate-400">
-              {ti({
-                en: "Waiting for opponent to join...",
-                vi: "Đang chờ đối thủ tham gia...",
-              })}
-            </span>
-          )}
-        </div>
-      )}
-
-      {/* New Game Button - for host during play */}
-      {state.gamePhase === "playing" && game.isHost && !state.isSimulating && (
+      {/* Game Controls */}
+      <div className="flex gap-4">
+        {/* Rotation Toggle */}
         <button
-          onClick={() => game.requestReset()}
-          className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-slate-300 text-sm font-medium transition-colors flex items-center gap-2"
+          className="flex items-center justify-center p-3 bg-slate-700 hover:bg-slate-600 rounded-full transition-colors"
+          onClick={() => setIsVertical(!isVertical)}
         >
-          <RefreshCcw className="w-4 h-4" />
-          {ti({ en: "New Game", vi: "Ván mới" })}
+          <RotateCw className="w-5 h-5 text-white" />
+          <span className="text-white text-sm ml-2">
+            {ti({ en: "Rotate table", vi: "Xoay bàn" })}
+          </span>
         </button>
-      )}
 
-      {/* Waiting message for non-host */}
-      {state.gamePhase === "waiting" && !game.isHost && (
-        <div className="text-sm text-slate-400">
-          {ti({
-            en: "Waiting for host to start the game...",
-            vi: "Đang chờ chủ phòng bắt đầu...",
-          })}
-        </div>
-      )}
+        {/* Control Mode Toggle */}
+        <button
+          className="flex items-center justify-center p-3 bg-slate-700 hover:bg-slate-600 rounded-full transition-colors"
+          onClick={() =>
+            setControlMode(controlMode === "drag" ? "slider" : "drag")
+          }
+          title={
+            ti({
+              en: "Switch Control Mode",
+              vi: "Đổi kiểu hiện khiển",
+            }) as string
+          }
+        >
+          {controlMode === "drag" ? (
+            <Hand className="w-5 h-5 text-white" />
+          ) : (
+            <MousePointer2 className="w-5 h-5 text-white" />
+          )}
+          <span className="text-white text-sm ml-2">
+            {controlMode === "drag"
+              ? ti({ en: "Drag Mode", vi: "Kéo thả" })
+              : ti({ en: "Slider Mode", vi: "Thanh lực" })}
+          </span>
+        </button>
+      </div>
 
       {/* Turn Indicator */}
       {state.gamePhase === "playing" && !state.winner && (
@@ -901,10 +1335,15 @@ export default function BilliardUI({ game: baseGame }: GameUIProps) {
           ) : isMyTurn ? (
             <span className="text-green-400 flex items-center gap-2">
               <Target className="w-5 h-5" />
-              {ti({
-                en: "Your turn! Click near the cue ball and drag to aim.",
-                vi: "Lượt của bạn! Nhấp vào bóng trắng và kéo để ngắm.",
-              })}
+              {controlMode === "drag"
+                ? ti({
+                    en: "Your turn! Click near the cue ball and drag to aim.",
+                    vi: "Lượt của bạn! Nhấp vào bóng trắng và kéo để ngắm.",
+                  })
+                : ti({
+                    en: "Your turn! Click to aim, set power, then Shoot.",
+                    vi: "Lượt của bạn! Chọn hướng, chỉnh lực, rồi bấm BẮN.",
+                  })}
             </span>
           ) : (
             <span>
@@ -920,7 +1359,7 @@ export default function BilliardUI({ game: baseGame }: GameUIProps) {
       )}
 
       {/* Billiard Table Canvas */}
-      <div className="relative bg-slate-900 p-2 rounded-xl shadow-2xl overflow-hidden">
+      <div className="relative bg-slate-800 p-2 rounded-xl shadow-2xl overflow-hidden">
         <canvas
           ref={canvasRef}
           width={TABLE_WIDTH * scale}
@@ -929,13 +1368,78 @@ export default function BilliardUI({ game: baseGame }: GameUIProps) {
           style={{ touchAction: "none" }}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
-          onTouchStart={handleMouseDown}
-          onTouchMove={handleMouseMove}
         />
+
+        {/* Unified Overlay: Waiting or Winner */}
+        {(state.winner || state.gamePhase === "waiting") && (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/60 backdrop-blur-[2px] rounded-lg animate-fade-in">
+            {/* WINNER STATE */}
+            {state.winner && (
+              <>
+                <div className="text-3xl font-bold text-green-400 mb-6 drop-shadow-lg animate-bounce">
+                  🏆 {getPlayerName(state.winner)}{" "}
+                  {ti({ en: "wins!", vi: "thắng!" })}
+                </div>
+                {game.isHost ? (
+                  <button
+                    onClick={() => game.requestReset()}
+                    className="px-8 py-4 bg-green-600 hover:bg-green-500 rounded-full text-white font-bold text-lg transition-transform hover:scale-105 flex items-center gap-2 shadow-lg"
+                  >
+                    <RefreshCcw className="w-6 h-6" />
+                    {ti({ en: "Play Again", vi: "Chơi lại" })}
+                  </button>
+                ) : (
+                  <div className="text-slate-300 animate-pulse">
+                    {ti({
+                      en: "Waiting for host to restart...",
+                      vi: "Đang chờ chủ phòng chơi lại...",
+                    })}
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* WAITING STATE */}
+            {!state.winner && state.gamePhase === "waiting" && (
+              <>
+                {game.isHost ? (
+                  game.canStartGame() ? (
+                    <button
+                      onClick={() => game.startGame()}
+                      className="px-8 py-4 bg-green-600 hover:bg-green-500 rounded-full text-white font-bold text-lg transition-transform hover:scale-105 flex items-center gap-2 shadow-lg"
+                    >
+                      <Play className="w-6 h-6" />
+                      {ti({ en: "Start Game", vi: "Bắt đầu" })}
+                    </button>
+                  ) : (
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="text-lg text-slate-300 font-medium">
+                        {ti({
+                          en: "Waiting for opponent...",
+                          vi: "Đang chờ đối thủ...",
+                        })}
+                      </div>
+                    </div>
+                  )
+                ) : (
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="w-12 h-12 border-4 border-slate-500 border-t-white rounded-full animate-spin" />
+                    <div className="text-lg text-slate-300 font-medium">
+                      {ti({
+                        en: "Waiting for host to start...",
+                        vi: "Đang chờ chủ phòng bắt đầu...",
+                      })}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Power Indicator */}
-      {isAiming && (
+      {/* Power Controls (Dynamic based on Mode) */}
+      {isAiming && controlMode === "drag" && (
         <div className="w-full max-w-xs">
           <div className="text-sm text-gray-400 mb-1">
             {ti({ en: "Power", vi: "Lực" })}: {Math.round(aimPower * 100)}%
@@ -952,37 +1456,86 @@ export default function BilliardUI({ game: baseGame }: GameUIProps) {
         </div>
       )}
 
-      {/* Winner display */}
-      {state.winner && (
-        <div className="text-center">
-          <div className="text-2xl font-bold text-green-400 mb-4">
-            🏆 {getPlayerName(state.winner)} {ti({ en: "wins!", vi: "thắng!" })}
+      {/* Slider Mode Controls */}
+      {controlMode === "slider" && (
+        // state.gamePhase === "playing" &&
+        // !state.isSimulating &&
+        // !state.winner &&
+        <div className="flex flex-col gap-3 w-full max-w-md p-4 bg-slate-800/80 rounded-xl backdrop-blur-sm border border-slate-700">
+          <div className="flex items-center justify-between">
+            <span className="text-white font-medium">
+              {ti({ en: "Power", vi: "Lực bắn" })}
+            </span>
+            <span
+              className={`font-bold ${aimPower > 0.8 ? "text-red-500" : aimPower > 0.5 ? "text-yellow-500" : "text-green-500"}`}
+            >
+              {Math.round(aimPower * 100)}%
+            </span>
           </div>
+
+          <input
+            type="range"
+            min="0"
+            max="1"
+            step="0.01"
+            value={aimPower}
+            disabled={!isMyTurn || state.isSimulating}
+            onChange={(e) => {
+              setAimPower(parseFloat(e.target.value));
+              // If we change power, ensuring we enter aiming mode if not already
+              if (!isAiming) setIsAiming(true);
+            }}
+            className="w-full h-4 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+          />
+
           <button
-            onClick={() => game.requestReset()}
-            className="px-6 py-3 bg-slate-700 hover:bg-slate-600 rounded-lg text-white font-medium transition-colors flex items-center gap-2 mx-auto"
+            onClick={handleSliderShoot}
+            disabled={aimPower < 0.05 || !isMyTurn || state.isSimulating}
+            className={`
+                    w-full py-3 rounded-lg font-bold text-lg shadow-lg transition-all
+                    disabled:bg-slate-600 disabled:text-slate-400 disabled:cursor-not-allowed
+                    bg-red-600 hover:bg-red-500 text-white hover:scale-[1.02] active:scale-[0.98]
+                `}
           >
-            <RefreshCcw className="w-5 h-5" />
-            {ti({ en: "Play Again", vi: "Chơi lại" })}
+            {ti({ en: "SHOOT!", vi: "BẮN!" })}
           </button>
         </div>
       )}
 
-      {/* Ball Legend */}
-      <div className="flex flex-wrap gap-2 justify-center text-xs text-gray-400">
-        <span className="flex items-center gap-1">
-          <span className="w-3 h-3 rounded-full bg-yellow-500" />{" "}
-          {ti({ en: "Solids (1-7)", vi: "Trơn (1-7)" })}
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="w-3 h-3 rounded-full border-2 border-yellow-500 bg-white" />{" "}
-          {ti({ en: "Stripes (9-15)", vi: "Sọc (9-15)" })}
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="w-3 h-3 rounded-full bg-black border border-gray-600" />{" "}
-          {ti({ en: "8-Ball", vi: "Bóng 8" })}
-        </span>
-      </div>
+      {/* new game button */}
+      {game.isHost && state.gamePhase !== "waiting" && (
+        <button
+          onClick={async () => {
+            if (
+              await showConfirm(
+                ts({
+                  en: "Are you sure you want to reset the game?",
+                  vi: "Bạn có chắc chắn muốn chơi lại không?",
+                }),
+                ts({
+                  en: "Reset game",
+                  vi: "Chơi lại",
+                }),
+              )
+            )
+              game.requestReset();
+          }}
+          className="flex items-center gap-2 px-4 py-2 bg-slate-600 hover:bg-slate-500 rounded-full "
+        >
+          <RefreshCcw className="w-4 h-4" />
+          {ti({ en: "New game", vi: "Chơi lại" })}
+        </button>
+      )}
+
+      {/* Rules Button */}
+      <button
+        onClick={() => setShowRules(true)}
+        className="fixed bottom-4 right-4 p-3 bg-slate-700 hover:bg-slate-600 rounded-full text-yellow-500 transition-colors z-40 shadow-lg border border-slate-500"
+        title={ts({ en: "Game Rules", vi: "Luật chơi" })}
+      >
+        <BookOpen size={24} />
+      </button>
+      {showRules && createPortal(renderGameRules(), document.body)}
     </div>
   );
 }
