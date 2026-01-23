@@ -604,14 +604,25 @@ export default class Thirteen extends BaseGame<ThirteenState> {
     const lastCombo = this.state.lastCombination;
 
     if (!lastCombo) {
-      // Starting new trick - play lowest single
-      return [hand[0]];
+      // Starting new trick - find best opening play
+      return this.findBestOpeningPlay(hand);
     }
 
     // Try to find matching combination that beats the last
     switch (lastCombo.type) {
-      case CombinationType.SINGLE:
+      case CombinationType.SINGLE: {
+        // Special case: Chopping a 2
+        if (lastCombo.cards[0].rank === Rank.TWO) {
+          // Check for 3 consecutive pairs
+          const threePairs = this.findThreeConsecutivePairs(hand);
+          if (threePairs.length > 0) return threePairs[0];
+
+          // Check for Four of a Kind
+          const fourKinds = this.findFourOfAKind(hand);
+          if (fourKinds.length > 0) return fourKinds[0];
+        }
         return this.findBeatingSingle(hand, lastCombo);
+      }
       case CombinationType.PAIR:
         return this.findBeatingPair(hand, lastCombo);
       case CombinationType.TRIPLE:
@@ -700,6 +711,153 @@ export default class Thirteen extends BaseGame<ThirteenState> {
       groups[card.rank].push(card);
     }
     return groups;
+  }
+
+  // ============== Bot Strategy ==============
+
+  private findBestOpeningPlay(hand: Card[]): Card[] {
+    // 0. Special strong combinations (instant win in some variations, or just very strong)
+
+    // Check for 3 consecutive pairs (Sám cô) - can chop 2s
+    const threePairs = this.findThreeConsecutivePairs(hand);
+    if (threePairs.length > 0) {
+      // Prioritize this as it's very strong
+      return threePairs[0];
+    }
+
+    // Check for Four of a Kind (Tứ quý) - can chop 2s
+    const fourOfKinds = this.findFourOfAKind(hand);
+    if (fourOfKinds.length > 0) {
+      return fourOfKinds[0];
+    }
+
+    // 1. Try to find straights (longest first)
+    const straights = this.findStraights(hand);
+    if (straights.length > 0) {
+      // Prefer the longest straight
+      straights.sort((a, b) => b.length - a.length);
+      return straights[0];
+    }
+
+    // 2. Try to find triples
+    const triples = this.findTriples(hand);
+    if (triples.length > 0) {
+      // Play lowest triple
+      return triples[0];
+    }
+
+    // 3. Try to find pairs
+    const pairs = this.findPairs(hand);
+    if (pairs.length > 0) {
+      // Play lowest pair
+      return pairs[0];
+    }
+
+    // 4. Default to lowest single
+    return [hand[0]];
+  }
+
+  private findThreeConsecutivePairs(hand: Card[]): Card[][] {
+    const pairs = this.findPairs(hand);
+    if (pairs.length < 3) return [];
+
+    const consecutivePairs: Card[][] = [];
+
+    // Sort pairs by rank
+    pairs.sort((a, b) => a[0].rank - b[0].rank);
+
+    for (let i = 0; i <= pairs.length - 3; i++) {
+      // Check if p1, p2, p3 are consecutive
+      const p1 = pairs[i];
+      const p2 = pairs[i + 1];
+      const p3 = pairs[i + 2];
+
+      if (p2[0].rank === p1[0].rank + 1 && p3[0].rank === p2[0].rank + 1) {
+        // Found 3 consecutive pairs
+        // Don't include 2s in 3 consecutive pairs usually (rule variation?)
+        // Standard rule: 3 consecutive pairs cannot contain 2.
+        if (p3[0].rank !== Rank.TWO) {
+          consecutivePairs.push([...p1, ...p2, ...p3]);
+        }
+      }
+    }
+
+    return consecutivePairs;
+  }
+
+  private findFourOfAKind(hand: Card[]): Card[][] {
+    const grouped = this.groupByRank(hand);
+    const quads: Card[][] = [];
+    for (const cards of Object.values(grouped)) {
+      if (cards.length === 4) {
+        quads.push(cards);
+      }
+    }
+    // Sort by rank
+    return quads.sort((a, b) => a[0].rank - b[0].rank);
+  }
+
+  private findStraights(hand: Card[]): Card[][] {
+    const straights: Card[][] = [];
+    // Filter out 2s (cannot be in straight)
+    const validCards = hand.filter((c) => c.rank !== Rank.TWO);
+    // Sort by rank
+    validCards.sort((a, b) => a.rank - b.rank);
+
+    let currentSequence: Card[] = [];
+
+    for (let i = 0; i < validCards.length; i++) {
+      const card = validCards[i];
+
+      if (currentSequence.length === 0) {
+        currentSequence.push(card);
+        continue;
+      }
+
+      const last = currentSequence[currentSequence.length - 1];
+      if (card.rank === last.rank + 1) {
+        currentSequence.push(card);
+      } else if (card.rank === last.rank) {
+        // Same rank, ignore for current straight build
+        continue;
+      } else {
+        // Break in sequence
+        if (currentSequence.length >= 3) {
+          straights.push([...currentSequence]);
+        }
+        currentSequence = [card];
+      }
+    }
+
+    if (currentSequence.length >= 3) {
+      straights.push([...currentSequence]);
+    }
+
+    return straights;
+  }
+
+  private findTriples(hand: Card[]): Card[][] {
+    const grouped = this.groupByRank(hand);
+    const triples: Card[][] = [];
+    for (const cards of Object.values(grouped)) {
+      if (cards.length === 3) {
+        triples.push(cards);
+      }
+    }
+    // Sort by rank (lowest first)
+    return triples.sort((a, b) => a[0].rank - b[0].rank);
+  }
+
+  private findPairs(hand: Card[]): Card[][] {
+    const grouped = this.groupByRank(hand);
+    const pairs: Card[][] = [];
+    for (const cards of Object.values(grouped)) {
+      if (cards.length === 2) {
+        pairs.push(cards);
+      }
+    }
+    // Sort by rank (lowest first)
+    return pairs.sort((a, b) => a[0].rank - b[0].rank);
   }
 
   // ============== Public API ==============
