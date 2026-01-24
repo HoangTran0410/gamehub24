@@ -1,6 +1,7 @@
 import { io, Socket } from "socket.io-client";
 import { useUserStore } from "../stores/userStore";
 import { useSocketStore } from "../stores/socketStore";
+import { useRoomStore } from "../stores/roomStore";
 
 let socket: Socket | null = null;
 
@@ -49,6 +50,28 @@ export const initSocket = (): Socket => {
   socket.on("connect", () => {
     console.log("✅ Connected to server:", socket?.id);
     useSocketStore.getState().setIsConnected(true);
+
+    // Auto-rejoin room if exists
+    const { currentRoom } = useRoomStore.getState();
+    if (currentRoom) {
+      console.log("🔄 Attempting to auto-rejoin room:", currentRoom.id);
+      socket?.emit(
+        "room:join",
+        {
+          roomId: currentRoom.id,
+          password: currentRoom.password,
+        },
+        (response: any) => {
+          if (response.success) {
+            console.log("✅ Auto-rejoined room:", response.room.name);
+          } else {
+            console.warn("⚠️ Failed to auto-rejoin room:", response.error);
+            // Optional: clear room if failed?
+            // useRoomStore.getState().leaveRoom();
+          }
+        },
+      );
+    }
   });
 
   socket.on("disconnect", (reason) => {

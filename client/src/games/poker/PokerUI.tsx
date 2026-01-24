@@ -440,6 +440,7 @@ export default function PokerUI({ game: baseGame }: GameUIProps) {
                 isActiveTurn={state.currentTurnIndex === p.actualIndex}
                 isHost={isHost}
                 gamePhase={state.gamePhase}
+                winnerIds={state.winnerIds}
                 bestHandName={
                   (myIndex === p.actualIndex || state.gamePhase === "ended") &&
                   p.slot.hand.length > 0
@@ -467,9 +468,9 @@ export default function PokerUI({ game: baseGame }: GameUIProps) {
       </div>
 
       {/* Controls - Fixed Bottom Bar */}
-      <div className="w-full shrink-0 p-2 bg-slate-900/80 backdrop-blur-md border-t border-slate-700 flex flex-col @md:flex-row items-center justify-between gap-4 z-20">
+      <div className="w-full shrink-0 p-2 bg-slate-900/80 backdrop-blur-md border-t border-slate-700 flex flex-col items-center justify-between gap-4 z-20">
         {/* Game State Info */}
-        <div className="flex flex-row flex-wrap items-center gap-4 text-xs text-slate-400">
+        <div className="flex flex-row flex-wrap items-center justify-center gap-4 text-xs text-slate-400">
           <span>
             {ti({ en: "Phase: ", vi: "Giai đoạn: " })}
             {ti(GAME_PHASES[state.gamePhase])}
@@ -783,6 +784,7 @@ function PlayerSlot({
   isActiveTurn,
   isHost,
   gamePhase,
+  winnerIds,
   onAddBot,
   onRemove,
   bestHandName,
@@ -794,6 +796,7 @@ function PlayerSlot({
   isActiveTurn: boolean;
   isHost: boolean;
   gamePhase: string;
+  winnerIds: string[];
   onAddBot: () => void;
   onRemove: () => void;
   bestHandName?: React.ReactNode;
@@ -803,6 +806,7 @@ function PlayerSlot({
   const { ti } = useLanguage();
 
   const isEmpty = player.id === null;
+  const isWinner = player.id && winnerIds.includes(player.id);
 
   if (isEmpty) {
     return (
@@ -833,7 +837,8 @@ function PlayerSlot({
             relative flex flex-col items-center justify-center p-2 rounded-xl transition-all duration-300
             ${isActiveTurn ? "bg-yellow-500/20 ring-2 ring-yellow-400 scale-105" : "bg-slate-900/60 ring-1 ring-slate-700"}
             ${player.hasFolded ? "opacity-50 grayscale" : ""}
-            w-[90px] @md:w-[160px]
+            ${isWinner ? "animate-bounce" : ""}
+            w-[90px] @md:w-[140px]
         `}
     >
       {/* Dealer Button */}
@@ -871,7 +876,6 @@ function PlayerSlot({
                     <CardDisplay
                       card={card}
                       size="md"
-                      compact
                       className="animate-in fade-in slide-in-from-bottom-8 duration-500 ease-out"
                     />
                   </div>
@@ -935,7 +939,7 @@ function CardDisplay({
   card,
   size = "md",
   className = "",
-  compact = false,
+  compact = true,
 }: {
   card: Card;
   size?: "sm" | "md" | "lg";

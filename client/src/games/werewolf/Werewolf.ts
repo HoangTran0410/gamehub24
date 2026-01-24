@@ -169,26 +169,31 @@ export default class Werewolf extends BaseGame<WerewolfState> {
 
     let stateChanged = false;
 
-    // 1. Handle new players joining
-    players.forEach((roomPlayer) => {
-      // Check if player is already in a slot
-      const existingSlot = this.state.players.find(
-        (p) => p.id === roomPlayer.id,
-      );
+    // 1. Sync existing slots with room players
+    this.state.players.forEach((slot) => {
+      if (slot.id && !slot.isBot) {
+        // Check if player is still in the room
+        const roomPlayer = players.find((p) => p.id === slot.id);
 
-      if (!existingSlot) {
-        // Find first empty slot
-        const emptySlot = this.state.players.find((p) => p.id === null);
-        if (emptySlot) {
-          emptySlot.id = roomPlayer.id;
-          emptySlot.username = roomPlayer.username;
-          // Reset other fields if necessary
-          emptySlot.isBot = false;
-          emptySlot.role = null;
+        if (roomPlayer) {
+          // Update username if changed
+          if (slot.username !== roomPlayer.username) {
+            slot.username = roomPlayer.username;
+            stateChanged = true;
+          }
+        } else {
+          // Player left the room, clear the slot
+          slot.id = null;
+          slot.username = `Slot ${this.state.players.indexOf(slot) + 1}`;
+          slot.role = null;
+          slot.isBot = false;
           stateChanged = true;
         }
       }
     });
+
+    // NOTE: We do NOT auto-add players to empty slots anymore.
+    // Players must manually click "Join" (handled by JOIN_SLOT action)
 
     if (stateChanged) {
       this.syncState();

@@ -226,8 +226,8 @@ export default function GameContainer({
     <div className="relative w-full h-full">
       <GameUI game={gameInstance} currentUserId={userId} />
 
-      {/* Optimization Toggle (Host Only) */}
-      {gameInstance.isHost && (
+      {/* Optimization Toggle (Host + Dev Only) */}
+      {gameInstance.isHost && false && (
         <button
           onClick={toggleOptimization}
           className={`absolute -top-2 -right-2 p-2 rounded-full shadow-lg transition-all z-50 opacity-10 hover:opacity-100 ${

@@ -34,7 +34,7 @@ export default function TicTacToeUI({ game: baseGame }: GameUIProps) {
       playerId: game.userId,
     };
 
-    game.makeMove(action);
+    game.makeAction(action);
   };
 
   const onSwitchTurn = () => {

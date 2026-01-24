@@ -3,15 +3,70 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.RoomManager = void 0;
 class RoomManager {
     constructor() {
+        this.DATA_DIR = "data";
+        this.SAVE_FILE = "rooms.json";
         this.rooms = new Map();
         this.playerRoomMap = new Map(); // userId -> roomId
         this.roomSettings = new Map();
+        this.ensureDataDir();
+    }
+    ensureDataDir() {
+        const fs = require("fs");
+        const path = require("path");
+        const dirPath = path.resolve(this.DATA_DIR);
+        if (!fs.existsSync(dirPath)) {
+            fs.mkdirSync(dirPath, { recursive: true });
+        }
+    }
+    saveState() {
+        try {
+            const fs = require("fs");
+            const path = require("path");
+            const filePath = path.resolve(this.DATA_DIR, this.SAVE_FILE);
+            const data = {
+                rooms: Array.from(this.rooms.entries()),
+                roomSettings: Array.from(this.roomSettings.entries()),
+            };
+            fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+        }
+        catch (error) {
+            console.error("[RoomManager] Error saving state:", error);
+        }
+    }
+    loadState() {
+        try {
+            const fs = require("fs");
+            const path = require("path");
+            const filePath = path.resolve(this.DATA_DIR, this.SAVE_FILE);
+            if (!fs.existsSync(filePath)) {
+                return;
+            }
+            const fileContent = fs.readFileSync(filePath, "utf-8");
+            const data = JSON.parse(fileContent);
+            if (data.rooms) {
+                this.rooms = new Map(data.rooms);
+            }
+            if (data.roomSettings) {
+                this.roomSettings = new Map(data.roomSettings);
+            }
+            // Rebuild playerRoomMap
+            this.playerRoomMap.clear();
+            this.rooms.forEach((room) => {
+                room.players.forEach((p) => this.playerRoomMap.set(p.id, room.id));
+                room.spectators.forEach((p) => this.playerRoomMap.set(p.id, room.id));
+            });
+            console.log(`[RoomManager] Restored ${this.rooms.size} rooms from ${filePath}`);
+        }
+        catch (error) {
+            console.error("[RoomManager] Error loading state:", error);
+        }
     }
     getRoomSettings(roomId) {
         return this.roomSettings.get(roomId);
     }
     saveRoomSettings(roomId, settings) {
         this.roomSettings.set(roomId, settings);
+        this.saveState();
     }
     createRoom(data, userId, username, socketId, customRoomId) {
         const roomId = customRoomId || username;
@@ -44,6 +99,7 @@ class RoomManager {
             gameType: room.gameType,
             name: room.name,
         });
+        this.saveState();
         console.log(`[RoomManager] Created room ${roomId} for user ${userId} (${username})`);
         return room;
     }
@@ -72,6 +128,7 @@ class RoomManager {
             socketId,
         });
         this.playerRoomMap.set(userId, roomId);
+        this.saveState();
         console.log(`[RoomManager] User ${userId} (${username}) joined room ${roomId}`);
         return { success: true, room };
     }
@@ -97,6 +154,7 @@ class RoomManager {
             room.spectators.forEach((p) => this.playerRoomMap.delete(p.id));
             // Remove all chats from room
             console.log(`[RoomManager] Deleted room ${roomId} (Host Left: ${wasHost}, Empty: ${room.players.length === 0})`);
+            this.saveState();
             return { roomId, wasHost };
         }
         // If host left but room not empty, assign new host
@@ -107,6 +165,7 @@ class RoomManager {
         //     `[RoomManager] Reassigned host for room ${roomId} to ${room.players[0].username}`,
         //   );
         // }
+        this.saveState();
         return { roomId, room, wasHost };
     }
     getRoom(roomId) {
@@ -136,6 +195,12 @@ class RoomManager {
                 spectator.socketId = socketId;
             }
         }
+        // Update socket ID is just in-memory ephemeral state, usually.
+        // However, if we restart, the old socket IDs are useless anyway.
+        // So we don't strictly *need* to persist this update.
+        // But saving state here keeps the file in sync if we want to debug.
+        // Let's debounce or skip saving for just socket updates to reduce IO load.
+        // For now, I'll Skip saving for socket update as it changes often and is invalidated on restart.
     }
     moveSpectatorToPlayer(roomId, userId) {
         const room = this.rooms.get(roomId);
@@ -149,6 +214,7 @@ class RoomManager {
         const player = room.spectators[spectatorIndex];
         room.spectators.splice(spectatorIndex, 1);
         room.players.push(player);
+        this.saveState();
         return { success: true, room };
     }
     movePlayerToSpectator(roomId, userId) {
@@ -165,6 +231,7 @@ class RoomManager {
         const player = room.players[playerIndex];
         room.players.splice(playerIndex, 1);
         room.spectators.push(player);
+        this.saveState();
         return { success: true, room };
     }
     kickUser(roomId, userId) {
@@ -180,6 +247,7 @@ class RoomManager {
         if (playerIndex !== -1) {
             room.players.splice(playerIndex, 1);
             this.playerRoomMap.delete(userId);
+            this.saveState();
             return { success: true, room };
         }
         // Check spectators
@@ -187,6 +255,7 @@ class RoomManager {
         if (spectatorIndex !== -1) {
             room.spectators.splice(spectatorIndex, 1);
             this.playerRoomMap.delete(userId);
+            this.saveState();
             return { success: true, room };
         }
         return { success: false, error: "User not found in room" };

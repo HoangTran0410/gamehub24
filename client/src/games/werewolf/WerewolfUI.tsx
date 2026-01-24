@@ -47,6 +47,7 @@ import {
 } from "lucide-react";
 import { useAlertStore } from "../../stores/alertStore";
 import useLanguage from "../../stores/languageStore";
+import { useRoomStore } from "../../stores/roomStore";
 import { useUserStore } from "../../stores/userStore";
 
 const getPhaseIcon = (phase: GamePhase) => {
@@ -913,6 +914,8 @@ const SetupPhase: React.FC<{
 }> = ({ game, state, currentUserId, isHost }) => {
   const { ti } = useLanguage();
   const username = useUserStore((state) => state.username);
+  const room = useRoomStore((state) => state.currentRoom);
+  const isRoomPlayer = room?.players.some((p) => p.id === currentUserId);
   const [selectedRole, setSelectedRole] = useState<WerewolfRole | "">("");
 
   const mySlotIndex = state.players.findIndex((p) => p.id === currentUserId);
@@ -974,18 +977,25 @@ const SetupPhase: React.FC<{
             ) : (
               <div className="py-2">
                 {mySlotIndex === -1 ? (
-                  <button
-                    onClick={() =>
-                      game.requestJoinSlot(
-                        index,
-                        username || `Guest ${Date.now().toString().slice(-4)}`,
-                      )
-                    }
-                    className="text-xs bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 px-3 py-1.5 rounded-lg flex items-center justify-center gap-1"
-                  >
-                    <User className="w-3 h-3 inline" />{" "}
-                    {ti({ vi: "Tham gia", en: "Join" })}
-                  </button>
+                  isRoomPlayer ? (
+                    <button
+                      onClick={() =>
+                        game.requestJoinSlot(
+                          index,
+                          username ||
+                            `Guest ${Date.now().toString().slice(-4)}`,
+                        )
+                      }
+                      className="text-xs bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 px-3 py-1.5 rounded-lg flex items-center justify-center gap-1"
+                    >
+                      <User className="w-3 h-3 inline" />{" "}
+                      {ti({ vi: "Tham gia", en: "Join" })}
+                    </button>
+                  ) : (
+                    <span className="text-xs text-white/40">
+                      {ti({ vi: "Khách", en: "Spectator" })}
+                    </span>
+                  )
                 ) : isHost ? (
                   <button
                     onClick={() => game.requestAddBot(index)}

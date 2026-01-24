@@ -1,5 +1,8 @@
 import { Socket } from "socket.io-client";
-import { produce } from "immer";
+import { produce, setAutoFreeze } from "immer";
+
+// Disable auto-freezing to allow mutable state in games
+setAutoFreeze(false);
 import { useRoomStore, type Player } from "../stores/roomStore";
 
 export interface GameAction {
@@ -263,6 +266,8 @@ export abstract class BaseGame<T> {
         this.stateVersion = data.version;
       }
 
+      console.log("new state", newState);
+
       this.setState(newState);
     }
   }
@@ -343,8 +348,9 @@ function getHash(obj: any): string {
 
 function getDiff(oldObj: any, newObj: any): any {
   if (oldObj === newObj) return undefined;
+  if (oldObj === null || newObj === null) return newObj; // Handle null explicitly (typeof null === 'object')
   if (typeof oldObj !== typeof newObj) return newObj;
-  if (typeof newObj !== "object" || newObj === null) return newObj;
+  if (typeof newObj !== "object") return newObj;
 
   const diff: any = {};
   let changed = false;
@@ -353,6 +359,7 @@ function getDiff(oldObj: any, newObj: any): any {
   for (const key in newObj) {
     // If key not in oldObj, it's new
     if (!(key in oldObj)) {
+      if (newObj[key] === undefined) continue;
       diff[key] = newObj[key];
       changed = true;
       continue;

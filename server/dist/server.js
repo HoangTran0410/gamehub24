@@ -34,6 +34,7 @@ const io = new socket_io_1.Server(httpServer, {
 });
 // Initialize managers
 const roomManager = new RoomManager_1.RoomManager();
+roomManager.loadState();
 const chatHistory = new Map();
 function formatUpTime(diff) {
     const seconds = Math.floor(diff / 1000);
@@ -68,6 +69,12 @@ io.on("connection", (socket) => {
     console.log(`🟢 User connected: ${username} (${userId}) [${socket.id}]`);
     // Update socket ID if user reconnects
     roomManager.updatePlayerSocketId(userId, socket.id);
+    // Check if user is in a room and rejoin if necessary
+    const currentRoom = roomManager.getRoomByUserId(userId);
+    if (currentRoom) {
+        socket.join(currentRoom.id);
+        console.log(`🔄 User ${username} rejoined room ${currentRoom.id} (socket updated)`);
+    }
     // heartbeat
     socket.on("heartbeat", () => { });
     // Get online users count
