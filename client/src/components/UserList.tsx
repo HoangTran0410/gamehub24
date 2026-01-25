@@ -110,7 +110,7 @@ export default function UserList() {
   };
 
   return (
-    <div className="h-full overflow-y-auto p-4 space-y-4 min-h-[80vh]">
+    <div className="h-full overflow-y-auto p-4 space-y-4 min-h-[80vh] md:min-h-[200px]">
       {showShareModal &&
         createPortal(
           <ShareModal

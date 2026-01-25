@@ -18,20 +18,19 @@ import { useRoomStore } from "../stores/roomStore";
 import { useChatStore } from "../stores/chatStore";
 import { useUserStore } from "../stores/userStore";
 import { useAlertStore } from "../stores/alertStore";
-import useLanguage from "../stores/languageStore";
+import useLanguage, { Language } from "../stores/languageStore";
 import { getSocket } from "../services/socket";
-import { getAllGames, type GameCategory } from "../games/registry";
+import { getAllGames } from "../games/registry";
 import { useGameFavorites } from "../hooks/useGameFavorites";
 import GameCategoryFilter from "../components/GameCategoryFilter";
 import { type Room } from "../stores/roomStore";
-import { EmojiFloatingLayer } from "../components/room/EmojiFloatingLayer";
-import { EmojiToolbar } from "../components/room/EmojiToolbar";
-import { useFloatingEmojis } from "../hooks/useFloatingEmojis";
+import EmojiToolbar from "../components/EmojiToolbar";
 import SidePanel from "../components/SidePanel";
 import ChatPanel from "../components/ChatPanel";
 import UserList from "../components/UserList";
 import GameContainer from "../games/GameContainer";
 import ShareModal from "../components/ShareModal";
+import type { GameCategory } from "../constants";
 
 export default function RoomPage() {
   const { roomId } = useParams<{ roomId: string }>();
@@ -70,8 +69,6 @@ export default function RoomPage() {
   const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
   const [showUserTooltip, setShowUserTooltip] = useState(false);
 
-  // Floating Emojis
-  const floatingEmojis = useFloatingEmojis();
   const game = useMemo(
     () => getAllGames().find((g) => g.id === currentRoom?.gameType),
     [currentRoom?.gameType],
@@ -416,7 +413,7 @@ export default function RoomPage() {
         />
       )}
 
-      <EmojiFloatingLayer emojis={floatingEmojis} />
+      <EmojiToolbar />
 
       <div className="min-h-screen bg-background-primary flex flex-col">
         {/* Room Header */}
@@ -467,9 +464,6 @@ export default function RoomPage() {
                           ? "bg-white/5 hover:bg-white/10 cursor-pointer px-2 py-1 rounded transition-colors text-primary"
                           : "text-text-muted cursor-default"
                       }`}
-                      title={
-                        isHost ? ts({ en: "Change game", vi: "Đổi game" }) : ""
-                      }
                     >
                       {game?.icon ? (
                         <game.icon className="w-3.5 h-3.5 md:w-4 md:h-4" />
@@ -526,34 +520,24 @@ export default function RoomPage() {
                       onClick={() => setShowLanguageDropdown(false)}
                     />
                     <div className="absolute right-0 top-full mt-2 w-40 bg-slate-800 border border-white/10 rounded-xl shadow-xl overflow-hidden z-50 animate-fadeIn">
-                      <button
-                        onClick={() => {
-                          setLanguage("en");
-                          setShowLanguageDropdown(false);
-                        }}
-                        className={`w-full px-4 py-3 text-left hover:bg-white/5 transition-colors flex items-center gap-2 ${
-                          language === "en"
-                            ? "text-primary font-medium"
-                            : "text-text-secondary"
-                        }`}
-                      >
-                        <span className="text-lg">🇺🇸</span>
-                        English
-                      </button>
-                      <button
-                        onClick={() => {
-                          setLanguage("vi");
-                          setShowLanguageDropdown(false);
-                        }}
-                        className={`w-full px-4 py-3 text-left hover:bg-white/5 transition-colors flex items-center gap-2 ${
-                          language === "vi"
-                            ? "text-primary font-medium"
-                            : "text-text-secondary"
-                        }`}
-                      >
-                        <span className="text-lg">🇻🇳</span>
-                        Tiếng Việt
-                      </button>
+                      {[
+                        { value: Language.en, label: "🇺🇸 English" },
+                        { value: Language.vi, label: "🇻🇳 Tiếng Việt" },
+                      ].map((lang) => (
+                        <button
+                          onClick={() => {
+                            setLanguage(lang.value);
+                            setShowLanguageDropdown(false);
+                          }}
+                          className={`w-full px-4 py-3 text-left hover:bg-white/5 transition-colors flex items-center gap-2 ${
+                            language === lang.value
+                              ? "text-primary font-medium"
+                              : "text-text-secondary"
+                          }`}
+                        >
+                          <span className="text-lg">{lang.label}</span>
+                        </button>
+                      ))}
                     </div>
                   </>
                 )}
@@ -651,7 +635,6 @@ export default function RoomPage() {
               <GameContainer
                 onShowChangeGameModal={() => setShowChangeGameModal(true)}
               />
-              <EmojiToolbar />
             </div>
 
             {/* Resize Handle (Desktop Only) */}
@@ -703,7 +686,7 @@ export default function RoomPage() {
         </main>
 
         <footer className="p-4 shrink-0">
-          <p className="text-text-muted text-xs">
+          <p className="text-text-muted text-xs text-center">
             &copy; {new Date().getFullYear()} GameHub24. Made with ❤️ by{" "}
             <span className="text-primary">
               <a
@@ -849,92 +832,96 @@ function ChangeGameModal({
       onClick={onClose}
     >
       <div
-        className="bg-background-secondary border border-white/10 rounded-2xl p-4 max-w-2xl w-full max-h-[85vh] overflow-y-auto shadow-2xl mx-4 animate-scaleIn relative flex flex-col"
+        className="bg-background-secondary border border-white/10 rounded-2xl p-4 max-w-2xl w-full shadow-2xl mx-4 animate-scaleIn relative flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 p-1 hover:bg-white/10 rounded-lg transition-colors text-text-secondary z-10"
-        >
-          <X className="w-5 h-5" />
-        </button>
+        <div className="flex items-center justify-between">
+          <button
+            onClick={onClose}
+            className="absolute top-4 right-4 p-1 hover:bg-white/10 rounded-lg transition-colors text-text-secondary z-10"
+          >
+            <X className="w-5 h-5" />
+          </button>
 
-        <h3 className="text-2xl font-display text-text-primary mb-6">
-          {ti({ en: "Change Game", vi: "Đổi game" })}
-        </h3>
-
-        <div className="mb-6">
-          <GameCategoryFilter
-            selectedCategory={selectedCategory}
-            onSelectCategory={setSelectedCategory}
-            favoritesCount={favoritesCount}
-          />
+          <h3 className="text-2xl font-display text-text-primary mb-3">
+            {ti({ en: "Change Game", vi: "Đổi game" })}
+          </h3>
         </div>
 
-        {gamesToShow.length <= 0 && (
-          <p className="text-text-secondary text-center w-full">
-            {ti({ en: "No games found", vi: "Không tìm thấy game" })}
-          </p>
-        )}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {gamesToShow.map((game) => {
-            const Icon = game.icon;
-            const isSelected = currentRoom.gameType === game.id;
-            return (
-              <div key={game.id} className="relative group">
-                <button
-                  onClick={(e) => toggleFavorite(game.id, e)}
-                  className={`absolute top-2 right-2 p-1.5 rounded-full transition-all duration-200 z-10 ${
-                    favorites.includes(game.id)
-                      ? "text-yellow-500 bg-yellow-500/10 hover:bg-yellow-500/20"
-                      : "text-text-muted hover:text-yellow-500 hover:bg-white/5 md:opacity-0 group-hover:opacity-100"
-                  }`}
-                  title={ts({
-                    en: "Toggle Favorite",
-                    vi: "Đánh dấu yêu thích",
-                  })}
-                >
-                  <Star
-                    className={`w-4 h-4 ${favorites.includes(game.id) ? "fill-current" : ""}`}
-                  />
-                </button>
+        <div className="flex-1 max-h-[80vh] overflow-y-auto">
+          <div className="mb-6">
+            <GameCategoryFilter
+              selectedCategory={selectedCategory}
+              onSelectCategory={setSelectedCategory}
+              favoritesCount={favoritesCount}
+            />
+          </div>
 
-                <button
-                  onClick={() => onChangeGame(game.id)}
-                  disabled={!game.isAvailable || isSelected}
-                  className={`flex items-center gap-4 p-4 rounded-xl border transition-all text-left w-full ${
-                    isSelected
-                      ? "bg-primary/20 border-primary cursor-default"
-                      : !game.isAvailable
-                        ? "opacity-50 cursor-not-allowed border-white/5 bg-white/5"
-                        : "bg-white/5 border-white/10 hover:border-primary/50 hover:bg-white/10 cursor-pointer"
-                  }`}
-                >
-                  <div
-                    className={`p-3 rounded-lg ${
+          {gamesToShow.length <= 0 && (
+            <p className="text-text-secondary text-center w-full">
+              {ti({ en: "No games found", vi: "Không tìm thấy game" })}
+            </p>
+          )}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {gamesToShow.map((game) => {
+              const Icon = game.icon;
+              const isSelected = currentRoom.gameType === game.id;
+              return (
+                <div key={game.id} className="relative group">
+                  <button
+                    onClick={(e) => toggleFavorite(game.id, e)}
+                    className={`absolute top-2 right-2 p-1.5 rounded-full transition-all duration-200 z-10 ${
+                      favorites.includes(game.id)
+                        ? "text-yellow-500 bg-yellow-500/10 hover:bg-yellow-500/20"
+                        : "text-text-muted hover:text-yellow-500 hover:bg-white/5 md:opacity-0 group-hover:opacity-100"
+                    }`}
+                    title={ts({
+                      en: "Toggle Favorite",
+                      vi: "Đánh dấu yêu thích",
+                    })}
+                  >
+                    <Star
+                      className={`w-4 h-4 ${favorites.includes(game.id) ? "fill-current" : ""}`}
+                    />
+                  </button>
+
+                  <button
+                    onClick={() => onChangeGame(game.id)}
+                    disabled={!game.isAvailable || isSelected}
+                    className={`flex items-center gap-4 p-4 rounded-xl border transition-all text-left w-full ${
                       isSelected
-                        ? "bg-primary text-white"
-                        : "bg-white/10 text-primary"
+                        ? "bg-primary/20 border-primary cursor-default"
+                        : !game.isAvailable
+                          ? "opacity-50 cursor-not-allowed border-white/5 bg-white/5"
+                          : "bg-white/5 border-white/10 hover:border-primary/50 hover:bg-white/10 cursor-pointer"
                     }`}
                   >
-                    <Icon className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <h4
-                      className={`font-bold ${
-                        isSelected ? "text-primary" : "text-text-primary"
+                    <div
+                      className={`p-3 rounded-lg ${
+                        isSelected
+                          ? "bg-primary text-white"
+                          : "bg-white/10 text-primary"
                       }`}
                     >
-                      {ti(game.name)}
-                    </h4>
-                    <p className="text-xs text-text-secondary line-clamp-2 opacity-50">
-                      {ti(game.description)}
-                    </p>
-                  </div>
-                </button>
-              </div>
-            );
-          })}
+                      <Icon className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h4
+                        className={`font-bold ${
+                          isSelected ? "text-primary" : "text-text-primary"
+                        }`}
+                      >
+                        {ti(game.name)}
+                      </h4>
+                      <p className="text-xs text-text-secondary line-clamp-2 opacity-50">
+                        {ti(game.description)}
+                      </p>
+                    </div>
+                  </button>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
     </div>

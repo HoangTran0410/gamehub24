@@ -8,16 +8,26 @@ export interface ChatMessage {
   message: string;
   timestamp: number;
   type: "user" | "system";
+  temp?: boolean;
 }
 
 interface ChatStore {
+  onlineCount: number;
+  setOnlineCount: (count: number) => void;
   messages: ChatMessage[];
+  isGlobalChatOpen: boolean;
+  setGlobalChatOpen: (isOpen: boolean) => void;
   addMessage: (message: ChatMessage) => void;
   clearMessages: () => void;
   setMessages: (messages: ChatMessage[]) => void;
 }
 
 export const useChatStore = create<ChatStore>((set) => ({
+  onlineCount: 0,
+  setOnlineCount: (count) => set({ onlineCount: count }),
+  isGlobalChatOpen: false,
+  setGlobalChatOpen: (isOpen) => set({ isGlobalChatOpen: isOpen }),
+
   messages: [],
   addMessage: (message) =>
     set((state) => {

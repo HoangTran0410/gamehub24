@@ -9,6 +9,7 @@ import {
   Gamepad2,
   LogIn,
   Star,
+  MessageSquare,
 } from "lucide-react";
 import { useRoomStore } from "../stores/roomStore";
 import { useUserStore } from "../stores/userStore";
@@ -16,30 +17,29 @@ import { useSocketStore } from "../stores/socketStore";
 import { useAlertStore } from "../stores/alertStore";
 import useLanguage from "../stores/languageStore";
 import { getSocket } from "../services/socket";
-import {
-  getAllGames,
-  type GameCategory,
-  CATEGORY_CONFIG,
-} from "../games/registry";
+import { getAllGames } from "../games/registry";
 import type { Room } from "../stores/roomStore";
 import SettingsModal from "../components/SettingsModal";
 import { useGameFavorites } from "../hooks/useGameFavorites";
 import GameCategoryFilter from "../components/GameCategoryFilter";
 import RecentUpdates from "../components/RecentUpdates";
+import { CATEGORY_CONFIG, type GameCategory } from "../constants";
+import { useChatStore } from "../stores/chatStore";
 
 export default function Lobby() {
+  const { ti, ts } = useLanguage();
   const { username } = useUserStore();
   const { isConnected } = useSocketStore();
   const { publicRooms, setPublicRooms } = useRoomStore();
-  const { ti, ts } = useLanguage();
+  const { setGlobalChatOpen, onlineCount, setOnlineCount } = useChatStore();
+  const { favorites, toggleFavorite, favoritesCount } = useGameFavorites();
+
   const [showCreateModal, setShowCreateModal] = useState<string | null>(null);
   const [showJoinModal, setShowJoinModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
-  const [onlineCount, setOnlineCount] = useState(0);
   const [selectedCategory, setSelectedCategory] = useState<
     GameCategory | "favorites" | null
   >(null);
-  const { favorites, toggleFavorite, favoritesCount } = useGameFavorites();
   const [isAnimating, setIsAnimating] = useState(false);
 
   const gamesToShow = useMemo(
@@ -98,7 +98,7 @@ export default function Lobby() {
     setTimeout(() => {
       setSelectedCategory(category);
       setIsAnimating(false);
-    }, 300);
+    }, 150);
   };
 
   return (
@@ -187,7 +187,7 @@ export default function Lobby() {
             </div>
 
             {/* Online Users Count */}
-            <div className="mt-6 flex items-center justify-center">
+            <div className="mt-6 flex items-center justify-center gap-2">
               <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-green-500/10 border border-green-500/30 rounded-full text-green-400 text-sm font-medium">
                 <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
                 {onlineCount}{" "}
@@ -196,10 +196,20 @@ export default function Lobby() {
                   vi: "người chơi online",
                 })}
               </div>
+
+              {/* Chat Toggle Button (Desktop Only) */}
+              <button
+                onClick={() => setGlobalChatOpen(true)}
+                className="hidden md:flex items-center gap-2 px-4 py-1.5 bg-blue-500/10 border border-blue-500/30 rounded-full text-blue-400 text-sm font-medium hover:bg-blue-500/20 transition-colors cursor-pointer"
+              >
+                {/* <div className="w-2 h-2 rounded-full bg-blue-500" /> */}
+                <MessageSquare className="w-5 h-5 text-primary" />
+                {ti({ en: "Open Chat", vi: "Mở Chat" })}
+              </button>
             </div>
 
             {/* Updates Section */}
-            <RecentUpdates />
+            <RecentUpdates onOpenGame={setShowCreateModal} />
           </div>
 
           {/* Games Gallery */}
@@ -221,7 +231,7 @@ export default function Lobby() {
             </div>
 
             <div
-              className={`grid grid-cols-2 md:grid-cols-3 md:gap-6 gap-3 transition-opacity duration-300 ${
+              className={`grid grid-cols-2 md:grid-cols-3 md:gap-6 gap-3 transition-opacity duration-150 ${
                 isAnimating ? "opacity-0" : "opacity-100"
               }`}
             >
@@ -373,7 +383,7 @@ export default function Lobby() {
       )}
 
       <footer className="p-4">
-        <p className="text-text-muted text-xs">
+        <p className="text-text-muted text-xs text-center">
           &copy; {new Date().getFullYear()} GameHub24. Made with ❤️ by{" "}
           <span className="text-primary">
             <a
@@ -535,24 +545,27 @@ function CreateRoomModal({
 
   const allGames = useMemo(() => getAllGames(), []);
 
+  const selectedGame = useMemo(() => {
+    return allGames.find((g) => g.id === gameType) || allGames[0];
+  }, [gameType]);
+
   const handleCreate = () => {
     const socket = getSocket();
     if (!socket || !isConnected)
       return showAlert("Socket not connected", { type: "error" });
 
-    const game = allGames.find((g) => g.id === gameType) || allGames[0];
-    if (!game) return showAlert("Game not found", { type: "error" });
+    if (!selectedGame) return showAlert("Game not found", { type: "error" });
 
-    console.log(game);
+    console.log(selectedGame);
 
     socket.emit(
       "room:create",
       {
         name: roomName.trim() || username,
-        gameType: game.id,
+        gameType: selectedGame.id,
         isPublic,
         password: requirePassword ? password : undefined,
-        maxPlayers: game.maxPlayers,
+        maxPlayers: selectedGame.maxPlayers,
       },
       (response: { success: boolean; room?: Room; error?: string }) => {
         if (response.success && response.room) {
@@ -599,7 +612,7 @@ function CreateRoomModal({
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 animate-fadeIn">
-      <div className="bg-background-secondary border border-white/10 rounded-2xl p-8 max-w-md w-full shadow-2xl mx-4">
+      <div className="bg-background-secondary border border-white/10 rounded-2xl p-8 max-w-md w-full shadow-2xl mx-4 text-center">
         <h2 className="font-display text-2xl text-text-primary mb-6">
           {ti({ en: "Create Room", vi: "Tạo Phòng" })}
         </h2>
@@ -638,6 +651,14 @@ function CreateRoomModal({
                 </option>
               ))}{" "}
             </select>
+
+            {selectedGame && (
+              <div className="mt-2 text-center">
+                <p className="text-sm text-text-muted">
+                  {ts(selectedGame.description)}
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Public/Private */}
@@ -654,7 +675,7 @@ function CreateRoomModal({
               </span>
             </label>
             {isPublic && (
-              <label className="text-xs text-left text-slate-400">
+              <label className="text-xs text-text-muted">
                 {ti({
                   en: "Everyone can see your public room",
                   vi: "Ai cũng có thể thấy phòng công khai của bạn",

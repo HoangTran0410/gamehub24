@@ -38,6 +38,24 @@ const io = new Server(httpServer, {
 const roomManager = new RoomManager();
 roomManager.loadState();
 const chatHistory: Map<string, ChatMessage[]> = new Map();
+const globalChatHistory: ChatMessage[] = [];
+const spamMap = new Map<string, { count: number; lastMessageTime: number }>();
+const SPAM_WINDOW_MS = 5000;
+const MAX_MESSAGES_PER_WINDOW = 5;
+
+// Cleanup spam map every 10 minutes to prevent memory leaks
+setInterval(
+  () => {
+    const now = Date.now();
+    for (const [userId, userSpam] of spamMap.entries()) {
+      // If user hasn't chatted in 1 minute, remove from map
+      if (now - userSpam.lastMessageTime > 60000) {
+        spamMap.delete(userId);
+      }
+    }
+  },
+  10 * 60 * 1000,
+);
 
 function formatUpTime(diff: number) {
   const seconds = Math.floor(diff / 1000);
@@ -238,6 +256,9 @@ io.on("connection", (socket: Socket) => {
         } else {
           // Room was deleted, notify all
           console.log(`🗑️  Room deleted: ${result.roomId}`);
+
+          // Remove chat history
+          chatHistory.delete(result.roomId);
 
           if (result.wasHost) {
             io.to(result.roomId).emit("room:deleted", {
@@ -529,15 +550,17 @@ io.on("connection", (socket: Socket) => {
       };
 
       // Store in history
-      if (!chatHistory.has(data.roomId)) {
-        chatHistory.set(data.roomId, []);
-      }
-      const history = chatHistory.get(data.roomId)!;
-      history.push(message);
+      if (!data.temp) {
+        if (!chatHistory.has(data.roomId)) {
+          chatHistory.set(data.roomId, []);
+        }
+        const history = chatHistory.get(data.roomId)!;
+        history.push(message);
 
-      // Keep last 50 messages
-      if (history.length > 50) {
-        history.shift();
+        // Keep last 50 messages
+        if (history.length > 50) {
+          history.shift();
+        }
       }
 
       // Broadcast to room
@@ -556,6 +579,72 @@ io.on("connection", (socket: Socket) => {
       console.error("Error getting chat history:", error);
       callback?.([]);
     }
+  });
+
+  // Delete chat history - host only
+  socket.on("chat:history:delete", (data: { roomId: string }) => {
+    try {
+      if (roomManager.getRoom(data.roomId)?.ownerId !== userId) return;
+      chatHistory.delete(data.roomId);
+
+      io.to(data.roomId).emit("chat:history:delete");
+    } catch (error) {
+      console.error("Error deleting chat history:", error);
+    }
+  });
+
+  // GLOBAL CHAT EVENTS
+  socket.on(
+    "global:chat",
+    (data: Omit<ChatMessage, "id" | "timestamp" | "roomId">) => {
+      try {
+        const now = Date.now();
+        const userSpam = spamMap.get(userId) || {
+          count: 0,
+          lastMessageTime: 0,
+        };
+
+        // Reset count if window passed
+        if (now - userSpam.lastMessageTime > SPAM_WINDOW_MS) {
+          userSpam.count = 0;
+        }
+
+        // Check limit
+        if (userSpam.count >= MAX_MESSAGES_PER_WINDOW) {
+          socket.emit("global:chat:error", {
+            message: "You are chatting too fast. Please slow down.",
+          });
+          return;
+        }
+
+        // Update spam tracker
+        userSpam.count++;
+        userSpam.lastMessageTime = now;
+        spamMap.set(userId, userSpam);
+
+        const message: ChatMessage = {
+          ...data,
+          id: uuidv4(),
+          roomId: "global",
+          timestamp: now,
+        };
+
+        // Store in history
+        globalChatHistory.push(message);
+        if (globalChatHistory.length > 20) {
+          globalChatHistory.shift();
+        }
+
+        // Broadcast to all
+        io.emit("global:chat", message);
+      } catch (error) {
+        console.error("Error sending global chat message:", error);
+      }
+    },
+  );
+
+  socket.on("global:chat:history", (callback) => {
+    callback?.(globalChatHistory);
   });
 
   // DISCONNECT

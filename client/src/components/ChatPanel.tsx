@@ -5,10 +5,11 @@ import { useRoomStore } from "../stores/roomStore";
 import { useUserStore } from "../stores/userStore";
 import { getSocket } from "../services/socket";
 import useLanguage from "../stores/languageStore";
+import { PRESET_EMOJIS } from "../constants";
 
 export default function ChatPanel() {
   const [message, setMessage] = useState("");
-  const { messages, addMessage } = useChatStore();
+  const { messages, addMessage, clearMessages } = useChatStore();
   const { currentRoom } = useRoomStore();
   const { userId, username } = useUserStore();
   const { ti } = useLanguage();
@@ -21,11 +22,19 @@ export default function ChatPanel() {
 
     const handleMessage = (msg: ChatMessage) => {
       console.log("chatpanel", msg);
-      addMessage(msg);
+      if (!PRESET_EMOJIS.includes(msg.message)) addMessage(msg);
+    };
+
+    const handleHistoryDelete = () => {
+      console.log("history deleted");
+      clearMessages();
     };
 
     // Listen for chat messages
     socket.on("chat:message", handleMessage);
+
+    // Listen for chat history delete
+    socket.on("chat:history:delete", handleHistoryDelete);
 
     // Request chat history when joining room
     if (currentRoom?.id) {
@@ -40,6 +49,7 @@ export default function ChatPanel() {
 
     return () => {
       socket.off("chat:message", handleMessage);
+      socket.off("chat:history:delete", handleHistoryDelete);
     };
   }, [socket, addMessage, currentRoom?.id]);
 
@@ -74,7 +84,7 @@ export default function ChatPanel() {
   };
 
   return (
-    <div className="flex flex-col h-full w-full min-h-[70vh]">
+    <div className="flex flex-col h-full w-full min-h-[400px] md:min-h-[100px]">
       {/* Messages */}
       <div
         className="flex-1 p-4 overflow-y-auto space-y-3 max-h-[70vh]"

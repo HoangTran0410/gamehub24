@@ -26,6 +26,7 @@ export interface ChatMessage {
   message: string;
   timestamp: number;
   type: "user" | "system";
+  temp?: boolean;
 }
 
 export interface CreateRoomData {

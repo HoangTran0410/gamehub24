@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDown, ChevronUp, Star } from "lucide-react";
+import { ChevronDown, ChevronUp, ExternalLink, Play, Star } from "lucide-react";
 import useLanguage from "../stores/languageStore";
 import { formatTimeAgo } from "../utils";
 
@@ -16,12 +16,20 @@ const updates: {
   en: string;
   vi: string;
   timestamp: number;
+  gameId?: string;
   link?: string;
 }[] = [
   {
+    type: "new",
+    en: "New feature: Global chat",
+    vi: "Chức năng mới: Chat tổng",
+    timestamp: 1769360911300,
+  },
+  {
     type: "fix",
-    en: "New game mode: Draw & Guess",
-    vi: "Chế độ game mới: Vẽ & Đoán",
+    en: "New game: Draw & Guess",
+    vi: "Game mới: Vẽ & Đoán",
+    gameId: "draw",
     timestamp: 1769331150518,
   },
   {
@@ -31,27 +39,26 @@ const updates: {
     timestamp: 1769331150517,
   },
   {
-    type: "fix",
-    en: "Optimize server bandwidth",
-    vi: "Tối ưu băng thông server",
-    timestamp: 1769274000000,
-  },
-  {
     type: "new",
     en: "New game: Poker",
     vi: "Game mới: Xì tố (Poker)",
+    gameId: "poker",
     timestamp: 1769274000000,
   },
   {
     type: "hot",
     en: "Welcome to Gamehub24",
-    vi: "Chào mừng đến với Gamehub24",
+    vi: "Ra mắt Gamehub24",
     timestamp: 1769101200000,
     link: "https://www.facebook.com/groups/indiehackervn/posts/2062449634542598",
   },
 ];
 
-export default function RecentUpdates() {
+export default function RecentUpdates({
+  onOpenGame,
+}: {
+  onOpenGame: (gameId: string) => void;
+}) {
   const { ti } = useLanguage();
   const [showUpdates, setShowUpdates] = useState(false);
 
@@ -67,7 +74,7 @@ export default function RecentUpdates() {
           </div>
           <div className="text-left">
             <h3 className="text-sm font-medium text-text-primary">
-              {ti({ en: "Last update: ", vi: "Cập nhật cuối: " })}
+              {ti({ en: "Last update: ", vi: "Cập nhật mới: " })}
               <span className="text-text-secondary">
                 {ti(
                   formatTimeAgo(Math.max(...updates.map((u) => u.timestamp))),
@@ -114,10 +121,17 @@ export default function RecentUpdates() {
                     href={update.link}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-blue-500 hover:underline"
+                    className="text-blue-500 hover:underline cursor-pointer"
                   >
-                    {ti(update)}
+                    {ti(update)} <ExternalLink className="w-4 h-4 inline" />
                   </a>
+                ) : update.gameId ? (
+                  <button
+                    onClick={() => onOpenGame(update.gameId || "")}
+                    className="text-blue-500 hover:underline cursor-pointer"
+                  >
+                    {ti(update)} <Play className="w-4 h-4 inline" />
+                  </button>
                 ) : (
                   ti(update)
                 )}

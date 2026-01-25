@@ -1,12 +1,8 @@
 import { useMemo } from "react";
 import { Filter, Star } from "lucide-react";
 import useLanguage from "../stores/languageStore";
-import {
-  getAllCategories,
-  getAllGames,
-  CATEGORY_CONFIG,
-  type GameCategory,
-} from "../games/registry";
+import { getAllCategories, getAllGames } from "../games/registry";
+import { CATEGORY_CONFIG, type GameCategory } from "../constants";
 
 interface GameCategoryFilterProps {
   selectedCategory: GameCategory | "favorites" | null;

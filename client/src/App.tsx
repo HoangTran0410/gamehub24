@@ -8,6 +8,7 @@ import AlertModal from "./components/AlertModal";
 import UsernameModal from "./components/UsernameModal";
 import Lobby from "./pages/Lobby";
 import Room from "./pages/Room";
+import GlobalChat from "./components/GlobalChat";
 
 export default function App() {
   const [isChecking, setIsChecking] = useState(true);
@@ -107,6 +108,8 @@ export default function App() {
         <Route path="/room/:roomId" element={<Room />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+
+      <GlobalChat />
     </HashRouter>
   );
 }

@@ -65,12 +65,12 @@
     transform: translateY(0) scale(0.5);
     opacity: 0;
   }
-  10% {
+  15% {
     opacity: 1;
-    transform: translateY(-10vh) scale(1.2);
+    transform: translateY(-15vh) scale(1.5);
   }
   100% {
-    transform: translateY(-80vh) scale(1);
+    transform: translateY(-100vh) scale(1);
     opacity: 0;
   }
 }

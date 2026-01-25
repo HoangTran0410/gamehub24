@@ -63,7 +63,7 @@ export default function CanvasGameUI({
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const [showRules, setShowRules] = useState(false);
 
-  const { confirm: showConfirm } = useAlertStore();
+  const { show: showAlert, confirm: showConfirm } = useAlertStore();
   const { ti, ts } = useLanguage();
 
   // Track strokes we've already drawn (for animation detection)
@@ -636,15 +636,18 @@ export default function CanvasGameUI({
               <button
                 onClick={() => {
                   if (game.players.length < 2) {
-                    showConfirm(
+                    showAlert(
                       ts({
                         en: "Need at least 2 players to start Draw & Guess mode!",
                         vi: "Cần ít nhất 2 người chơi để bắt đầu chế độ Vẽ & Đoán!",
                       }),
-                      ts({
-                        en: "Not enough players",
-                        vi: "Không đủ người chơi",
-                      }),
+                      {
+                        type: "warning",
+                        title: ts({
+                          en: "Not enough players",
+                          vi: "Không đủ người chơi",
+                        }),
+                      },
                     );
                     return;
                   }
