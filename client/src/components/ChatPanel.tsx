@@ -8,20 +8,24 @@ import useLanguage from "../stores/languageStore";
 
 export default function ChatPanel() {
   const [message, setMessage] = useState("");
-  const messagesEndRef = useRef<HTMLDivElement>(null);
   const { messages, addMessage } = useChatStore();
   const { currentRoom } = useRoomStore();
   const { userId, username } = useUserStore();
   const { ti } = useLanguage();
   const socket = getSocket();
 
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     if (!socket) return;
 
-    // Listen for chat messages
-    socket.on("chat:message", (msg: ChatMessage) => {
+    const handleMessage = (msg: ChatMessage) => {
+      console.log("chatpanel", msg);
       addMessage(msg);
-    });
+    };
+
+    // Listen for chat messages
+    socket.on("chat:message", handleMessage);
 
     // Request chat history when joining room
     if (currentRoom?.id) {
@@ -35,13 +39,16 @@ export default function ChatPanel() {
     }
 
     return () => {
-      socket.off("chat:message");
+      socket.off("chat:message", handleMessage);
     };
   }, [socket, addMessage, currentRoom?.id]);
 
   useEffect(() => {
     // Auto-scroll to bottom when new messages arrive
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop =
+        messagesContainerRef.current.scrollHeight;
+    }
   }, [messages]);
 
   const handleSend = () => {
@@ -67,9 +74,12 @@ export default function ChatPanel() {
   };
 
   return (
-    <div className="flex flex-col h-full w-full">
+    <div className="flex flex-col h-full w-full min-h-[70vh]">
       {/* Messages */}
-      <div className="flex-1 p-4 overflow-y-auto space-y-3 max-h-[70vh]">
+      <div
+        className="flex-1 p-4 overflow-y-auto space-y-3 max-h-[70vh]"
+        ref={messagesContainerRef}
+      >
         {messages.length === 0 && (
           <p className="text-text-muted text-sm text-center">
             {ti({ en: "No messages yet.", vi: "Không có tin nhắn" })}
@@ -86,7 +96,6 @@ export default function ChatPanel() {
             />
           ),
         )}
-        <div ref={messagesEndRef} />
       </div>
 
       {/* Input */}

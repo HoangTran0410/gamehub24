@@ -26,6 +26,7 @@
   --animate-fadeIn: fadeIn 0.3s ease-out;
   --animate-slideUp: slideUp 0.3s ease-out;
   --animate-scaleIn: scaleIn 0.2s ease-out;
+  --animate-floatUp: floatUp 4s ease-in forwards;
 }
 
 @keyframes fadeIn {
@@ -56,5 +57,20 @@
   100% {
     transform: scale(1);
     opacity: 1;
+  }
+}
+
+@keyframes floatUp {
+  0% {
+    transform: translateY(0) scale(0.5);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+    transform: translateY(-10vh) scale(1.2);
+  }
+  100% {
+    transform: translateY(-80vh) scale(1);
+    opacity: 0;
   }
 }

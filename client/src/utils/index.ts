@@ -22,3 +22,38 @@ export function randInRange(
   }
   return min + Math.random() * (max - min);
 }
+
+export function uuid() {
+  // basic js uuid
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (c) {
+    var r = (Math.random() * 16) | 0,
+      v = c == "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+export function formatTimeAgo(time: number | string): {
+  en: string;
+  vi: string;
+} {
+  const diff = new Date().getTime() - new Date(time).getTime();
+  const minutes = Math.floor(diff / 60000);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+
+  if (minutes < 1) return { en: "Just now", vi: "Vừa xong" };
+  if (minutes < 60)
+    return {
+      en: `${minutes}m ago`,
+      vi: `${minutes} phút trước`,
+    };
+  if (hours < 24)
+    return {
+      en: `${hours}h ago`,
+      vi: `${hours} giờ trước`,
+    };
+  return {
+    en: `${days}d ago`,
+    vi: `${days} ngày trước`,
+  };
+}

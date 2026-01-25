@@ -4,6 +4,9 @@ import tailwindcss from "@tailwindcss/postcss";
 
 export default defineConfig({
   plugins: [react()],
+  define: {
+    __BUILD_TIME__: Date.now(),
+  },
   css: {
     postcss: {
       plugins: [tailwindcss()],

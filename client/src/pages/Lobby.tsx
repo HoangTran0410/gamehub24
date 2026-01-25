@@ -25,6 +25,7 @@ import type { Room } from "../stores/roomStore";
 import SettingsModal from "../components/SettingsModal";
 import { useGameFavorites } from "../hooks/useGameFavorites";
 import GameCategoryFilter from "../components/GameCategoryFilter";
+import RecentUpdates from "../components/RecentUpdates";
 
 export default function Lobby() {
   const { username } = useUserStore();
@@ -196,6 +197,9 @@ export default function Lobby() {
                 })}
               </div>
             </div>
+
+            {/* Updates Section */}
+            <RecentUpdates />
           </div>
 
           {/* Games Gallery */}

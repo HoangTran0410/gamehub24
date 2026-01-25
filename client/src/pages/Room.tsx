@@ -24,6 +24,9 @@ import { getAllGames, type GameCategory } from "../games/registry";
 import { useGameFavorites } from "../hooks/useGameFavorites";
 import GameCategoryFilter from "../components/GameCategoryFilter";
 import { type Room } from "../stores/roomStore";
+import { EmojiFloatingLayer } from "../components/room/EmojiFloatingLayer";
+import { EmojiToolbar } from "../components/room/EmojiToolbar";
+import { useFloatingEmojis } from "../hooks/useFloatingEmojis";
 import SidePanel from "../components/SidePanel";
 import ChatPanel from "../components/ChatPanel";
 import UserList from "../components/UserList";
@@ -67,6 +70,8 @@ export default function RoomPage() {
   const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
   const [showUserTooltip, setShowUserTooltip] = useState(false);
 
+  // Floating Emojis
+  const floatingEmojis = useFloatingEmojis();
   const game = useMemo(
     () => getAllGames().find((g) => g.id === currentRoom?.gameType),
     [currentRoom?.gameType],
@@ -127,7 +132,6 @@ export default function RoomPage() {
         "room:join",
         { roomId },
         (response: { success: boolean; room?: any; error?: string }) => {
-          console.log("room:join response:", response);
           if (timeoutId) clearTimeout(timeoutId);
 
           if (response.success && response.room) {
@@ -412,6 +416,8 @@ export default function RoomPage() {
         />
       )}
 
+      <EmojiFloatingLayer emojis={floatingEmojis} />
+
       <div className="min-h-screen bg-background-primary flex flex-col">
         {/* Room Header */}
         <header className="z-40 glass-card border-b border-white/10 shrink-0">
@@ -645,6 +651,7 @@ export default function RoomPage() {
               <GameContainer
                 onShowChangeGameModal={() => setShowChangeGameModal(true)}
               />
+              <EmojiToolbar />
             </div>
 
             {/* Resize Handle (Desktop Only) */}

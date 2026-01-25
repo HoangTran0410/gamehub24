@@ -9,8 +9,6 @@ import UsernameModal from "./components/UsernameModal";
 import Lobby from "./pages/Lobby";
 import Room from "./pages/Room";
 
-import "./App.css";
-
 export default function App() {
   const [isChecking, setIsChecking] = useState(true);
   const [isDuplicateTab, setIsDuplicateTab] = useState(false);

@@ -381,6 +381,14 @@ function getDiff(oldObj: any, newObj: any): any {
     }
   }
 
+  // Handle Array length mismatch
+  if (Array.isArray(oldObj) && Array.isArray(newObj)) {
+    if (oldObj.length !== newObj.length) {
+      diff.length = newObj.length;
+      changed = true;
+    }
+  }
+
   return changed ? diff : undefined;
 }
 

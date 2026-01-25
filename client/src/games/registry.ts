@@ -228,23 +228,23 @@ games.set("youtube", {
   loadUI: () => import("./youtube/YouTubeWatchUI").then((m) => m.default),
 });
 
-games.set("canvas", {
-  id: "canvas",
-  name: { en: "Draw Together", vi: "Vẽ Cùng Nhau" },
+games.set("draw", {
+  id: "draw",
+  name: { en: "Draw & Guess", vi: "Vẽ & đoán" },
   description: {
-    en: "Collaborative whiteboard to draw with friends!",
-    vi: "Bảng vẽ cộng tác để vẽ cùng bạn bè!",
+    en: "Draw and guess words with friends!",
+    vi: "Vẽ và đoán từ cùng bạn bè!",
   },
   icon: Palette,
   categories: ["party", "relax"],
   minPlayers: 1,
-  maxPlayers: 10,
+  maxPlayers: 30,
   isAvailable: true,
   createGame: async (roomId, socket, isHost, userId, players) => {
-    const { default: CanvasGame } = await import("./canvas/CanvasGame");
+    const { default: CanvasGame } = await import("./draw/Draw");
     return new CanvasGame(roomId, socket, isHost, userId, players);
   },
-  loadUI: () => import("./canvas/CanvasGameUI").then((m) => m.default),
+  loadUI: () => import("./draw/DrawUI").then((m) => m.default),
 });
 
 // Register Thirteen

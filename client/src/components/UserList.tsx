@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useAlertStore } from "../stores/alertStore";
 import ShareModal from "./ShareModal";
+import { createPortal } from "react-dom";
 
 export default function UserList() {
   const { currentRoom } = useRoomStore();
@@ -109,13 +110,15 @@ export default function UserList() {
   };
 
   return (
-    <div className="h-full overflow-y-auto p-4 space-y-4">
-      {showShareModal && (
-        <ShareModal
-          roomId={currentRoom?.id || ""}
-          onClose={() => setShowShareModal(false)}
-        />
-      )}
+    <div className="h-full overflow-y-auto p-4 space-y-4 min-h-[80vh]">
+      {showShareModal &&
+        createPortal(
+          <ShareModal
+            roomId={currentRoom?.id || ""}
+            onClose={() => setShowShareModal(false)}
+          />,
+          document.body,
+        )}
 
       {/* Invite user button */}
       {currentRoom?.isOffline ? (
