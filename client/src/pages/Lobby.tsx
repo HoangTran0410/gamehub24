@@ -653,6 +653,14 @@ function CreateRoomModal({
                 {ti({ en: "Public Room", vi: "Phòng công khai" })}
               </span>
             </label>
+            {isPublic && (
+              <label className="text-xs text-left text-slate-400">
+                {ti({
+                  en: "Everyone can see your public room",
+                  vi: "Ai cũng có thể thấy phòng công khai của bạn",
+                })}
+              </label>
+            )}
           </div>
 
           {/* Require Password */}
@@ -673,9 +681,6 @@ function CreateRoomModal({
           {/* Password (if private) */}
           {requirePassword && (
             <div>
-              <label className="block text-sm font-medium text-text-secondary mb-2">
-                {ti({ en: "Password", vi: "Mật khẩu" })}
-              </label>
               <input
                 type="password"
                 value={password}

@@ -22,7 +22,7 @@ const updates: {
     type: "fix",
     en: "New game mode: Draw & Guess",
     vi: "Chế độ game mới: Vẽ & Đoán",
-    timestamp: 1769331150517,
+    timestamp: 1769331150518,
   },
   {
     type: "new",
