@@ -8,6 +8,7 @@ class RoomManager {
         this.rooms = new Map();
         this.playerRoomMap = new Map(); // userId -> roomId
         this.roomSettings = new Map();
+        this.saveTimeout = null;
         this.ensureDataDir();
     }
     ensureDataDir() {
@@ -19,6 +20,15 @@ class RoomManager {
         }
     }
     saveState() {
+        if (this.saveTimeout) {
+            return;
+        }
+        this.saveTimeout = setTimeout(() => {
+            this.persistState();
+            this.saveTimeout = null;
+        }, 30000); // Save at most once every 30 seconds
+    }
+    persistState() {
         try {
             const fs = require("fs");
             const path = require("path");
@@ -28,6 +38,7 @@ class RoomManager {
                 roomSettings: Array.from(this.roomSettings.entries()),
             };
             fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+            console.log("[RoomManager] State saved to disk");
         }
         catch (error) {
             console.error("[RoomManager] Error saving state:", error);
