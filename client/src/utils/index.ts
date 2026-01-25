@@ -45,15 +45,15 @@ export function formatTimeAgo(time: number | string): {
   if (minutes < 60)
     return {
       en: `${minutes}m ago`,
-      vi: `${minutes} phút trước`,
+      vi: `${minutes}p trước`,
     };
   if (hours < 24)
     return {
       en: `${hours}h ago`,
-      vi: `${hours} giờ trước`,
+      vi: `${hours}h trước`,
     };
   return {
     en: `${days}d ago`,
-    vi: `${days} ngày trước`,
+    vi: `${days}d trước`,
   };
 }

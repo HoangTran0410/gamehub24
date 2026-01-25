@@ -3,13 +3,12 @@ import { ChevronDown, ChevronUp, Star } from "lucide-react";
 import useLanguage from "../stores/languageStore";
 import { formatTimeAgo } from "../utils";
 
-type UpdateType = "new" | "event" | "fix" | "improve";
+type UpdateType = "new" | "hot" | "fix";
 
 const UpdateTypeColor: Record<UpdateType, string> = {
-  new: "text-blue-500",
-  event: "text-purple-500",
-  fix: "text-green-500",
-  improve: "text-yellow-500",
+  new: "text-green-500",
+  hot: "text-red-500",
+  fix: "text-yellow-500",
 };
 
 const updates: {
@@ -20,7 +19,7 @@ const updates: {
   link?: string;
 }[] = [
   {
-    type: "improve",
+    type: "fix",
     en: "New game mode: Draw & Guess",
     vi: "Chế độ game mới: Vẽ & Đoán",
     timestamp: 1769331150517,
@@ -32,7 +31,7 @@ const updates: {
     timestamp: 1769331150517,
   },
   {
-    type: "improve",
+    type: "fix",
     en: "Optimize server bandwidth",
     vi: "Tối ưu băng thông server",
     timestamp: 1769274000000,
@@ -44,7 +43,7 @@ const updates: {
     timestamp: 1769274000000,
   },
   {
-    type: "event",
+    type: "hot",
     en: "Welcome to Gamehub24",
     vi: "Chào mừng đến với Gamehub24",
     timestamp: 1769101200000,
@@ -71,12 +70,7 @@ export default function RecentUpdates() {
               {ti({ en: "Last update: ", vi: "Cập nhật cuối: " })}
               <span className="text-text-secondary">
                 {ti(
-                  formatTimeAgo(
-                    Math.max(
-                      __BUILD_TIME__,
-                      ...updates.map((u) => u.timestamp),
-                    ),
-                  ),
+                  formatTimeAgo(Math.max(...updates.map((u) => u.timestamp))),
                 )}
               </span>
             </h3>
@@ -107,14 +101,14 @@ export default function RecentUpdates() {
                 {/* <span
                   className={`w-1.5 h-1.5 rounded-full ${UpdateTypeColor[update.type]} mt-1.5 shrink-0`}
                 /> */}
-                <span className="text-text-secondary text-xs">
-                  {ti(formatTimeAgo(update.timestamp))}
-                </span>
                 <strong
-                  className={`text-xs px-1 py-0.5 rounded-full ${UpdateTypeColor[update.type]}`}
+                  className={`text-xs px-1 py-0.5 rounded-full font-mono ${UpdateTypeColor[update.type]}`}
                 >
                   {update.type}
                 </strong>{" "}
+                <span className="text-text-secondary font-mono text-xs bg-slate-500/30 px-1.5 py-0.5 rounded-full">
+                  {ti(formatTimeAgo(update.timestamp))}
+                </span>
                 {update.link ? (
                   <a
                     href={update.link}

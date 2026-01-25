@@ -5,7 +5,7 @@ import tailwindcss from "@tailwindcss/postcss";
 export default defineConfig({
   plugins: [react()],
   define: {
-    __BUILD_TIME__: Date.now(),
+    // __BUILD_TIME__: Date.now(), // Disable to prevent full re-hash
   },
   css: {
     postcss: {

@@ -688,13 +688,6 @@ function CreateRoomModal({
         </div>
 
         <div className="flex gap-2 flex-col md:flex-row justify-center items-center">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 md:py-2.5 bg-white/5 hover:bg-white/10 text-text-secondary rounded-lg transition-colors cursor-pointer"
-          >
-            {ti({ en: "Cancel", vi: "Hủy" })}
-          </button>
-
           <div className="flex gap-2">
             <button
               onClick={handleCreateOffline}
@@ -710,6 +703,12 @@ function CreateRoomModal({
               {ti({ en: "Create Online", vi: "Tạo Online" })}
             </button>
           </div>
+          <button
+            onClick={onClose}
+            className="px-4 py-2 md:py-2.5 bg-white/5 hover:bg-white/10 text-text-secondary rounded-lg transition-colors cursor-pointer"
+          >
+            {ti({ en: "Cancel", vi: "Hủy" })}
+          </button>
         </div>
       </div>
     </div>
