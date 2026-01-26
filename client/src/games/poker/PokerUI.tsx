@@ -367,7 +367,7 @@ export default function PokerUI({ game: baseGame }: GameUIProps) {
   };
 
   return (
-    <div className="flex flex-col w-full h-full min-h-[700px] bg-slate-900 text-white relative overflow-hidden select-none mb-16">
+    <div className="flex flex-col w-full h-full min-h-[700px] bg-slate-900 text-white relative overflow-hidden select-none mb-16!">
       {/* Game Area Wrapper */}
       <div className="relative flex-1 w-full shrink-0">
         {/* Table Background */}

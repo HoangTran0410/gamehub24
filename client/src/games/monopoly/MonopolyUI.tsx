@@ -958,28 +958,6 @@ export default function MonopolyUI({
             {ti(state.lastAction)}
           </p>
         )}
-
-        {isHost && (
-          <button
-            onClick={async () => {
-              if (
-                await showConfirm(
-                  ts({
-                    en: "Start a new game? Current progress will be lost.",
-                    vi: "Bắt đầu ván mới? Tiến trình hiện tại sẽ bị mất.",
-                  }),
-                  ts({ en: "New Game", vi: "Ván mới" }),
-                )
-              ) {
-                game.requestResetGame();
-              }
-            }}
-            className="px-4 py-2 bg-slate-600 hover:bg-slate-500 text-white rounded-lg transition-colors flex items-center gap-2"
-            title={ti({ en: "New Game", vi: "Ván mới" }) as string}
-          >
-            <RotateCcw className="w-4 h-4" />{" "}
-          </button>
-        )}
       </div>
     );
   };
@@ -2064,7 +2042,7 @@ export default function MonopolyUI({
 
   return (
     <div
-      className="relative flex flex-col @md:flex-row gap-2 p-0 w-full max-w-6xl mx-auto pb-16 @md:pb-0"
+      className="relative flex flex-col @md:flex-row gap-2 p-0 w-full max-w-6xl mx-auto pb-16! @md:pb-0"
       ref={gameContainerRef}
     >
       {renderTradeOffers()}
@@ -2199,9 +2177,30 @@ export default function MonopolyUI({
 
         {/* Zoom Controls (Mobile Only) */}
         <div className="flex w-full justify-end gap-2 px-2">
+          {isHost && (
+            <button
+              onClick={async () => {
+                if (
+                  await showConfirm(
+                    ts({
+                      en: "Start a new game? Current progress will be lost.",
+                      vi: "Bắt đầu ván mới? Tiến trình hiện tại sẽ bị mất.",
+                    }),
+                    ts({ en: "New Game", vi: "Ván mới" }),
+                  )
+                ) {
+                  game.requestResetGame();
+                }
+              }}
+              className="flex items-center gap-1 px-3 py-1.5 bg-slate-700 text-white rounded-lg border border-slate-600 shadow-sm text-xs font-bold active:scale-95 transition-transform cursor-pointer hover:bg-slate-600"
+            >
+              <RotateCcw className="w-3 h-3" />{" "}
+              {ti({ en: "New Game", vi: "Ván mới" })}
+            </button>
+          )}
           <button
             onClick={() => setViewMode(viewMode === "fit" ? "zoom" : "fit")}
-            className="flex items-center gap-1 px-3 py-1.5 bg-slate-700 text-white rounded-lg border border-slate-600 shadow-sm text-xs font-bold active:scale-95 transition-transform"
+            className="flex items-center gap-1 px-3 py-1.5 bg-slate-700 text-white rounded-lg border border-slate-600 shadow-sm text-xs font-bold active:scale-95 transition-transform cursor-pointer hover:bg-slate-600"
           >
             {viewMode === "fit" ? (
               <>

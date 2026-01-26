@@ -585,7 +585,7 @@ export default function LudoUI({ game: baseGame, currentUserId }: GameUIProps) {
   };
 
   return (
-    <div className="flex flex-col items-center gap-4 p-4 w-full max-w-2xl mx-auto pb-16">
+    <div className="flex flex-col items-center gap-4 p-4 w-full max-w-2xl mx-auto pb-16!">
       <style dangerouslySetInnerHTML={{ __html: animationStyles }} />
 
       {/* Token Selection Popup */}

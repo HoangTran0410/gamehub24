@@ -197,7 +197,7 @@ export default function Connect4UI({
   };
 
   return (
-    <div className="flex flex-col items-center gap-4 p-4 w-full max-w-lg mx-auto pb-12">
+    <div className="flex flex-col items-center gap-4 p-4 w-full max-w-lg mx-auto pb-16!">
       {/* Inject drop animation CSS */}
       <style dangerouslySetInnerHTML={{ __html: dropStyle }} />
 

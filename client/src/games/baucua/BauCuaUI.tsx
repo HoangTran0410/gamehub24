@@ -1512,7 +1512,7 @@ export default function BauCuaUI({
         currentBet={myBetOnSelectedSymbol}
       />
       <div
-        className={`relative w-full h-full flex flex-col @md:gap-4 gap-2 @md:p-2 pb-20 overflow-y-auto`}
+        className={`relative w-full h-full flex flex-col @md:gap-4 gap-2 @md:p-2 pb-20! overflow-y-auto`}
       >
         {/* Header */}
         {state.isMegaRound &&

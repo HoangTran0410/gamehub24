@@ -556,7 +556,7 @@ export default function UnoUI({ game: baseGame }: GameUIProps) {
   return (
     <div
       ref={containerRef}
-      className="relative flex flex-col h-full p-2 @md:p-4 gap-2 @md:gap-4 overflow-hidden"
+      className="relative flex flex-col h-full p-2 @md:p-4 gap-2 @md:gap-4 overflow-hidden pb-16!"
     >
       {/* Mobile: Top row with 3 opponents */}
       <div className="flex @md:hidden justify-center gap-2">

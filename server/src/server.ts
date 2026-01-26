@@ -513,6 +513,7 @@ io.on("connection", (socket: Socket) => {
     // But we need to attach the requester's socket ID so the host knows who to reply to.
     socket.to(data.roomId).emit("game:request_sync", {
       roomId: data.roomId,
+      targetUser: username,
       requesterSocketId: socket.id,
     });
   });
@@ -522,13 +523,15 @@ io.on("connection", (socket: Socket) => {
     "game:state:direct",
     (data: {
       roomId: string;
+      targetUser: string;
       targetSocketId: string;
       state: any;
       version: number;
     }) => {
       const json = JSON.stringify(data);
+
       console.log(
-        `game:state:direct ${data.roomId} -> ${data.targetSocketId} (${(json.length / 1024).toFixed(2)} KB) ${json}\n\n`,
+        `game:state:direct ${data.roomId} -> ${data.targetUser || data.targetSocketId} (${(json.length / 1024).toFixed(2)} KB) ${json}\n\n`,
       );
       io.to(data.targetSocketId).emit("game:state", {
         roomId: data.roomId,

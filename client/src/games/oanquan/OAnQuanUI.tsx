@@ -434,7 +434,7 @@ const OAnQuanUI: React.FC<GameUIProps> = ({
   };
 
   return (
-    <div className="flex flex-col items-center justify-center p-4 w-full max-w-4xl mx-auto touch-none @md:min-h-[500px]">
+    <div className="flex flex-col items-center justify-center p-4 w-full max-w-4xl mx-auto touch-none @md:min-h-[500px] pb-16!">
       {/* Persistent Flying Cluster Overlay */}
       {createPortal(
         <div
@@ -531,7 +531,7 @@ const OAnQuanUI: React.FC<GameUIProps> = ({
           }`}
         >
           <div className="text-lg">{getPlayerLabel(0)}</div>
-          <div className="text-2xl font-mono text-yellow-300">
+          <div className="text-2xl font-mono text-yellow-300 text-center">
             {state.playerScores[player1?.id] || 0}
           </div>
         </div>
@@ -635,7 +635,7 @@ const OAnQuanUI: React.FC<GameUIProps> = ({
           }`}
         >
           <div className="text-lg">{getPlayerLabel(1)}</div>
-          <div className="text-2xl font-mono text-yellow-300">
+          <div className="text-2xl font-mono text-yellow-300 text-center">
             {state.playerScores[player2?.id] || 0}
           </div>
 
@@ -676,7 +676,7 @@ const OAnQuanUI: React.FC<GameUIProps> = ({
   );
 };
 
-const RiceField: React.FC<{
+const RiceField = React.memo<{
   idx: number;
   count: number;
   playerOwner: number;
@@ -685,19 +685,13 @@ const RiceField: React.FC<{
   isHighlighted?: boolean;
   onClick: () => void;
   forwardRef?: (el: HTMLDivElement | null) => void;
-}> = ({
-  count,
-  isSelectable,
-  isSelected,
-  isHighlighted,
-  onClick,
-  forwardRef,
-}) => {
-  return (
-    <div
-      ref={forwardRef}
-      onClick={onClick}
-      className={`
+}>(
+  ({ count, isSelectable, isSelected, isHighlighted, onClick, forwardRef }) => {
+    return (
+      <div
+        ref={forwardRef}
+        onClick={onClick}
+        className={`
                 w-10 h-10 @md:w-16 @md:h-16 flex items-center justify-center rounded-lg border-2 relative transition-all
                 ${
                   isSelected
@@ -707,44 +701,63 @@ const RiceField: React.FC<{
                       : "border-amber-700 bg-amber-50 cursor-default opacity-90"
                 }
             `}
-    >
-      <StoneCluster count={count} isHighlighted={isHighlighted} />
-      <div className="absolute bottom-0 right-0 text-[10px] text-amber-900 p-0.5">
-        {count}
+      >
+        <StoneCluster count={count} isHighlighted={isHighlighted} />
+        <div className="absolute bottom-0 right-0 text-[10px] text-amber-900 p-0.5">
+          {count}
+        </div>
       </div>
-    </div>
-  );
-};
+    );
+  },
+  (prev, next) => {
+    return (
+      prev.count === next.count &&
+      prev.isSelectable === next.isSelectable &&
+      prev.isSelected === next.isSelected &&
+      prev.isHighlighted === next.isHighlighted &&
+      prev.playerOwner === next.playerOwner
+    );
+  },
+);
 
-const MandarinSquare: React.FC<{
+const MandarinSquare = React.memo<{
   count: number;
   onClick: () => void;
   isMandarin: boolean;
   forwardRef?: (el: HTMLDivElement | null) => void;
   left?: boolean;
   isHighlighted?: boolean;
-}> = ({ count, forwardRef, left, isHighlighted }) => {
-  return (
-    <div
-      ref={forwardRef}
-      className={`
+}>(
+  ({ count, forwardRef, left, isHighlighted }) => {
+    return (
+      <div
+        ref={forwardRef}
+        className={`
              w-16 h-24 @md:w-20 @md:h-32 flex flex-col items-center justify-center ${left ? "rounded-l-full" : "rounded-r-full"} border-2 border-amber-900
              bg-amber-400 text-white font-bold text-xl relative shadow-inner
         `}
-    >
-      <div className="text-white drop-shadow-md z-1">
-        <StoneCluster
-          count={count}
-          isBig={true}
-          isHighlighted={isHighlighted}
-        />
+      >
+        <div className="text-white drop-shadow-md z-1">
+          <StoneCluster
+            count={count}
+            isBig={true}
+            isHighlighted={isHighlighted}
+          />
+        </div>
+        <div className="absolute bottom-2 text-xs opacity-70 text-amber-900">
+          {count}
+        </div>
       </div>
-      <div className="absolute bottom-2 text-xs opacity-70 text-amber-900">
-        {count}
-      </div>
-    </div>
-  );
-};
+    );
+  },
+  (prev, next) => {
+    return (
+      prev.count === next.count &&
+      prev.isHighlighted === next.isHighlighted &&
+      prev.left === next.left
+    );
+  },
+);
 
 const StoneCluster = React.memo<{
   count: number;

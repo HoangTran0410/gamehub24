@@ -1,9 +1,10 @@
 import { Socket } from "socket.io-client";
 import { produce, setAutoFreeze } from "immer";
+import { useRoomStore, type Player } from "../stores/roomStore";
+import { createGameProxy } from "./stateProxy";
 
 // Disable auto-freezing to allow mutable state in games
 setAutoFreeze(false);
-import { useRoomStore, type Player } from "../stores/roomStore";
 
 export interface GameAction {
   // type: string;
@@ -23,14 +24,28 @@ export abstract class BaseGame<T> {
   public userId: string;
   public players: Player[];
 
-  protected state: T;
-  protected stateListeners: ((state: T) => void)[] = [];
+  private _state: T;
+  private stateListeners: ((state: T) => void)[] = [];
+  private updateScheduled: boolean = false;
+
+  protected get state(): T {
+    return this._state;
+  }
+
+  protected set state(state: T) {
+    this.setState(state);
+  }
+
+  // Auto broadcast state to all guests
+  // IMPORTANT: Only use for turn based games
+  // Realtime game (state updates every frame) should use manual state sync
+  public autoBroadcast: boolean = true;
 
   // Optimization: State syncing
-  protected lastSyncedState?: T;
-  protected lastSyncedHash?: string;
-  public isOptimizationEnabled: boolean = true;
-  protected stateVersion: number = 0;
+  private lastSyncedState?: T;
+  private lastSyncedHash?: string;
+  private isOptimizationEnabled: boolean = true;
+  private stateVersion: number = 0;
 
   constructor(
     roomId: string,
@@ -44,7 +59,10 @@ export abstract class BaseGame<T> {
     this.isHost = isHost;
     this.userId = userId;
     this.players = players;
-    this.state = this.getInitState();
+    this.players = players;
+
+    const initState = this.getInitState();
+    this._state = this.setState(initState);
 
     // Initialize sync tracking (Host only needs this, but safe to init)
     this.lastSyncedState = JSON.parse(JSON.stringify(this.state));
@@ -97,7 +115,7 @@ export abstract class BaseGame<T> {
     this.players = players;
 
     console.log(players);
-    this.syncState(); // host sync state to new players (Force full sync)
+    this.syncStateInternal();
   }
 
   public setOptimization(enabled: boolean): void {
@@ -122,15 +140,39 @@ export abstract class BaseGame<T> {
     this.stateListeners.forEach((listener) => listener({ ...state }));
   }
 
-  public syncState(forceFull = false): void {
+  protected scheduleUpdate(): void {
+    if (!this.updateScheduled) {
+      this.updateScheduled = true;
+      queueMicrotask(() => {
+        this.notifyListeners(this.state);
+        if (this.autoBroadcast) {
+          this.broadcastState();
+        }
+        this.updateScheduled = false;
+      });
+    }
+  }
+
+  private syncStateInternal(forceFull = false): void {
     this.notifyListeners(this.state);
     this.broadcastState(forceFull);
   }
 
-  public setState(state: T): void {
-    this.state = state;
-    this.notifyListeners(state);
-    this.broadcastState(); // TODO: check if this is needed
+  protected syncState(): void {
+    // this.syncStateInternal();
+    // turn off to test proxy
+  }
+
+  public setState(state: T): T {
+    this._state =
+      typeof state === "object" && state !== null
+        ? (createGameProxy(state as object, () =>
+            this.scheduleUpdate(),
+          ) as unknown as T)
+        : state;
+    this.scheduleUpdate();
+
+    return this._state;
   }
 
   public onUpdate(callback: (state: T) => void): () => void {
@@ -251,6 +293,7 @@ export abstract class BaseGame<T> {
       ) {
         console.warn(
           `Packet loss detected! Expected version ${this.stateVersion + 1} but got ${data.version}. Requesting sync...`,
+          data,
         );
         this.requestSync();
         return;
@@ -271,20 +314,24 @@ export abstract class BaseGame<T> {
   }
 
   // Host receives sync request
-  protected onRequestSync(data: { requesterSocketId?: string }): void {
+  protected onRequestSync(data: {
+    requesterSocketId?: string;
+    targetUser?: string;
+  }): void {
     if (this.isHost) {
       if (data.requesterSocketId) {
         // Optimization: Send state ONLY to the requester
         const state = this.getState();
         this.socket.emit("game:state:direct", {
           roomId: this.roomId,
+          targetUser: data.targetUser,
           targetSocketId: data.requesterSocketId,
           state: { ...state },
           version: this.stateVersion,
         });
       } else {
         // Fallback: Broadcast to everyone
-        this.syncState(true);
+        this.syncStateInternal(true);
       }
     }
   }
@@ -324,7 +371,12 @@ export abstract class BaseGame<T> {
     if (this.isHost) {
       this.socket.off("game:request_sync");
     }
+    // Clean up local listeners to prevent memory leaks or calling on unmounted components
+    this.stateListeners.length = 0;
   }
+  // Optional: Help GC
+  // this.state = null as any;
+  // this.lastSyncedState = undefined;
 }
 
 // --- Helper Functions ---

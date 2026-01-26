@@ -421,13 +421,14 @@ io.on("connection", (socket) => {
         // But we need to attach the requester's socket ID so the host knows who to reply to.
         socket.to(data.roomId).emit("game:request_sync", {
             roomId: data.roomId,
+            targetUser: username,
             requesterSocketId: socket.id,
         });
     });
     // Direct state sync (Host -> Specific User)
     socket.on("game:state:direct", (data) => {
         const json = JSON.stringify(data);
-        console.log(`game:state:direct ${data.roomId} -> ${data.targetSocketId} (${(json.length / 1024).toFixed(2)} KB) ${json}\n\n`);
+        console.log(`game:state:direct ${data.roomId} -> ${data.targetUser || data.targetSocketId} (${(json.length / 1024).toFixed(2)} KB) ${json}\n\n`);
         io.to(data.targetSocketId).emit("game:state", {
             roomId: data.roomId,
             state: data.state,

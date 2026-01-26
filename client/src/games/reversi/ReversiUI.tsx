@@ -191,7 +191,7 @@ export default function ReversiUI({
   };
 
   return (
-    <div className="flex flex-col items-center gap-4 p-4 w-full max-w-2xl mx-auto pb-14">
+    <div className="flex flex-col items-center gap-4 p-4 w-full max-w-2xl mx-auto pb-16!">
       {/* Inject flip animation CSS */}
       <style dangerouslySetInnerHTML={{ __html: flipStyle }} />
 

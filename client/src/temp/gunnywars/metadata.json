@@ -1,0 +1,5 @@
+{
+  "name": "GunnyWars",
+  "description": "A 2D artillery strategy game with destroyable terrain, multiple weapons, and AI opponents.",
+  "requestFramePermissions": []
+}

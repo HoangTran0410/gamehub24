@@ -2006,7 +2006,7 @@ const WerewolfUI: React.FC<GameUIProps> = ({ game, currentUserId = "" }) => {
 
   return (
     <div
-      className={`relative flex flex-col h-full ${currentBg} rounded-lg text-white overflow-hidden`}
+      className={`relative flex flex-col h-full ${currentBg} rounded-lg text-white overflow-hidden pb-16!`}
     >
       {/* Background Animation Curtain */}
       {animatingBg && (

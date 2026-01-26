@@ -340,7 +340,7 @@ export default function ThirteenUI({ game: baseGame }: GameUIProps) {
   };
 
   return (
-    <div className="flex flex-col h-full p-2 @md:p-4 gap-2 @md:gap-4 overflow-hidden @md:min-h-[500px] pb-10">
+    <div className="flex flex-col h-full p-2 @md:p-4 gap-2 @md:gap-4 overflow-hidden @md:min-h-[500px] pb-16!">
       {/* Mobile: Top row with 3 opponents */}
       <div className="flex @md:hidden justify-center gap-2">
         {renderPlayerSlot(1, true)}

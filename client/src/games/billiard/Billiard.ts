@@ -50,6 +50,10 @@ export default class Billiard extends BaseGame<BilliardState> {
 
   init(): void {
     super.init();
+
+    // IMPORTANT: Disable auto broadcast for billiard
+    this.autoBroadcast = false;
+
     if (this.isHost) {
       // Periodic sync every 5 seconds during simulation
       this.syncIntervalId = setInterval(() => {
@@ -65,13 +69,15 @@ export default class Billiard extends BaseGame<BilliardState> {
     this.onFrameUpdate = callback;
   }
 
-  setState(state: BilliardState): void {
+  setState(state: BilliardState): BilliardState {
     super.setState(state);
 
     // If receiving a shot action, start local physics simulation
     if (state.lastShot && state.isSimulating && !this.isHost) {
       this.runPhysicsLoop();
     }
+
+    return state;
   }
 
   onSocketGameAction(data: { action: GameAction }): void {

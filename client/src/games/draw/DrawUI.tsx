@@ -6,7 +6,6 @@ import CanvasGame, {
 } from "./Draw";
 import { WORD_LIST, type Difficulty } from "./words";
 import {
-  Palette,
   Trash2,
   Undo2,
   Send,
@@ -301,8 +300,8 @@ export default function CanvasGameUI({
     const scaleY = canvas.height / rect.height;
 
     return {
-      x: x * scaleX,
-      y: y * scaleY,
+      x: Math.floor(x * scaleX),
+      y: Math.floor(y * scaleY),
     };
   };
 
@@ -575,7 +574,7 @@ export default function CanvasGameUI({
   };
 
   return (
-    <div className="flex flex-col @2xl:flex-row gap-4 p-4 w-full h-full max-w-[1600px] mx-auto overflow-hidden pb-16">
+    <div className="flex flex-col @2xl:flex-row gap-4 @md:p-4 p-2 w-full h-full max-w-[1600px] mx-auto overflow-hidden pb-16!">
       {/* Main Canvas Area */}
       <div className="flex flex-col flex-1 h-full min-h-0 gap-2">
         {/* Header / Top Bar */}
@@ -679,25 +678,9 @@ export default function CanvasGameUI({
           <div className="flex items-center gap-1.5 p-1.5 bg-slate-800 rounded-lg justify-center shrink-0">
             <button
               onClick={() => setShowColorModal(true)}
-              className="@md:hidden w-8 h-8 rounded-full border-2 border-white"
+              className="w-8 h-8 rounded-full border-2 border-white cursor-pointer"
               style={{ backgroundColor: currentColor }}
             />
-            <Palette className="w-4 h-4 text-slate-400 hidden @md:block" />
-            <div className="hidden @md:flex items-center gap-1">
-              {COLORS.map((color) => (
-                <button
-                  key={color}
-                  onClick={() => setCurrentColor(color)}
-                  className={`w-8 h-8 rounded-full border-2 transition-all ${
-                    currentColor === color
-                      ? "border-white scale-110"
-                      : "border-slate-600 hover:scale-105"
-                  }`}
-                  style={{ backgroundColor: color }}
-                  title={color}
-                />
-              ))}
-            </div>
             <div className="w-px h-6 bg-slate-700 mx-1" />
             {STROKE_SIZES.map((size) => (
               <button

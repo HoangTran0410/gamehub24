@@ -140,7 +140,7 @@ export default function DotsAndBoxesUI({
   };
 
   return (
-    <div className="flex flex-col items-center gap-6 p-4 w-full max-w-2xl mx-auto pb-10">
+    <div className="flex flex-col items-center gap-6 p-4 w-full max-w-2xl mx-auto pb-16!">
       {/* Header Info */}
       <div className="flex flex-col items-center gap-2">
         <h2 className="text-3xl font-bold text-white">Dots & Boxes</h2>
@@ -338,15 +338,6 @@ export default function DotsAndBoxesUI({
           );
         })()}
 
-      {/* Rules Button */}
-      <button
-        onClick={() => setShowRules(true)}
-        className="fixed bottom-4 right-4 p-3 bg-slate-700 hover:bg-slate-600 rounded-full text-yellow-500 transition-colors z-40 shadow-lg border border-slate-500"
-        title={ts({ en: "Rules", vi: "Luật chơi" })}
-      >
-        <BookOpen size={24} />
-      </button>
-
       {/* Game Board */}
       <div className="relative aspect-square w-full max-w-[400px] bg-slate-900 p-6 rounded-lg shadow-2xl select-none touch-none border-2 border-slate-700">
         <div className="relative w-full h-full">
@@ -455,6 +446,14 @@ export default function DotsAndBoxesUI({
         </div>
       </div>
 
+      {/* Rules Button */}
+      <button
+        onClick={() => setShowRules(true)}
+        className="fixed bottom-4 right-4 p-3 bg-slate-700 hover:bg-slate-600 rounded-full text-yellow-500 transition-colors z-40 shadow-lg border border-slate-500"
+        title={ts({ en: "Rules", vi: "Luật chơi" })}
+      >
+        <BookOpen size={24} />
+      </button>
       {showRules && createPortal(renderGameRules(), document.body)}
     </div>
   );

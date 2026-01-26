@@ -669,9 +669,10 @@ export default function BilliardUI({ game: baseGame }: GameUIProps) {
 
   // Animation running state
   const animationRef = useRef<number | null>(null);
-
   const startAnimationLoop = useCallback(() => {
     if (animationRef.current) return;
+
+    console.log("startAnimationLoop");
 
     const loop = () => {
       let isAnimating = false;
@@ -729,12 +730,17 @@ export default function BilliardUI({ game: baseGame }: GameUIProps) {
   // Initial draw and redraw on state changes (STATIC updates)
   useEffect(() => {
     drawCanvas();
+    console.log("drawCanvas");
   }, [drawCanvas, state, isAiming, aimAngle, aimPower, scale]);
 
   // Subscribe to game updates
   useEffect(() => {
     const unsub = game.onUpdate((newState) => {
+      // TODO this will call multiple times on simulating state
+      // if (!newState.isSimulating) {
       setState(newState);
+      // }
+
       ballsRef.current = newState.balls;
 
       if (
@@ -747,7 +753,7 @@ export default function BilliardUI({ game: baseGame }: GameUIProps) {
       }
 
       if (newState.isSimulating) {
-        startAnimationLoop();
+        if (!state.isSimulating) startAnimationLoop();
       } else {
         // Even if not simulating, draw once to reflect state
         drawCanvasRef.current();
@@ -1221,7 +1227,7 @@ export default function BilliardUI({ game: baseGame }: GameUIProps) {
 
   return (
     <div
-      className="flex flex-col items-center gap-4 p-4 w-full max-w-4xl mx-auto pb-12"
+      className="flex flex-col items-center gap-4 p-4 w-full max-w-4xl mx-auto pb-12!"
       ref={containerRef}
     >
       {/* Player List */}

@@ -76,6 +76,7 @@ export default function GameContainer({
 
       // Cleanup previous game
       if (gameInstance) {
+        console.log("destroying game instance", gameInstance);
         gameInstance.destroy();
         setGameInstance(null);
       }
