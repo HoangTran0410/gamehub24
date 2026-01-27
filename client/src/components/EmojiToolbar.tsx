@@ -23,7 +23,7 @@ export default function EmojiToolbar() {
 
   const [emojis, setEmojis] = useState<FloatingEmoji[]>([]);
 
-  const timeoutRef = useRef<Record<string, NodeJS.Timeout>>({});
+  const timeoutRef = useRef<Record<string, number>>({});
 
   useEffect(() => {
     if (!socket) return;
