@@ -402,11 +402,11 @@ games.set("gunnywars", {
   minPlayers: 1,
   maxPlayers: 2,
   isAvailable: true,
-  createGame: async (room, socket, isHost, userId) => {
-    const { default: GunnyWars } = await import("./gunnywars/GunnyWars");
-    return new GunnyWars(room, socket, isHost, userId);
-  },
-  loadUI: () => import("./gunnywars/GunnyWarsUI").then((m) => m.default),
+  // createGame: async (room, socket, isHost, userId) => {
+  //   const { default: GunnyWars } = await import("./gunnywars/GunnyWars");
+  //   return new GunnyWars(room, socket, isHost, userId);
+  // },
+  // loadUI: () => import("./gunnywars/GunnyWarsUI").then((m) => m.default),
 });
 
 // Registry functions
