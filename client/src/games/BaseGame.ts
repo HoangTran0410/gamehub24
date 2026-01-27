@@ -154,7 +154,7 @@ export abstract class BaseGame<T> {
   }
 
   protected syncState(): void {
-    // this.syncStateInternal();
+    this.syncStateInternal();
     // turn off to test proxy
   }
 
