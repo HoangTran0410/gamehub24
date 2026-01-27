@@ -401,7 +401,7 @@ games.set("gunnywars", {
   categories: ["strategy", "party"],
   minPlayers: 1,
   maxPlayers: 2,
-  isAvailable: true,
+  isAvailable: false,
   // createGame: async (room, socket, isHost, userId) => {
   //   const { default: GunnyWars } = await import("./gunnywars/GunnyWars");
   //   return new GunnyWars(room, socket, isHost, userId);
