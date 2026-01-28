@@ -110,7 +110,7 @@ export abstract class BaseGame<T> {
     this.players = players;
 
     console.log(players);
-    this.syncStateInternal();
+    this.syncState();
   }
 
   public setOptimization(enabled: boolean): void {
@@ -131,7 +131,7 @@ export abstract class BaseGame<T> {
     return this.state;
   }
 
-  public notifyListeners(state: T): void {
+  public onStateUpdate(state: T): void {
     this.stateListeners.forEach((listener) => listener({ ...state }));
   }
 
@@ -139,7 +139,7 @@ export abstract class BaseGame<T> {
     if (!this.updateScheduled) {
       this.updateScheduled = true;
       queueMicrotask(() => {
-        this.notifyListeners(this.state);
+        this.onStateUpdate(this.state);
         if (this.autoBroadcast) {
           this.broadcastState();
         }
@@ -148,14 +148,9 @@ export abstract class BaseGame<T> {
     }
   }
 
-  private syncStateInternal(forceFull = false): void {
-    this.notifyListeners(this.state);
+  protected syncState(forceFull = false): void {
+    this.onStateUpdate(this.state);
     this.broadcastState(forceFull);
-  }
-
-  protected syncState(): void {
-    this.syncStateInternal();
-    // turn off to test proxy
   }
 
   public setState(state: T): T {
@@ -326,7 +321,7 @@ export abstract class BaseGame<T> {
         });
       } else {
         // Fallback: Broadcast to everyone
-        this.syncStateInternal(true);
+        this.syncState(true);
       }
     }
   }
