@@ -42,4 +42,5 @@ export type MazeAction =
   | { type: "START_GAME" }
   | { type: "NEXT_LEVEL" }
   | { type: "RESET_GAME" }
-  | { type: "UPDATE_SETTINGS"; difficulty: "EASY" | "MEDIUM" | "HARD" };
+  | { type: "UPDATE_SETTINGS"; difficulty: "EASY" | "MEDIUM" | "HARD" }
+  | { type: "TELEPORT"; playerId?: string };

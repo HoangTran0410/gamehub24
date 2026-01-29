@@ -113,6 +113,11 @@ export class MazeUtils {
 
       path.push({ x, y });
 
+      // Check Portal - Stop here if it's a portal (manual activation)
+      if (grid[y][x].portalTo) {
+        break;
+      }
+
       // Check Win (Stop at exit)
       if (x === stateConfig.cols - 1 && y === stateConfig.rows - 1) {
         break;

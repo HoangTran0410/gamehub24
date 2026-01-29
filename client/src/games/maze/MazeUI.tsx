@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState, useMemo } from "react";
 import type { GameUIProps } from "../types";
 import Maze, { DIFFICULTY_CONFIG, type Difficulty } from "./Maze";
 import type { MazeState, Direction } from "./types";
-import { MazeGenerator } from "./utils/MazeGenerator";
 import {
   ArrowUp,
   ArrowDown,
@@ -42,10 +41,8 @@ const MazeUI: React.FC<GameUIProps> = ({ game, currentUserId }) => {
 
   // Generate maze grid locally based on seed & config
   const mazeGrid = useMemo(() => {
-    const { rows, cols } = state.config;
-    const generator = new MazeGenerator(rows, cols, state.seed);
-    return generator.generate();
-  }, [state.config, state.seed]);
+    return mazeGame.getMazeGrid();
+  }, [state.config, state.seed, mazeGame]);
 
   // Dynamic Layout Calculation
   useEffect(() => {
@@ -116,6 +113,36 @@ const MazeUI: React.FC<GameUIProps> = ({ game, currentUserId }) => {
     ctx.fillStyle = "rgba(59, 130, 246, 0.2)"; // Blue
     ctx.fillRect(0, 0, cellSize, cellSize);
 
+    // Draw Portals
+    ctx.lineWidth = 3;
+    for (let y = 0; y < rows; y++) {
+      for (let x = 0; x < cols; x++) {
+        const cell = mazeGrid[y][x];
+        if (cell.portalTo) {
+          const px = x * cellSize + cellSize / 2;
+          const py = y * cellSize + cellSize / 2;
+
+          // Outer glow
+          ctx.beginPath();
+          ctx.arc(px, py, cellSize * 0.35, 0, Math.PI * 2);
+          ctx.fillStyle = cell.portalTo.color + "40"; // Transparent
+          ctx.fill();
+
+          // Inner ring
+          ctx.beginPath();
+          ctx.arc(px, py, cellSize * 0.25, 0, Math.PI * 2);
+          ctx.strokeStyle = cell.portalTo.color;
+          ctx.stroke();
+
+          // Center dot
+          ctx.beginPath();
+          ctx.arc(px, py, cellSize * 0.1, 0, Math.PI * 2);
+          ctx.fillStyle = cell.portalTo.color;
+          ctx.fill();
+        }
+      }
+    }
+
     // Draw Walls
     ctx.strokeStyle = "#4b5563";
     ctx.lineWidth = 2; // Fixed wall thickness? Or scale? Keep constant for now.
@@ -159,6 +186,7 @@ const MazeUI: React.FC<GameUIProps> = ({ game, currentUserId }) => {
       if (e.key === "ArrowDown") dir = "DOWN";
       if (e.key === "ArrowLeft") dir = "LEFT";
       if (e.key === "ArrowRight") dir = "RIGHT";
+      if (e.key === " ") handleTeleport();
 
       if (dir) {
         e.preventDefault();
@@ -173,6 +201,11 @@ const MazeUI: React.FC<GameUIProps> = ({ game, currentUserId }) => {
   const getRank = (playerId: string) => {
     const index = state.winners.indexOf(playerId);
     return index === -1 ? undefined : index + 1;
+  };
+
+  const handleTeleport = () => {
+    if (currentUserId)
+      mazeGame.makeAction({ type: "TELEPORT", playerId: currentUserId });
   };
 
   const handleMove = (direction: Direction) => {
@@ -246,6 +279,8 @@ const MazeUI: React.FC<GameUIProps> = ({ game, currentUserId }) => {
           if (segmentIndex < totalSegments) {
             const p1 = path[segmentIndex];
             const p2 = path[segmentIndex + 1];
+
+            // Standard interpolation
             renderX = p1.x + (p2.x - p1.x) * segmentProgress;
             renderY = p1.y + (p2.y - p1.y) * segmentProgress;
           }
@@ -258,12 +293,12 @@ const MazeUI: React.FC<GameUIProps> = ({ game, currentUserId }) => {
         el.style.height = `${cellSize * 0.7}px`;
 
         // Handle Opacity for Finish State
-        const isAnimatingTimestamp = now < (player.moveEnd || 0);
-        if (getRank(player.id) && !isAnimatingTimestamp) {
-          el.style.opacity = "0.5";
-        } else {
-          el.style.opacity = "1";
-        }
+        // const isAnimatingTimestamp = now < (player.moveEnd || 0);
+        // if (getRank(player.id) && !isAnimatingTimestamp) {
+        //   el.style.opacity = "0.5";
+        // } else {
+        //   el.style.opacity = "1";
+        // }
       });
 
       // Update my player animation state for UI
@@ -302,7 +337,7 @@ const MazeUI: React.FC<GameUIProps> = ({ game, currentUserId }) => {
       LEFT: !cell.walls.left,
       RIGHT: !cell.walls.right,
     };
-  }, [myPlayer, mazeGrid, state.config, isMyPlayerAnimating]);
+  }, [myPlayer?.x, myPlayer?.y, mazeGrid, state.config, isMyPlayerAnimating]);
 
   const renderMoveButtons = () => {
     if (
@@ -313,13 +348,40 @@ const MazeUI: React.FC<GameUIProps> = ({ game, currentUserId }) => {
     )
       return null;
 
-    const BUTTON_SIZE = 48; // Fixed large touch target
+    const BUTTON_SIZE = 40; // Fixed large touch target
     const ICON_SIZE = 24;
-    const OFFSET = 50; // Fixed pixel distance from player center
+    const OFFSET = 40; // Fixed pixel distance from player center
 
     // Calculate Player Center relative to the container
-    const centerX = myPlayer.x * cellSize + cellSize / 2;
-    const centerY = myPlayer.y * cellSize + cellSize / 2;
+    const rawCenterX = myPlayer.x * cellSize + cellSize / 2;
+    const rawCenterY = myPlayer.y * cellSize + cellSize / 2;
+
+    const width = state.config.cols * cellSize;
+    const height = state.config.rows * cellSize;
+
+    // Minimum space needed from center to edge based on enabled buttons
+    const spaceLeft = availableMoves.LEFT
+      ? OFFSET + BUTTON_SIZE / 2
+      : BUTTON_SIZE / 2;
+    const spaceRight = availableMoves.RIGHT
+      ? OFFSET + BUTTON_SIZE / 2
+      : BUTTON_SIZE / 2;
+    const spaceTop = availableMoves.UP
+      ? OFFSET + BUTTON_SIZE / 2
+      : BUTTON_SIZE / 2;
+    const spaceBottom = availableMoves.DOWN
+      ? OFFSET + BUTTON_SIZE / 2
+      : BUTTON_SIZE / 2;
+
+    // Clamp center position to keep buttons inside
+    const centerX = Math.max(
+      spaceLeft,
+      Math.min(width - spaceRight, rawCenterX),
+    );
+    const centerY = Math.max(
+      spaceTop,
+      Math.min(height - spaceBottom, rawCenterY),
+    );
 
     const getButtonStyle = (offsetX: number, offsetY: number) => ({
       width: `${BUTTON_SIZE}px`,
@@ -329,7 +391,7 @@ const MazeUI: React.FC<GameUIProps> = ({ game, currentUserId }) => {
     });
 
     const className =
-      "absolute flex items-center justify-center bg-white/10 hover:bg-white/40 rounded-full backdrop-blur-sm transition-all hover:scale-110 active:scale-95 z-30 border border-white/10 shadow-lg ring-1 ring-black/20";
+      "absolute flex items-center justify-center bg-white/10 hover:bg-white/40 rounded-full backdrop-blur-sm transition-all hover:scale-110 active:scale-95 z-30 border border-white/10 shadow-lg ring-1 ring-black/20 opacity-50";
 
     return (
       <>
@@ -381,6 +443,29 @@ const MazeUI: React.FC<GameUIProps> = ({ game, currentUserId }) => {
             <ArrowRight
               size={ICON_SIZE}
               className="text-white drop-shadow-md"
+            />
+          </button>
+        )}
+
+        {/* Teleport Button */}
+        {mazeGrid[myPlayer.y][myPlayer.x].portalTo && (
+          <button
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              handleTeleport();
+            }}
+            className="absolute flex items-center justify-center bg-purple-500/80 hover:bg-purple-400 rounded-full backdrop-blur-sm transition-all hover:scale-110 active:scale-95 z-40 border border-white/20 shadow-[0_0_15px_rgba(168,85,247,0.5)] animate-pulse opacity-50"
+            style={{
+              width: `${BUTTON_SIZE}px`,
+              height: `${BUTTON_SIZE}px`,
+              left: `${centerX - BUTTON_SIZE / 2}px`,
+              top: `${centerY - BUTTON_SIZE / 2}px`,
+            }}
+          >
+            <RotateCcw
+              size={ICON_SIZE}
+              className="text-white drop-shadow-md animate-spin"
+              style={{ animationDirection: "reverse" }}
             />
           </button>
         )}

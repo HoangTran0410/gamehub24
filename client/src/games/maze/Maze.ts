@@ -70,6 +70,12 @@ export default class Maze extends BaseGame<MazeState> {
         }
         break;
 
+      case "TELEPORT":
+        if (action.playerId) {
+          this.handleTeleport(action.playerId);
+        }
+        break;
+
       case "START_GAME":
         this.state.status = "PLAYING";
         this.state.startTime = Date.now();
@@ -196,6 +202,33 @@ export default class Maze extends BaseGame<MazeState> {
     );
     if (allFinished) {
       this.state.status = "FINISHED";
+    }
+  }
+
+  private handleTeleport(playerId: string) {
+    if (this.state.status !== "PLAYING") return;
+    const player = this.state.players[playerId];
+    if (!player) return;
+
+    // Ignore if already moving
+    if (player.moveEnd && Date.now() < player.moveEnd) return;
+
+    const grid = this.getMazeGrid();
+    const cell = grid[player.y][player.x];
+
+    if (cell.portalTo) {
+      const dest = cell.portalTo;
+
+      // Teleport
+      player.x = dest.x;
+      player.y = dest.y;
+
+      // Small delay/animation metadata if needed, but instant is fine for now
+      // Since it's a teleport, we can just update x/y.
+      // Current path is cleared to stop any previous movement visualization
+      player.currentPath = undefined;
+      player.moveStart = undefined;
+      player.moveEnd = undefined;
     }
   }
 
