@@ -31,7 +31,7 @@ const initCanvas = (canvas: HTMLCanvasElement, w: number, h: number) => {
   return ctx;
 };
 
-const MazeUI: React.FC<GameUIProps> = ({ game: baseGame, currentUserId }) => {
+const MazeUI: React.FC<GameUIProps> = ({ game: baseGame }) => {
   const game = baseGame as Maze;
   const [state] = useGameState(game);
   const staticCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -45,7 +45,12 @@ const MazeUI: React.FC<GameUIProps> = ({ game: baseGame, currentUserId }) => {
   // Dynamic Cell Size State
   const [cellSize, setCellSize] = useState(30);
 
-  const myPlayer = currentUserId ? state.players[currentUserId] : undefined;
+  const myPlayer = useMemo(
+    () => (game.userId ? state.players[game.userId] : undefined),
+    [game.userId, state.players],
+  );
+
+  // console.log("myPlayer", myPlayer);
 
   // Generate maze grid locally based on seed & config
   const mazeGrid = useMemo(() => {
@@ -308,9 +313,9 @@ const MazeUI: React.FC<GameUIProps> = ({ game: baseGame, currentUserId }) => {
         let renderY = player.y;
 
         const isAnim =
-          player.moveStart &&
-          player.moveEnd &&
-          player.currentPath &&
+          !!player.moveStart &&
+          !!player.moveEnd &&
+          !!player.currentPath &&
           player.currentPath.length >= 2 &&
           now < player.moveEnd;
 
@@ -335,7 +340,7 @@ const MazeUI: React.FC<GameUIProps> = ({ game: baseGame, currentUserId }) => {
           }
 
           // [LOCAL] Progressive Visited Path Update for My Player
-          if (player.id === currentUserId) {
+          if (player.id === game.userId) {
             let changed = false;
             for (let i = 0; i <= segmentIndex && i < path.length; i++) {
               const p = path[i];
@@ -360,8 +365,8 @@ const MazeUI: React.FC<GameUIProps> = ({ game: baseGame, currentUserId }) => {
       });
 
       // Update my player animation state for UI
-      if (currentUserId && state.players[currentUserId]) {
-        const p = state.players[currentUserId];
+      if (game.userId && state.players[game.userId]) {
+        const p = state.players[game.userId];
         const currentlyAnimating = !!(p.moveEnd && now < p.moveEnd);
         if (currentlyAnimating !== lastAnimatingState) {
           lastAnimatingState = currentlyAnimating;
@@ -377,25 +382,7 @@ const MazeUI: React.FC<GameUIProps> = ({ game: baseGame, currentUserId }) => {
       if (animationFrameRef.current)
         cancelAnimationFrame(animationFrameRef.current);
     };
-  }, [state.players, currentUserId, cellSize]); // Re-bind when settings (cellSize) change
-
-  // Calculate available moves for UI feedback
-  const availableMoves = useMemo(() => {
-    if (!myPlayer || !mazeGrid || isMyPlayerAnimating)
-      return { UP: false, DOWN: false, LEFT: false, RIGHT: false };
-
-    const { x, y } = myPlayer;
-    if (y < 0 || x < 0 || y >= state.config.rows || x >= state.config.cols)
-      return { UP: false, DOWN: false, LEFT: false, RIGHT: false };
-
-    const cell = mazeGrid[y][x];
-    return {
-      UP: !cell.walls.top,
-      DOWN: !cell.walls.bottom,
-      LEFT: !cell.walls.left,
-      RIGHT: !cell.walls.right,
-    };
-  }, [myPlayer?.x, myPlayer?.y, mazeGrid, state.config, isMyPlayerAnimating]);
+  }, [state.players, cellSize, game.userId]); // Re-bind when settings (cellSize) change
 
   const getRank = (playerId: string) => {
     const index = state.winners.indexOf(playerId);
@@ -403,13 +390,13 @@ const MazeUI: React.FC<GameUIProps> = ({ game: baseGame, currentUserId }) => {
   };
 
   const handleTeleport = () => {
-    if (currentUserId)
-      game.makeAction({ type: "TELEPORT", playerId: currentUserId });
+    if (game.userId)
+      game.makeAction({ type: "TELEPORT", playerId: game.userId });
   };
 
   const handleMove = (direction: Direction) => {
-    if (currentUserId)
-      game.makeAction({ type: "MOVE", direction, playerId: currentUserId });
+    if (game.userId)
+      game.makeAction({ type: "MOVE", direction, playerId: game.userId });
   };
 
   const handleStart = () => {
@@ -441,13 +428,45 @@ const MazeUI: React.FC<GameUIProps> = ({ game: baseGame, currentUserId }) => {
   };
 
   const renderMoveButtons = () => {
+    const isAnimating = isMyPlayerAnimating;
+    // &&!!(myPlayer?.moveEnd && Date.now() < myPlayer.moveEnd);
     if (
       state.status !== "PLAYING" ||
       !myPlayer ||
-      isMyPlayerAnimating ||
+      isAnimating ||
       getRank(myPlayer.id)
-    )
+    ) {
+      console.log("Not rendering move buttons", {
+        status: state.status,
+        myPlayer,
+        isAnimating,
+        rank: getRank(myPlayer?.id ?? ""),
+      });
       return null;
+    }
+
+    console.log("myplayer", myPlayer.x, myPlayer.y);
+
+    // Calculate available moves for UI feedback
+    const availableMoves = (() => {
+      if (!myPlayer || !mazeGrid)
+        return { UP: false, DOWN: false, LEFT: false, RIGHT: false };
+
+      const { x, y } = myPlayer;
+      if (y < 0 || x < 0 || y >= state.config.rows || x >= state.config.cols)
+        return { UP: false, DOWN: false, LEFT: false, RIGHT: false };
+
+      const cell = mazeGrid[y][x];
+      const moves = {
+        UP: !cell.walls.top,
+        DOWN: !cell.walls.bottom,
+        LEFT: !cell.walls.left,
+        RIGHT: !cell.walls.right,
+      };
+      return moves;
+    })();
+
+    // console.log(availableMoves);
 
     const BUTTON_SIZE = 40; // Fixed large touch target
     const ICON_SIZE = 24;
@@ -623,7 +642,7 @@ const MazeUI: React.FC<GameUIProps> = ({ game: baseGame, currentUserId }) => {
                 />
                 <div className="truncate font-medium text-sm text-gray-300 max-w-[100px]">
                   {player.username || player.id.slice(0, 8)}
-                  {player.id === currentUserId && (
+                  {player.id === game.userId && (
                     <span className="text-blue-400 ml-1">
                       ({ts({ en: "You", vi: "Bạn" })})
                     </span>
@@ -675,10 +694,10 @@ const MazeUI: React.FC<GameUIProps> = ({ game: baseGame, currentUserId }) => {
                 width: `${cellSize * 0.7}px`,
                 height: `${cellSize * 0.7}px`,
                 // Initial position logic duplicated from animation loop for first render
-                left: `${player.x * cellSize + cellSize * 0.15}px`,
-                top: `${player.y * cellSize + cellSize * 0.15}px`,
+                // left: `${player.x * cellSize + cellSize * 0.15}px`,
+                // top: `${player.y * cellSize + cellSize * 0.15}px`,
                 backgroundColor: player.color,
-                zIndex: player.id === currentUserId ? 20 : 10,
+                zIndex: player.id === game.userId ? 20 : 10,
               }}
             >
               {getRank(player.id) && (
@@ -686,7 +705,7 @@ const MazeUI: React.FC<GameUIProps> = ({ game: baseGame, currentUserId }) => {
                   #{getRank(player.id)}
                 </span>
               )}
-              {/* {player.id === currentUserId && !getRank(player.id) && (
+              {/* {player.id === game.userId && !getRank(player.id) && (
                 <div className="absolute w-2 h-2 bg-white rounded-full"></div>
               )} */}
             </div>
@@ -770,7 +789,7 @@ const MazeUI: React.FC<GameUIProps> = ({ game: baseGame, currentUserId }) => {
         {renderMoveButtons()}
       </div>
 
-      <div className="mt-4 text-gray-500 text-sm hidden sm:block">
+      <div className="mt-4 text-gray-500 text-sm">
         {ts({
           vi: "Về đích đầu tiên để dành chiến thắng",
           en: "First to the finish wins!",

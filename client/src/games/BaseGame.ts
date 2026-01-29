@@ -140,6 +140,7 @@ export abstract class BaseGame<T> {
           applyMutation(draft, path, value);
         }
       });
+      console.log("lastSnapshot", this.lastSnapshot);
     }
 
     this.stateListeners.forEach((listener) => listener(this.lastSnapshot!));

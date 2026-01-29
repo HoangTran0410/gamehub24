@@ -109,32 +109,32 @@ export default function ThirteenUI({ game: baseGame }: GameUIProps) {
             </span>
           ) : (
             <div
-              className="flex cursor-pointer items-center justify-center max-w-[200px]"
+              className="grid items-center justify-items-center"
               onClick={() => setExpandPlays(!expandPlays)}
             >
               {state.currentTrick.map((play, playIndex) => {
                 const hasMultipleCards = play.cards.length > 1;
                 // Calculate center offset to stack plays in center of parent
                 const totalPlays = state.currentTrick.length;
-                const collapsedOffset = -90; // % of own width
-                const expandedOffset = -30;
-                // Total offset from first to last play
-                const totalOffset = expandPlays
-                  ? expandedOffset * (totalPlays - 1)
-                  : collapsedOffset * (totalPlays - 1);
-                // Shift to center: half of total offset
+
+                // Use fixed pixel offsets for more reliable centering
+                const collapsedX = 20; // px
+                const expandedX = 40; // px
+
+                const stepX = expandPlays ? expandedX : collapsedX;
+                const totalOffset = stepX * (totalPlays - 1);
                 const centerShift = -totalOffset / 2;
-                // Each play's position: its cumulative offset + center shift
-                const translateX =
-                  (expandPlays ? expandedOffset : collapsedOffset) * playIndex +
-                  centerShift;
+
+                const translateX = stepX * playIndex + centerShift;
+
                 // Add Y offset for visual distinction
-                const offsetY = playIndex * (isDesktop ? 4 : 3);
+                const offsetY = playIndex * (isDesktop ? 6 : 4);
                 return (
                   <div
                     key={playIndex}
                     style={{
-                      transform: `translateX(${translateX}%) translateY(${offsetY}px)`,
+                      gridArea: "1 / 1",
+                      transform: `translateX(${translateX}px) translateY(${offsetY}px)`,
                     }}
                     className={`
                       flex rounded-lg transition-all duration-300 ease-out

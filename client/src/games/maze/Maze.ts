@@ -236,9 +236,9 @@ export default class Maze extends BaseGame<MazeState> {
       // Small delay/animation metadata if needed, but instant is fine for now
       // Since it's a teleport, we can just update x/y.
       // Current path is cleared to stop any previous movement visualization
-      player.currentPath = undefined;
-      player.moveStart = undefined;
-      player.moveEnd = undefined;
+      // player.currentPath = undefined;
+      // player.moveStart = undefined;
+      // player.moveEnd = undefined;
     }
   }
 
