@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useRef } from "react";
 import Uno from "./Uno";
-import type { UnoState, UnoCard, PlayerSlot, CardColor } from "./types";
+import type { UnoCard, PlayerSlot, CardColor } from "./types";
 import {
   CardColor as Colors,
   CardType,
@@ -31,7 +31,7 @@ import useGameState from "../../hooks/useGameState";
 
 export default function UnoUI({ game: baseGame }: GameUIProps) {
   const game = baseGame as Uno;
-  const [state] = useGameState<UnoState>(game);
+  const [state] = useGameState(game);
   const [selectedCard, setSelectedCard] = useState<UnoCard | null>(null);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showDiscardHistory, setShowDiscardHistory] = useState(false);

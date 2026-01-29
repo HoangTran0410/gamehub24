@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useMemo } from "react";
 import type { GameUIProps } from "../types";
 import Maze, { DIFFICULTY_CONFIG, type Difficulty } from "./Maze";
-import type { MazeState, Direction } from "./types";
+import type { Direction } from "./types";
 import {
   ArrowUp,
   ArrowDown,
@@ -33,7 +33,7 @@ const initCanvas = (canvas: HTMLCanvasElement, w: number, h: number) => {
 
 const MazeUI: React.FC<GameUIProps> = ({ game: baseGame, currentUserId }) => {
   const game = baseGame as Maze;
-  const [state] = useGameState<MazeState>(game);
+  const [state] = useGameState(game);
   const staticCanvasRef = useRef<HTMLCanvasElement>(null);
   const dynamicCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);

@@ -1,5 +1,5 @@
 import TicTacToe from "./TicTacToe";
-import type { TicTacToeAction, TicTacToeState } from "./types";
+import type { TicTacToeAction } from "./types";
 import { RefreshCcw, X, Circle, Bot, Play } from "lucide-react";
 import useLanguage from "../../stores/languageStore";
 import type { GameUIProps } from "../types";
@@ -7,7 +7,7 @@ import useGameState from "../../hooks/useGameState";
 
 export default function TicTacToeUI({ game: baseGame }: GameUIProps) {
   const game = baseGame as TicTacToe;
-  const [state] = useGameState<TicTacToeState>(game);
+  const [state] = useGameState(game);
   const { ti } = useLanguage();
 
   const mySymbol = game.getPlayerSymbol();

@@ -627,7 +627,6 @@ export default class Billiard extends BaseGame<BilliardState> {
 
     this.state.gamePhase = "playing";
     this.state.balls = createInitialBalls();
-    debugger;
     this.syncState();
 
     this.checkBotTurn();

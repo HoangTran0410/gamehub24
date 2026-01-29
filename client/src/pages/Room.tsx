@@ -35,8 +35,7 @@ import type { GameCategory } from "../constants";
 export default function RoomPage() {
   const { roomId } = useParams<{ roomId: string }>();
   const navigate = useNavigate();
-  const { currentRoom, setCurrentRoom, updatePlayers, updateSpectators } =
-    useRoomStore();
+  const { currentRoom, setCurrentRoom } = useRoomStore();
   const { clearMessages, messages } = useChatStore();
   const { userId, username } = useUserStore();
   const { show: showAlert, confirm: showConfirm } = useAlertStore();
@@ -194,13 +193,13 @@ export default function RoomPage() {
   useEffect(() => {
     if (!roomId) return;
 
-    socket.on("room:players", (players) => {
-      updatePlayers(players);
-    });
+    // socket.on("room:players", (players) => {
+    //   updatePlayers(players);
+    // });
 
-    socket.on("room:spectators", (spectators) => {
-      updateSpectators(spectators);
-    });
+    // socket.on("room:spectators", (spectators) => {
+    //   updateSpectators(spectators);
+    // });
 
     socket.on("room:update", (room) => {
       setCurrentRoom(room);

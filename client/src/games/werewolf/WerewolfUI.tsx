@@ -1605,7 +1605,7 @@ const WerewolfUI: React.FC<GameUIProps> = ({ game, currentUserId = "" }) => {
   const { ti, ts } = useLanguage();
 
   const werewolf = game as Werewolf;
-  const [state] = useGameState<WerewolfState>(werewolf);
+  const [state] = useGameState(werewolf);
   const [showRules, setShowRules] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
