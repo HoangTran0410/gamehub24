@@ -68,6 +68,10 @@ function formatUpTime(diff: number) {
   return `${days}d ${hoursRemainder}h ${minutesRemainder}m ${secondsRemainder}s`;
 }
 
+function log(...args: any[]) {
+  console.log(`[${new Date().toLocaleString("vi-VN")}]`, ...args);
+}
+
 // Health check endpoint
 app.get("/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
@@ -94,7 +98,7 @@ app.get("/stats", (req, res) => {
 io.on("connection", (socket: Socket) => {
   const { userId, username } = socket.handshake.auth;
 
-  console.log(`🟢 User connected: ${username} (${userId}) [${socket.id}]`);
+  log(`🟢 User connected: ${username} (${userId}) [${socket.id}]`);
 
   // Update socket ID if user reconnects
   roomManager.updatePlayerSocketId(userId, socket.id);
@@ -103,9 +107,7 @@ io.on("connection", (socket: Socket) => {
   const currentRoom = roomManager.getRoomByUserId(userId);
   if (currentRoom) {
     socket.join(currentRoom.id);
-    console.log(
-      `🔄 User ${username} rejoined room ${currentRoom.id} (socket updated)`,
-    );
+    log(`🔄 User ${username} rejoined room ${currentRoom.id} (socket updated)`);
   }
 
   // heartbeat
@@ -129,7 +131,7 @@ io.on("connection", (socket: Socket) => {
       const room = roomManager.createRoom(data, userId, username, socket.id);
       socket.join(room.id);
 
-      console.log(`📦 Room created: ${room.name} (${room.id}) by ${username}`);
+      log(`📦 Room created: ${room.name} (${room.id}) by ${username}`);
 
       callback?.({ success: true, room });
 
@@ -178,7 +180,7 @@ io.on("connection", (socket: Socket) => {
           data.roomId,
         );
         result = { success: true, room };
-        console.log(
+        log(
           `📦 Room auto-created: ${room.name} (${room.id}) by ${username} (using ${
             savedSettings ? "saved" : "default"
           } settings)`,
@@ -188,7 +190,7 @@ io.on("connection", (socket: Socket) => {
       if (result.success && result.room) {
         socket.join(result.room.id);
 
-        console.log(`👤 ${username} joined room: ${result.room.name}`);
+        log(`👤 ${username} joined room: ${result.room.name}`);
 
         // Send room data to joiner
         callback?.({ success: true, room: result.room });
@@ -234,7 +236,7 @@ io.on("connection", (socket: Socket) => {
       if (result.roomId) {
         socket.leave(result.roomId);
 
-        console.log(`👋 ${username} left room: ${result.roomId}`);
+        log(`👋 ${username} left room: ${result.roomId}`);
 
         if (result.room) {
           // Room still exists, broadcast updated lists
@@ -255,7 +257,7 @@ io.on("connection", (socket: Socket) => {
           io.to(result.roomId).emit("chat:message", systemMessage);
         } else {
           // Room was deleted, notify all
-          console.log(`🗑️  Room deleted: ${result.roomId}`);
+          log(`🗑️  Room deleted: ${result.roomId}`);
 
           // Remove chat history
           chatHistory.delete(result.roomId);
@@ -300,7 +302,7 @@ io.on("connection", (socket: Socket) => {
       // Update game type if provided
       if (data.gameType) {
         room.gameType = data.gameType;
-        console.log(`🔄 Room ${room.name} game changed to: ${data.gameType}`);
+        log(`🔄 Room ${room.name} game changed to: ${data.gameType}`);
 
         // Save updated settings
         roomManager.saveRoomSettings(data.roomId, {
@@ -483,14 +485,14 @@ io.on("connection", (socket: Socket) => {
 
   // Relay game actions
   socket.on("game:action", (data: { roomId: string; action: any }) => {
-    console.log(`game:action ${userId} -> ${data.roomId}`);
+    log(`game:action ${userId} -> ${data.roomId}`);
     socket.to(data.roomId).emit("game:action", data);
   });
 
   // Relay game state
   socket.on("game:state", (data: { roomId: string; state: any }) => {
     const json = JSON.stringify(data);
-    console.log(
+    log(
       `game:state ${userId} -> ${data.roomId} (${(json.length / 1024).toFixed(2)} KB) ${json}\n\n`,
     );
     socket.to(data.roomId).emit("game:state", data);
@@ -499,7 +501,7 @@ io.on("connection", (socket: Socket) => {
   // Relay game state patch
   socket.on("game:state:patch", (data: { roomId: string; patch: any }) => {
     const json = JSON.stringify(data);
-    console.log(
+    log(
       `game:state:patch ${userId} -> ${data.roomId} (${(json.length / 1024).toFixed(2)} KB) ${json}\n\n`,
     );
     socket.to(data.roomId).emit("game:state:patch", data);
@@ -507,7 +509,7 @@ io.on("connection", (socket: Socket) => {
 
   // Request sync (Relay to host, with requester socketId)
   socket.on("game:request_sync", (data: { roomId: string }) => {
-    console.log(`game:request_sync ${userId} -> ${data.roomId}`);
+    log(`game:request_sync ${userId} -> ${data.roomId}`);
     // Determine host? The host is in the room.
     // Actually we can just broadcast to the room, the host will pick it up.
     // But we need to attach the requester's socket ID so the host knows who to reply to.
@@ -530,7 +532,7 @@ io.on("connection", (socket: Socket) => {
     }) => {
       const json = JSON.stringify(data);
 
-      console.log(
+      log(
         `game:state:direct ${data.roomId} -> ${data.targetUser || data.targetSocketId} (${(json.length / 1024).toFixed(2)} KB) ${json}\n\n`,
       );
       io.to(data.targetSocketId).emit("game:state", {
@@ -653,7 +655,7 @@ io.on("connection", (socket: Socket) => {
   // DISCONNECT
 
   socket.on("disconnect", (reason) => {
-    console.log(
+    log(
       `🔴 User disconnected: ${username} (${userId}) [${socket.id}]. Reason: ${reason}`,
     );
 
@@ -676,7 +678,7 @@ io.on("connection", (socket: Socket) => {
         io.to(result.roomId).emit("chat:message", systemMessage);
       } else {
         // Room was deleted because host left/disconnected
-        console.log(`🗑️  Room deleted (host disconnected): ${result.roomId}`);
+        log(`🗑️  Room deleted (host disconnected): ${result.roomId}`);
 
         // Delete chat for room
         chatHistory.delete(result.roomId);
@@ -698,7 +700,7 @@ io.on("connection", (socket: Socket) => {
 
 // Start server
 httpServer.listen(PORT, () => {
-  console.log(`
+  log(`
   ╔═══════════════════════════════════════╗
   ║   🎮 Game Hub Server Running 🎮      ║
   ╠═══════════════════════════════════════╣

@@ -60,6 +60,9 @@ function formatUpTime(diff) {
     const secondsRemainder = seconds % 60;
     return `${days}d ${hoursRemainder}h ${minutesRemainder}m ${secondsRemainder}s`;
 }
+function log(...args) {
+    console.log(`[${new Date().toLocaleString("vi-VN")}]`, ...args);
+}
 // Health check endpoint
 app.get("/health", (req, res) => {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
@@ -80,14 +83,14 @@ app.get("/stats", (req, res) => {
 // Socket.IO connection handler
 io.on("connection", (socket) => {
     const { userId, username } = socket.handshake.auth;
-    console.log(`🟢 User connected: ${username} (${userId}) [${socket.id}]`);
+    log(`🟢 User connected: ${username} (${userId}) [${socket.id}]`);
     // Update socket ID if user reconnects
     roomManager.updatePlayerSocketId(userId, socket.id);
     // Check if user is in a room and rejoin if necessary
     const currentRoom = roomManager.getRoomByUserId(userId);
     if (currentRoom) {
         socket.join(currentRoom.id);
-        console.log(`🔄 User ${username} rejoined room ${currentRoom.id} (socket updated)`);
+        log(`🔄 User ${username} rejoined room ${currentRoom.id} (socket updated)`);
     }
     // heartbeat
     socket.on("heartbeat", () => { });
@@ -107,7 +110,7 @@ io.on("connection", (socket) => {
         try {
             const room = roomManager.createRoom(data, userId, username, socket.id);
             socket.join(room.id);
-            console.log(`📦 Room created: ${room.name} (${room.id}) by ${username}`);
+            log(`📦 Room created: ${room.name} (${room.id}) by ${username}`);
             callback?.({ success: true, room });
             // Broadcast updated room list to all clients
             if (room.isPublic) {
@@ -139,11 +142,11 @@ io.on("connection", (socket) => {
                     maxPlayers: 10,
                 }, userId, username, socket.id, data.roomId);
                 result = { success: true, room };
-                console.log(`📦 Room auto-created: ${room.name} (${room.id}) by ${username} (using ${savedSettings ? "saved" : "default"} settings)`);
+                log(`📦 Room auto-created: ${room.name} (${room.id}) by ${username} (using ${savedSettings ? "saved" : "default"} settings)`);
             }
             if (result.success && result.room) {
                 socket.join(result.room.id);
-                console.log(`👤 ${username} joined room: ${result.room.name}`);
+                log(`👤 ${username} joined room: ${result.room.name}`);
                 // Send room data to joiner
                 callback?.({ success: true, room: result.room });
                 // Broadcast updated lists to room
@@ -184,7 +187,7 @@ io.on("connection", (socket) => {
             const result = roomManager.leaveRoom(userId);
             if (result.roomId) {
                 socket.leave(result.roomId);
-                console.log(`👋 ${username} left room: ${result.roomId}`);
+                log(`👋 ${username} left room: ${result.roomId}`);
                 if (result.room) {
                     // Room still exists, broadcast updated lists
                     // io.to(result.roomId).emit("room:players", result.room.players);
@@ -204,7 +207,7 @@ io.on("connection", (socket) => {
                 }
                 else {
                     // Room was deleted, notify all
-                    console.log(`🗑️  Room deleted: ${result.roomId}`);
+                    log(`🗑️  Room deleted: ${result.roomId}`);
                     // Remove chat history
                     chatHistory.delete(result.roomId);
                     if (result.wasHost) {
@@ -246,7 +249,7 @@ io.on("connection", (socket) => {
             // Update game type if provided
             if (data.gameType) {
                 room.gameType = data.gameType;
-                console.log(`🔄 Room ${room.name} game changed to: ${data.gameType}`);
+                log(`🔄 Room ${room.name} game changed to: ${data.gameType}`);
                 // Save updated settings
                 roomManager.saveRoomSettings(data.roomId, {
                     gameType: room.gameType,
@@ -398,24 +401,24 @@ io.on("connection", (socket) => {
     // GAME EVENTS (Pure relay)
     // Relay game actions
     socket.on("game:action", (data) => {
-        console.log(`game:action ${userId} -> ${data.roomId}`);
+        log(`game:action ${userId} -> ${data.roomId}`);
         socket.to(data.roomId).emit("game:action", data);
     });
     // Relay game state
     socket.on("game:state", (data) => {
         const json = JSON.stringify(data);
-        console.log(`game:state ${userId} -> ${data.roomId} (${(json.length / 1024).toFixed(2)} KB) ${json}\n\n`);
+        log(`game:state ${userId} -> ${data.roomId} (${(json.length / 1024).toFixed(2)} KB) ${json}\n\n`);
         socket.to(data.roomId).emit("game:state", data);
     });
     // Relay game state patch
     socket.on("game:state:patch", (data) => {
         const json = JSON.stringify(data);
-        console.log(`game:state:patch ${userId} -> ${data.roomId} (${(json.length / 1024).toFixed(2)} KB) ${json}\n\n`);
+        log(`game:state:patch ${userId} -> ${data.roomId} (${(json.length / 1024).toFixed(2)} KB) ${json}\n\n`);
         socket.to(data.roomId).emit("game:state:patch", data);
     });
     // Request sync (Relay to host, with requester socketId)
     socket.on("game:request_sync", (data) => {
-        console.log(`game:request_sync ${userId} -> ${data.roomId}`);
+        log(`game:request_sync ${userId} -> ${data.roomId}`);
         // Determine host? The host is in the room.
         // Actually we can just broadcast to the room, the host will pick it up.
         // But we need to attach the requester's socket ID so the host knows who to reply to.
@@ -428,7 +431,7 @@ io.on("connection", (socket) => {
     // Direct state sync (Host -> Specific User)
     socket.on("game:state:direct", (data) => {
         const json = JSON.stringify(data);
-        console.log(`game:state:direct ${data.roomId} -> ${data.targetUser || data.targetSocketId} (${(json.length / 1024).toFixed(2)} KB) ${json}\n\n`);
+        log(`game:state:direct ${data.roomId} -> ${data.targetUser || data.targetSocketId} (${(json.length / 1024).toFixed(2)} KB) ${json}\n\n`);
         io.to(data.targetSocketId).emit("game:state", {
             roomId: data.roomId,
             state: data.state,
@@ -532,7 +535,7 @@ io.on("connection", (socket) => {
     });
     // DISCONNECT
     socket.on("disconnect", (reason) => {
-        console.log(`🔴 User disconnected: ${username} (${userId}) [${socket.id}]. Reason: ${reason}`);
+        log(`🔴 User disconnected: ${username} (${userId}) [${socket.id}]. Reason: ${reason}`);
         // Handle room cleanup
         const result = roomManager.leaveRoom(userId);
         if (result.roomId) {
@@ -551,7 +554,7 @@ io.on("connection", (socket) => {
             }
             else {
                 // Room was deleted because host left/disconnected
-                console.log(`🗑️  Room deleted (host disconnected): ${result.roomId}`);
+                log(`🗑️  Room deleted (host disconnected): ${result.roomId}`);
                 // Delete chat for room
                 chatHistory.delete(result.roomId);
                 if (result.wasHost) {
@@ -569,7 +572,7 @@ io.on("connection", (socket) => {
 });
 // Start server
 httpServer.listen(PORT, () => {
-    console.log(`
+    log(`
   ╔═══════════════════════════════════════╗
   ║   🎮 Game Hub Server Running 🎮      ║
   ╠═══════════════════════════════════════╣
