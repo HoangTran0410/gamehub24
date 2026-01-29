@@ -85,7 +85,6 @@ export default function RoomPage() {
 
     // Skip if already have room data for this room
     if (currentRoom?.id === roomId) {
-      console.log("Already have room data, skipping join");
       return;
     }
 
@@ -109,11 +108,8 @@ export default function RoomPage() {
       if (isJoiningRef.current) return;
       isJoiningRef.current = true;
 
-      console.log("Attempting to join room:", roomId, "socket.id:", socket.id);
-
       // Set timeout to detect failed callback
       timeoutId = setTimeout(() => {
-        console.log("Join timeout - callback never received");
         isJoiningRef.current = false;
         showAlert(
           ts({
@@ -133,7 +129,6 @@ export default function RoomPage() {
 
           if (response.success && response.room) {
             setCurrentRoom(response.room);
-            console.log("Joined room:", response.room);
           } else {
             isJoiningRef.current = false;
             if (response.error === "Incorrect password") {
@@ -150,7 +145,6 @@ export default function RoomPage() {
     };
 
     const handleConnect = () => {
-      console.log("Socket connected, will attempt join");
       if (connectionTimeoutId) clearTimeout(connectionTimeoutId);
       // Small delay to ensure socket is fully ready
       setTimeout(attemptJoin, 100);
@@ -171,13 +165,11 @@ export default function RoomPage() {
     if (socket.connected) {
       attemptJoin();
     } else {
-      console.log("Socket not connected, waiting...");
       socket.on("connect", handleConnect);
       socket.on("connect_error", handleConnectError);
 
       // Timeout for waiting for connection (10 seconds)
       connectionTimeoutId = setTimeout(() => {
-        console.log("Connection timeout - socket never connected");
         showAlert(
           ts({
             en: "Connection timeout. Please try again.",
@@ -201,7 +193,6 @@ export default function RoomPage() {
   // Effect for room event listeners
   useEffect(() => {
     if (!roomId) return;
-    console.log("listen room events");
 
     socket.on("room:players", (players) => {
       updatePlayers(players);

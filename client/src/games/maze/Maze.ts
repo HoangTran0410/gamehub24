@@ -3,19 +3,22 @@ import type { MazeState, MazeAction, Direction, PlayerState } from "./types";
 import { MazeGenerator, type Cell } from "./utils/MazeGenerator";
 import { MazeUtils } from "./utils/MazeUtils";
 
-export const DIFFICULTY_CONFIG: Record<string, { rows: number; cols: number }> =
-  {
-    EASY: { rows: 10, cols: 10 },
-    MEDIUM: { rows: 20, cols: 20 },
-    HARD: { rows: 30, cols: 30 },
-  };
+export const DIFFICULTY_CONFIG: Record<
+  Difficulty,
+  { rows: number; cols: number }
+> = {
+  EASY: { rows: 10, cols: 10 },
+  MEDIUM: { rows: 20, cols: 20 },
+  HARD: { rows: 30, cols: 30 },
+};
 
-export type Difficulty = keyof typeof DIFFICULTY_CONFIG;
+export type Difficulty = "EASY" | "MEDIUM" | "HARD";
 
 export default class Maze extends BaseGame<MazeState> {
   // Cache the maze grid to avoid regenerating it constantly
   // The grid is deterministic based on seed + config
   private mazeGrid: Cell[][] | null = null;
+  private seed: number | null = null;
 
   constructor(room: any, socket: any, isHost: boolean, userId: string) {
     super(room, socket, isHost, userId);
@@ -30,7 +33,7 @@ export default class Maze extends BaseGame<MazeState> {
         difficulty: "EASY",
       },
       level: 1,
-      seed: Math.floor(Math.random() * 1000000),
+      seed: this.isHost ? Math.floor(Math.random() * 1000000) : null,
       status: "WAITING",
       players: {
         [this.players[0].id]: {
@@ -44,14 +47,29 @@ export default class Maze extends BaseGame<MazeState> {
     };
   }
 
+  public onStateUpdate(
+    state: MazeState,
+    prop?: string | symbol | null,
+    newValue?: MazeState | undefined,
+    oldValue?: MazeState | undefined,
+  ): void {
+    super.onStateUpdate(state, prop, newValue, oldValue);
+
+    // reset maze if seed changed
+    if (state.seed != this.seed) {
+      this.mazeGrid = null;
+    }
+  }
+
   // Helper to ensure maze grid exists and matches current state
-  public getMazeGrid(): Cell[][] {
-    if (!this.mazeGrid) {
+  public getMazeGrid(): Cell[][] | null {
+    if (!this.mazeGrid && this.state.seed) {
       const { rows, cols } = this.state.config;
       const generator = new MazeGenerator(rows, cols, this.state.seed);
       this.mazeGrid = generator.generate();
+      this.seed = this.state.seed;
     }
-    return this.mazeGrid;
+    return this.mazeGrid ?? null;
   }
 
   onSocketGameAction(data: { action: GameAction }): void {
@@ -115,8 +133,6 @@ export default class Maze extends BaseGame<MazeState> {
   updatePlayers(players: any[]) {
     super.updatePlayers(players);
 
-    console.log(players);
-
     // Sync players map
     const newPlayersMap: Record<string, PlayerState> = {};
     players.forEach((p) => {
@@ -155,6 +171,7 @@ export default class Maze extends BaseGame<MazeState> {
     const { x, y } = player;
     const currentDir = action.direction;
     const grid = this.getMazeGrid();
+    if (!grid) return;
 
     // 1. Calculate Path
     const path = MazeUtils.getMazePath(
@@ -214,6 +231,7 @@ export default class Maze extends BaseGame<MazeState> {
     if (player.moveEnd && Date.now() < player.moveEnd) return;
 
     const grid = this.getMazeGrid();
+    if (!grid) return;
     const cell = grid[player.y][player.x];
 
     if (cell.portalTo) {
@@ -236,13 +254,13 @@ export default class Maze extends BaseGame<MazeState> {
     this.state.level++;
 
     // Increase difficulty logic
-    // Every 2 levels, increase size
-    const difficultyKeys: ("EASY" | "MEDIUM" | "HARD")[] = [
-      "EASY",
-      "MEDIUM",
-      "HARD",
-    ];
-    const diffIndex = Math.min(Math.floor((this.state.level - 1) / 2), 2);
+    // Every 3 levels, increase size
+    const levelStep = 3;
+    const difficultyKeys: Difficulty[] = ["EASY", "MEDIUM", "HARD"];
+    const diffIndex = Math.min(
+      Math.floor((this.state.level - 1) / levelStep),
+      difficultyKeys.length - 1,
+    );
     const difficulty = difficultyKeys[diffIndex];
 
     this.state.config = {
@@ -251,10 +269,10 @@ export default class Maze extends BaseGame<MazeState> {
     };
 
     // Add some organic growth for higher levels beyond HARD default?
-    if (this.state.level > 6) {
-      this.state.config.rows += 5;
-      this.state.config.cols += 5;
-    }
+    // if (this.state.level > 6) {
+    //   this.state.config.rows += 5;
+    //   this.state.config.cols += 5;
+    // }
 
     this.state.seed = Math.floor(Math.random() * 1000000);
     this.state.winners = [];

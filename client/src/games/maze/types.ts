@@ -26,7 +26,7 @@ export interface MazeState {
   // Config
   config: MazeConfig;
   level: number;
-  seed: number;
+  seed: number | null;
 
   // Game Status
   status: "WAITING" | "PLAYING" | "FINISHED";

@@ -21,12 +21,10 @@ export default function ChatPanel() {
     if (!socket) return;
 
     const handleMessage = (msg: ChatMessage) => {
-      console.log("chatpanel", msg);
       if (!PRESET_EMOJIS.includes(msg.message)) addMessage(msg);
     };
 
     const handleHistoryDelete = () => {
-      console.log("history deleted");
       clearMessages();
     };
 

@@ -12,7 +12,7 @@ import type { Player } from "../../stores/roomStore";
 export default class Reversi extends BaseGame<ReversiState> {
   getInitState(): ReversiState {
     return {
-      board: this.createInitialBoard(),
+      board: this.encodeBoard(this.createInitialBoard()),
       players: {
         black: this.players[0],
         white: this.players[1],
@@ -21,10 +21,38 @@ export default class Reversi extends BaseGame<ReversiState> {
       winner: null,
       gamePhase: "waiting",
       undoRequest: null,
-      moveHistory: {},
+      moveHistory: [],
       lastMove: null,
       flippedCells: [],
     };
+  }
+
+  private encodeBoard(board: Cell[][]): string {
+    let encoded = "";
+    for (let r = 0; r < 8; r++) {
+      for (let c = 0; c < 8; c++) {
+        const cell = board[r][c];
+        if (cell === "black") encoded += "1";
+        else if (cell === "white") encoded += "2";
+        else encoded += "0";
+      }
+    }
+    return encoded;
+  }
+
+  private decodeBoard(encoded: string): Cell[][] {
+    const board: Cell[][] = Array(8)
+      .fill(null)
+      .map(() => Array(8).fill(null));
+    for (let i = 0; i < 64; i++) {
+      const r = Math.floor(i / 8);
+      const c = i % 8;
+      const val = encoded[i];
+      if (val === "1") board[r][c] = "black";
+      else if (val === "2") board[r][c] = "white";
+      else board[r][c] = null;
+    }
+    return board;
   }
 
   private createInitialBoard(): Cell[][] {
@@ -83,8 +111,8 @@ export default class Reversi extends BaseGame<ReversiState> {
 
     this.state.gamePhase = "playing";
     this.state.turn = "black";
-    this.state.board = this.createInitialBoard();
-    this.state.moveHistory = {};
+    this.state.board = this.encodeBoard(this.createInitialBoard());
+    this.state.moveHistory = [];
     this.state.winner = null;
     this.state.lastMove = null;
 
@@ -106,10 +134,12 @@ export default class Reversi extends BaseGame<ReversiState> {
     this.saveHistory();
 
     // Apply move
-    this.state.board[row][col] = currentTurn;
+    const board = this.decodeBoard(this.state.board);
+    board[row][col] = currentTurn;
     for (const [r, c] of flips) {
-      this.state.board[r][c] = currentTurn;
+      board[r][c] = currentTurn;
     }
+    this.state.board = this.encodeBoard(board);
     this.state.lastMove = { row, col };
     // Track flipped cells for animation
     this.state.flippedCells = flips.map(([r, c]) => ({ row: r, col: c }));
@@ -155,11 +185,9 @@ export default class Reversi extends BaseGame<ReversiState> {
     // Count pieces
     let blackCount = 0;
     let whiteCount = 0;
-    for (let r = 0; r < 8; r++) {
-      for (let c = 0; c < 8; c++) {
-        if (this.state.board[r][c] === "black") blackCount++;
-        if (this.state.board[r][c] === "white") whiteCount++;
-      }
+    for (let i = 0; i < 64; i++) {
+      if (this.state.board[i] === "1") blackCount++;
+      if (this.state.board[i] === "2") whiteCount++;
     }
 
     if (blackCount > whiteCount) {
@@ -188,7 +216,8 @@ export default class Reversi extends BaseGame<ReversiState> {
   }
 
   private getFlips(row: number, col: number, color: Cell): [number, number][] {
-    if (!color || this.state.board[row][col] != null) return [];
+    const board = this.decodeBoard(this.state.board);
+    if (!color || board[row][col] != null) return [];
 
     const opponent = color === "black" ? "white" : "black";
     const allFlips: [number, number][] = [];
@@ -199,13 +228,7 @@ export default class Reversi extends BaseGame<ReversiState> {
       let c = col + dc;
 
       // Move in direction while finding opponent pieces
-      while (
-        r >= 0 &&
-        r < 8 &&
-        c >= 0 &&
-        c < 8 &&
-        this.state.board[r][c] === opponent
-      ) {
+      while (r >= 0 && r < 8 && c >= 0 && c < 8 && board[r][c] === opponent) {
         flips.push([r, c]);
         r += dr;
         c += dc;
@@ -217,7 +240,7 @@ export default class Reversi extends BaseGame<ReversiState> {
         r < 8 &&
         c >= 0 &&
         c < 8 &&
-        this.state.board[r][c] === color &&
+        board[r][c] === color &&
         flips.length > 0
       ) {
         allFlips.push(...flips);
@@ -231,20 +254,14 @@ export default class Reversi extends BaseGame<ReversiState> {
 
   private saveHistory(): void {
     const history: MoveHistory = {
-      board: this.state.board.map((row) => [...row]),
-      turn: this.state.turn,
+      b: this.state.board,
+      t: this.state.turn,
     };
-    const moveKey = `${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
-    this.state.moveHistory[moveKey] = history;
+    this.state.moveHistory.push(history);
 
     // Keep max 5 moves
-    const keys = Object.keys(this.state.moveHistory);
-    if (keys.length > 5) {
-      const sortedKeys = keys.sort();
-      const numToRemove = sortedKeys.length - 5;
-      for (let i = 0; i < numToRemove; i++) {
-        delete this.state.moveHistory[sortedKeys[i]];
-      }
+    if (this.state.moveHistory.length > 5) {
+      this.state.moveHistory.shift();
     }
   }
 
@@ -273,14 +290,11 @@ export default class Reversi extends BaseGame<ReversiState> {
   }
 
   private applyUndo(): void {
-    const keys = Object.keys(this.state.moveHistory).sort();
-    if (keys.length === 0) return;
+    if (this.state.moveHistory.length === 0) return;
 
-    const lastKey = keys[keys.length - 1];
-    const lastState = this.state.moveHistory[lastKey];
-    delete this.state.moveHistory[lastKey];
-    this.state.board = lastState.board;
-    this.state.turn = lastState.turn;
+    const lastState = this.state.moveHistory.pop()!;
+    this.state.board = lastState.b;
+    this.state.turn = lastState.t;
     this.state.undoRequest = null;
     this.state.lastMove = null;
   }
@@ -334,7 +348,8 @@ export default class Reversi extends BaseGame<ReversiState> {
 
     // Use MCTS to find best move (500ms timeout)
     const playerIndex = this.state.turn === "black" ? 0 : 1;
-    const mctsMove = runMCTS(this.state.board, playerIndex as 0 | 1, 500);
+    const board = this.decodeBoard(this.state.board);
+    const mctsMove = runMCTS(board, playerIndex as 0 | 1, 500);
 
     if (mctsMove) {
       this.handleMakeMove(botId, mctsMove[0], mctsMove[1]);
@@ -409,12 +424,12 @@ export default class Reversi extends BaseGame<ReversiState> {
   reset(): void {
     this.state = {
       ...this.state,
-      board: this.createInitialBoard(),
+      board: this.encodeBoard(this.createInitialBoard()),
       turn: "black",
       winner: null,
       gamePhase: "waiting",
       undoRequest: null,
-      moveHistory: {},
+      moveHistory: [],
       lastMove: null,
     };
   }
@@ -449,11 +464,9 @@ export default class Reversi extends BaseGame<ReversiState> {
   getPieceCount(): { black: number; white: number } {
     let black = 0;
     let white = 0;
-    for (let r = 0; r < 8; r++) {
-      for (let c = 0; c < 8; c++) {
-        if (this.state.board[r][c] === "black") black++;
-        if (this.state.board[r][c] === "white") white++;
-      }
+    for (let i = 0; i < 64; i++) {
+      if (this.state.board[i] === "1") black++;
+      if (this.state.board[i] === "2") white++;
     }
     return { black, white };
   }

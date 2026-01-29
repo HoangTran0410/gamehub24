@@ -9,6 +9,8 @@ import {
   ArrowRight,
   Play,
   RotateCcw,
+  Maximize,
+  Minimize,
 } from "lucide-react";
 import { useAlertStore } from "../../stores/alertStore";
 import useLanguage from "../../stores/languageStore";
@@ -16,14 +18,27 @@ import useLanguage from "../../stores/languageStore";
 const APP_PADDING = 32; // Total horizontal padding of the app container
 const HUD_HEIGHT = 180; // Approximate height of HUD
 
+// Helper to init canvas
+const initCanvas = (canvas: HTMLCanvasElement, w: number, h: number) => {
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = w * dpr;
+  canvas.height = h * dpr;
+  canvas.style.width = `${w}px`;
+  canvas.style.height = `${h}px`;
+  const ctx = canvas.getContext("2d");
+  if (ctx) ctx.scale(dpr, dpr);
+  return ctx;
+};
+
 const MazeUI: React.FC<GameUIProps> = ({ game, currentUserId }) => {
   const mazeGame = game as Maze;
   const [state, setState] = useState<MazeState>(mazeGame.getState());
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const staticCanvasRef = useRef<HTMLCanvasElement>(null);
+  const dynamicCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
-  const { ti, ts } = useLanguage();
+  const { ts } = useLanguage();
   const { confirm: showConfirm } = useAlertStore();
 
   // Dynamic Cell Size State
@@ -74,31 +89,120 @@ const MazeUI: React.FC<GameUIProps> = ({ game, currentUserId }) => {
     window.addEventListener("resize", updateLayout);
     // Also update when config changes (rows/cols change)
     return () => window.removeEventListener("resize", updateLayout);
-  }, [state.config]);
+  }, [state.config.rows, state.config.cols]);
 
-  // Draw maze on canvas
+  // Fullscreen Logic
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  const toggleFullscreen = () => {
+    if (!containerRef.current) return;
+
+    if (!document.fullscreenElement) {
+      containerRef.current.requestFullscreen().catch((err) => {
+        console.error(`Error attempting to enable fullscreen: ${err.message}`);
+      });
+    } else {
+      document.exitFullscreen();
+    }
+  };
+
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
 
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+    };
+  }, []);
+
+  const animationFrameRef = useRef<number>(undefined);
+  const [isMyPlayerAnimating, setIsMyPlayerAnimating] = useState(false);
+
+  // Track visited cells (Set of "x,y" strings)
+  const [visitedCells, setVisitedCells] = useState<Set<string>>(new Set());
+  const visitedCellsRef = useRef<Set<string>>(new Set());
+
+  // Reset visited cells on new level/game
+  useEffect(() => {
+    const newSet = new Set<string>();
+    setVisitedCells(newSet);
+    visitedCellsRef.current = newSet;
+  }, [state.seed, state.level, state.status, mazeGame]);
+
+  // Ensure current position is always visited (handles teleport/spawn/finish move)
+  // We strictly check timestamps to avoid marking the TARGET of a move before we get there
+  useEffect(() => {
+    if (!myPlayer) return;
+
+    const now = Date.now();
+    const isActuallyAnimating =
+      myPlayer.moveEnd &&
+      now < myPlayer.moveEnd &&
+      myPlayer.currentPath &&
+      myPlayer.currentPath.length >= 2;
+
+    // Only force-add the "current" (which is actually destination) cell if we are NOT moving towards it
+    if (!isActuallyAnimating) {
+      const key = `${myPlayer.x},${myPlayer.y}`;
+      if (!visitedCellsRef.current.has(key)) {
+        visitedCellsRef.current.add(key);
+        setVisitedCells(new Set(visitedCellsRef.current));
+      }
+    }
+  }, [
+    myPlayer?.x,
+    myPlayer?.y,
+    myPlayer?.moveEnd,
+    myPlayer?.currentPath,
+    isMyPlayerAnimating,
+  ]); // Trigger when animation state finishes
+
+  // Draw Dynamic Visited Cells (Bottom Layer)
+  useEffect(() => {
+    const canvas = dynamicCanvasRef.current;
+    if (!canvas) return;
 
     const { rows, cols } = state.config;
     const width = cols * cellSize;
     const height = rows * cellSize;
 
-    // Handle high DPI
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = width * dpr;
-    canvas.height = height * dpr;
-    canvas.style.width = `${width}px`;
-    canvas.style.height = `${height}px`;
-    ctx.scale(dpr, dpr);
+    const ctx = initCanvas(canvas, width, height);
+    if (!ctx) return;
 
     // Clear
-    ctx.fillStyle = "#1a1a1a";
-    ctx.fillRect(0, 0, width, height);
+    ctx.clearRect(0, 0, width, height);
+
+    // Draw Visited Cells
+    if (myPlayer) {
+      ctx.fillStyle = myPlayer.color + "33"; // 20% opacity using player color
+      visitedCells.forEach((key) => {
+        const [vx, vy] = key.split(",").map(Number);
+        ctx.fillRect(vx * cellSize, vy * cellSize, cellSize, cellSize);
+      });
+    }
+  }, [visitedCells, state.config.rows, state.config.cols, cellSize, myPlayer]); // Update when visited cells change
+
+  // Draw Static Maze (Top Layer)
+  useEffect(() => {
+    const canvas = staticCanvasRef.current;
+    if (!canvas) return;
+
+    if (!mazeGrid) return;
+
+    const { rows, cols } = state.config;
+    const width = cols * cellSize;
+    const height = rows * cellSize;
+
+    const ctx = initCanvas(canvas, width, height);
+    if (!ctx) return;
+
+    // Clear
+    ctx.clearRect(0, 0, width, height);
+
+    // Note: Background color #1a1a1a is handled by the container DIV now to save redraws
+    // DO NOT fillRect #1a1a1a here, or it covers the visited layer (since this is top layer)
 
     // Draw End Zone
     ctx.fillStyle = "rgba(34, 197, 94, 0.2)"; // Green
@@ -174,7 +278,7 @@ const MazeUI: React.FC<GameUIProps> = ({ game, currentUserId }) => {
       }
     }
     ctx.stroke();
-  }, [mazeGrid, state.config, cellSize]); // Redraw when cellSize changes
+  }, [mazeGrid, state.config.rows, state.config.cols, cellSize]); // Only redraw when grid/size changes, NOT visitedCells
 
   // Handle Keyboard Input
   useEffect(() => {
@@ -197,6 +301,110 @@ const MazeUI: React.FC<GameUIProps> = ({ game, currentUserId }) => {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [state.status, mazeGame]);
+
+  // Animation Loop
+  useEffect(() => {
+    let lastAnimatingState = false;
+
+    const animate = () => {
+      const now = Date.now();
+
+      Object.values(state.players).forEach((player) => {
+        const el = playerRefs.current[player.id];
+        if (!el) return;
+
+        let renderX = player.x;
+        let renderY = player.y;
+
+        const isAnim =
+          player.moveStart &&
+          player.moveEnd &&
+          player.currentPath &&
+          player.currentPath.length >= 2 &&
+          now < player.moveEnd;
+
+        if (isAnim) {
+          const totalDuration = player.moveEnd! - player.moveStart!;
+          const elapsed = now - player.moveStart!;
+          const progress = Math.max(0, Math.min(elapsed / totalDuration, 1));
+
+          const path = player.currentPath!;
+          const totalSegments = path.length - 1;
+          const currentDist = progress * totalSegments;
+          const segmentIndex = Math.floor(currentDist);
+          const segmentProgress = currentDist - segmentIndex;
+
+          if (segmentIndex < totalSegments) {
+            const p1 = path[segmentIndex];
+            const p2 = path[segmentIndex + 1];
+
+            // Standard interpolation
+            renderX = p1.x + (p2.x - p1.x) * segmentProgress;
+            renderY = p1.y + (p2.y - p1.y) * segmentProgress;
+          }
+
+          // [LOCAL] Progressive Visited Path Update for My Player
+          if (player.id === currentUserId) {
+            let changed = false;
+            for (let i = 0; i <= segmentIndex && i < path.length; i++) {
+              const p = path[i];
+              const key = `${p.x},${p.y}`;
+              if (!visitedCellsRef.current.has(key)) {
+                visitedCellsRef.current.add(key);
+                changed = true;
+              }
+            }
+
+            if (changed) {
+              setVisitedCells(new Set(visitedCellsRef.current));
+            }
+          }
+        }
+
+        // Apply styles directly using dynamic cellSize
+        el.style.left = `${renderX * cellSize + cellSize * 0.15}px`;
+        el.style.top = `${renderY * cellSize + cellSize * 0.15}px`;
+        el.style.width = `${cellSize * 0.7}px`;
+        el.style.height = `${cellSize * 0.7}px`;
+      });
+
+      // Update my player animation state for UI
+      if (currentUserId && state.players[currentUserId]) {
+        const p = state.players[currentUserId];
+        const currentlyAnimating = !!(p.moveEnd && now < p.moveEnd);
+        if (currentlyAnimating !== lastAnimatingState) {
+          lastAnimatingState = currentlyAnimating;
+          setIsMyPlayerAnimating(currentlyAnimating);
+        }
+      }
+
+      animationFrameRef.current = requestAnimationFrame(animate);
+    };
+
+    animationFrameRef.current = requestAnimationFrame(animate);
+    return () => {
+      if (animationFrameRef.current)
+        cancelAnimationFrame(animationFrameRef.current);
+    };
+  }, [state.players, currentUserId, cellSize]); // Re-bind when settings (cellSize) change
+
+  // Calculate available moves for UI feedback
+  const availableMoves = useMemo(() => {
+    if (!myPlayer || !mazeGrid || isMyPlayerAnimating)
+      return { UP: false, DOWN: false, LEFT: false, RIGHT: false };
+
+    const { x, y } = myPlayer;
+    if (y < 0 || x < 0 || y >= state.config.rows || x >= state.config.cols)
+      return { UP: false, DOWN: false, LEFT: false, RIGHT: false };
+
+    const cell = mazeGrid[y][x];
+    return {
+      UP: !cell.walls.top,
+      DOWN: !cell.walls.bottom,
+      LEFT: !cell.walls.left,
+      RIGHT: !cell.walls.right,
+    };
+  }, [myPlayer?.x, myPlayer?.y, mazeGrid, state.config, isMyPlayerAnimating]);
 
   const getRank = (playerId: string) => {
     const index = state.winners.indexOf(playerId);
@@ -240,104 +448,6 @@ const MazeUI: React.FC<GameUIProps> = ({ game, currentUserId }) => {
   const handleDifficulty = (difficulty: Difficulty) => {
     mazeGame.makeAction({ type: "UPDATE_SETTINGS", difficulty });
   };
-
-  const animationFrameRef = useRef<number>(undefined);
-  const [isMyPlayerAnimating, setIsMyPlayerAnimating] = useState(false);
-
-  // Animation Loop
-  useEffect(() => {
-    let lastAnimatingState = false;
-
-    const animate = () => {
-      const now = Date.now();
-
-      Object.values(state.players).forEach((player) => {
-        const el = playerRefs.current[player.id];
-        if (!el) return;
-
-        let renderX = player.x;
-        let renderY = player.y;
-
-        const isAnim =
-          player.moveStart &&
-          player.moveEnd &&
-          player.currentPath &&
-          player.currentPath.length >= 2 &&
-          now < player.moveEnd;
-
-        if (isAnim) {
-          const totalDuration = player.moveEnd! - player.moveStart!;
-          const elapsed = now - player.moveStart!;
-          const progress = Math.max(0, Math.min(elapsed / totalDuration, 1));
-
-          const path = player.currentPath!;
-          const totalSegments = path.length - 1;
-          const currentDist = progress * totalSegments;
-          const segmentIndex = Math.floor(currentDist);
-          const segmentProgress = currentDist - segmentIndex;
-
-          if (segmentIndex < totalSegments) {
-            const p1 = path[segmentIndex];
-            const p2 = path[segmentIndex + 1];
-
-            // Standard interpolation
-            renderX = p1.x + (p2.x - p1.x) * segmentProgress;
-            renderY = p1.y + (p2.y - p1.y) * segmentProgress;
-          }
-        }
-
-        // Apply styles directly using dynamic cellSize
-        el.style.left = `${renderX * cellSize + cellSize * 0.15}px`;
-        el.style.top = `${renderY * cellSize + cellSize * 0.15}px`;
-        el.style.width = `${cellSize * 0.7}px`;
-        el.style.height = `${cellSize * 0.7}px`;
-
-        // Handle Opacity for Finish State
-        // const isAnimatingTimestamp = now < (player.moveEnd || 0);
-        // if (getRank(player.id) && !isAnimatingTimestamp) {
-        //   el.style.opacity = "0.5";
-        // } else {
-        //   el.style.opacity = "1";
-        // }
-      });
-
-      // Update my player animation state for UI
-      if (currentUserId && state.players[currentUserId]) {
-        const p = state.players[currentUserId];
-        const currentlyAnimating = !!(p.moveEnd && now < p.moveEnd);
-        if (currentlyAnimating !== lastAnimatingState) {
-          lastAnimatingState = currentlyAnimating;
-          setIsMyPlayerAnimating(currentlyAnimating);
-        }
-      }
-
-      animationFrameRef.current = requestAnimationFrame(animate);
-    };
-
-    animationFrameRef.current = requestAnimationFrame(animate);
-    return () => {
-      if (animationFrameRef.current)
-        cancelAnimationFrame(animationFrameRef.current);
-    };
-  }, [state.players, currentUserId, cellSize]); // Re-bind when settings (cellSize) change
-
-  // Calculate available moves for UI feedback
-  const availableMoves = useMemo(() => {
-    if (!myPlayer || !mazeGrid || isMyPlayerAnimating)
-      return { UP: false, DOWN: false, LEFT: false, RIGHT: false };
-
-    const { x, y } = myPlayer;
-    if (y < 0 || x < 0 || y >= state.config.rows || x >= state.config.cols)
-      return { UP: false, DOWN: false, LEFT: false, RIGHT: false };
-
-    const cell = mazeGrid[y][x];
-    return {
-      UP: !cell.walls.top,
-      DOWN: !cell.walls.bottom,
-      LEFT: !cell.walls.left,
-      RIGHT: !cell.walls.right,
-    };
-  }, [myPlayer?.x, myPlayer?.y, mazeGrid, state.config, isMyPlayerAnimating]);
 
   const renderMoveButtons = () => {
     if (
@@ -448,7 +558,7 @@ const MazeUI: React.FC<GameUIProps> = ({ game, currentUserId }) => {
         )}
 
         {/* Teleport Button */}
-        {mazeGrid[myPlayer.y][myPlayer.x].portalTo && (
+        {mazeGrid && mazeGrid[myPlayer.y][myPlayer.x].portalTo && (
           <button
             onPointerDown={(e) => {
               e.stopPropagation();
@@ -475,32 +585,39 @@ const MazeUI: React.FC<GameUIProps> = ({ game, currentUserId }) => {
 
   return (
     <div
-      className="flex flex-col items-center justify-center min-h-full p-4 overflow-hidden pb-16!"
+      className="flex flex-col items-center justify-center min-h-full @md:p-4 p-2 overflow-hidden pb-16!"
       ref={containerRef}
     >
       {/* HUD & Players Combined */}
-      <div className="flex flex-col w-full max-w-2xl bg-gray-800 p-4 rounded-xl shadow-lg gap-4 z-10 shrink-0">
+      <div className="flex flex-col w-full max-w-2xl bg-gray-800 @md:p-4 p-2 rounded-xl shadow-lg gap-4 z-10 shrink-0">
         {/* Top Row: Info & Controls */}
         <div className="flex items-center justify-between w-full gap-2">
           <div className="flex flex-col">
-            <span className="text-sm text-gray-400">Level</span>
-            <span className="text-xl font-bold text-white flex gap-2 items-center">
-              {state.level}{" "}
+            <span className="text-sm text-gray-400">
+              Level {state.level}{" "}
               <span className="text-xs text-gray-500 bg-gray-700 px-2 py-0.5 rounded-full">
                 {state.config.difficulty}
               </span>
             </span>
 
-            {mazeGame.isHost && (
+            <div className="flex gap-1 mt-2">
+              {mazeGame.isHost && (
+                <button
+                  onClick={handleReset}
+                  className="p-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg"
+                  title="Reset Game"
+                >
+                  <RotateCcw size={18} />
+                </button>
+              )}
               <button
-                onClick={handleReset}
-                className="flex items-center gap-2 p-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg"
-                title="Reset Game"
+                onClick={toggleFullscreen}
+                className="p-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg"
+                title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
               >
-                <RotateCcw size={18} />
-                {ti({ en: "Reset", vi: "Chơi lại" })}
+                {isFullscreen ? <Minimize size={18} /> : <Maximize size={18} />}
               </button>
-            )}
+            </div>
           </div>
 
           <div className="flex flex-col flex-wrap gap-0">
@@ -534,7 +651,7 @@ const MazeUI: React.FC<GameUIProps> = ({ game, currentUserId }) => {
 
       {/* Game Area */}
       <div
-        className="relative shadow-2xl rounded-lg border border-gray-700 select-none bg-black mt-4 shrink-0 transition-all duration-300"
+        className="relative shadow-2xl rounded-lg border border-gray-700 select-none bg-[#1a1a1a] mt-4 shrink-0 transition-all duration-300"
         style={{
           width: state.config.cols * cellSize,
           height: state.config.rows * cellSize,
@@ -542,7 +659,18 @@ const MazeUI: React.FC<GameUIProps> = ({ game, currentUserId }) => {
       >
         {/* Clipped Game World Wrapper */}
         <div className="absolute inset-0 overflow-hidden rounded-lg">
-          <canvas ref={canvasRef} />
+          {/* Dynamic Layer: Visited Cells */}
+          <canvas
+            ref={dynamicCanvasRef}
+            className="absolute inset-0 z-0"
+            style={{ width: "100%", height: "100%" }}
+          />
+          {/* Static Layer: Walls, Zones, Portals */}
+          <canvas
+            ref={staticCanvasRef}
+            className="absolute inset-0 z-10"
+            style={{ width: "100%", height: "100%" }}
+          />
 
           {/* Render Players with DOM Refs */}
           {Object.values(state.players).map((player) => (
@@ -591,7 +719,7 @@ const MazeUI: React.FC<GameUIProps> = ({ game, currentUserId }) => {
                     {Object.keys(DIFFICULTY_CONFIG).map((diff) => (
                       <button
                         key={diff}
-                        onClick={() => handleDifficulty(diff)}
+                        onClick={() => handleDifficulty(diff as Difficulty)}
                         className={`px-4 py-2 text-sm font-bold rounded-md transition-all ${state.config.difficulty === diff ? "bg-blue-600 text-white shadow-lg" : "text-gray-400 hover:text-white hover:bg-gray-700"}`}
                       >
                         {diff}

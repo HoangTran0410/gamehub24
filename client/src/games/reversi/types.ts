@@ -6,8 +6,8 @@ export type Cell = null | Turn;
 
 // Move history for undo
 export interface MoveHistory {
-  board: Cell[][];
-  turn: Turn;
+  b: string; // encoded board
+  t: Turn; // turn
 }
 
 // Undo request
@@ -18,7 +18,7 @@ export interface UndoRequest {
 
 // Main game state
 export interface ReversiState {
-  board: Cell[][]; // 8x8
+  board: string; // 8x8 encoded as string of 64 chars (0: empty, 1: black, 2: white)
   players: {
     black: Player | null;
     white: Player | null;
@@ -27,7 +27,7 @@ export interface ReversiState {
   winner: string | null;
   gamePhase: "waiting" | "playing" | "ended";
   undoRequest: UndoRequest | null;
-  moveHistory: Record<string, MoveHistory>;
+  moveHistory: MoveHistory[];
   lastMove: { row: number; col: number } | null;
   flippedCells: { row: number; col: number }[]; // Cells flipped in last move
 }

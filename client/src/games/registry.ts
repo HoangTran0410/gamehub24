@@ -432,7 +432,6 @@ games.set("gunnywars", {
 
 // Registry functions
 export const getGame = (gameType: string): GameModule | undefined => {
-  console.log(games, gameType);
   return games.get(gameType);
 };
 

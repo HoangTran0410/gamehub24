@@ -216,7 +216,7 @@ export default function ReversiUI({
             >
               <div className="flex items-center gap-3">
                 <div
-                  className={`w-6 h-6 rounded-full ${
+                  className={`w-6 h-6 rounded-full text-center ${
                     c[index] === "black" ? "bg-gray-900" : "bg-white"
                   } ${c[index] === "black" ? "text-white" : "text-black"}`}
                 >
@@ -374,16 +374,15 @@ export default function ReversiUI({
                 {ti({ en: "Pass Turn", vi: "Bỏ lượt" })}
               </button>
             )}
-            {Object.keys(state.moveHistory || {}).length > 0 &&
-              !state.undoRequest && (
-                <button
-                  onClick={() => game.requestUndo()}
-                  className="flex items-center gap-2 px-4 py-2 bg-slate-600 hover:bg-slate-500 text-white rounded-lg transition-colors"
-                >
-                  <RotateCcw className="w-4 h-4" />{" "}
-                  {ti({ en: "Undo", vi: "Hoàn tác" })}
-                </button>
-              )}
+            {(state.moveHistory?.length || 0) > 0 && !state.undoRequest && (
+              <button
+                onClick={() => game.requestUndo()}
+                className="flex items-center gap-2 px-4 py-2 bg-slate-600 hover:bg-slate-500 text-white rounded-lg transition-colors"
+              >
+                <RotateCcw className="w-4 h-4" />{" "}
+                {ti({ en: "Undo", vi: "Hoàn tác" })}
+              </button>
+            )}
             {/* reset game */}
             {isHost && (
               <button
@@ -425,9 +424,13 @@ export default function ReversiUI({
 
       {/* Game Board */}
       <div className="grid grid-cols-8 gap-0 rounded-lg overflow-hidden shadow-xl border-4 border-green-900 w-full max-w-[500px]">
-        {state.board.map((row, ri) =>
-          row.map((cell, ci) => renderCell(cell, ri, ci)),
-        )}
+        {Array.from({ length: 64 }).map((_, i) => {
+          const ri = Math.floor(i / 8);
+          const ci = i % 8;
+          const val = state.board[i];
+          const cell = val === "1" ? "black" : val === "2" ? "white" : null;
+          return renderCell(cell, ri, ci);
+        })}
       </div>
 
       {/* Rules Button */}
