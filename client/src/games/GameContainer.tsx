@@ -7,7 +7,7 @@ import useLanguage from "../stores/languageStore";
 import { getSocket } from "../services/socket";
 import { getGame } from "./registry";
 import type { GameUIProps } from "./types";
-import { RotateCcw, Zap, ZapOff } from "lucide-react";
+import { RotateCcw } from "lucide-react";
 import type { BaseGame } from "./BaseGame";
 
 export default function GameContainer({
@@ -27,17 +27,6 @@ export default function GameContainer({
 
   // Track current loading to avoid race conditions
   const loadingRef = useRef<{ roomId: string; gameType: string } | null>(null);
-
-  const [isOptimized, setIsOptimized] = useState(true);
-
-  // Toggle Optimization
-  const toggleOptimization = () => {
-    if (gameInstance) {
-      const newState = !isOptimized;
-      setIsOptimized(newState);
-      gameInstance.setOptimization(newState);
-    }
-  };
 
   // Main Game Lifecycle Effect
   useEffect(() => {
@@ -213,33 +202,5 @@ export default function GameContainer({
     );
   }
 
-  // Render the dynamically loaded UI component
-  return (
-    <div className="relative w-full h-full">
-      <GameUI game={gameInstance} currentUserId={userId} />
-
-      {/* Optimization Toggle (Host + Dev Only) */}
-      {gameInstance.isHost && false && (
-        <button
-          onClick={toggleOptimization}
-          className={`absolute -top-2 -right-2 p-2 rounded-full shadow-lg transition-all z-50 opacity-10 hover:opacity-100 ${
-            isOptimized
-              ? "bg-green-500 hover:bg-green-600 text-white"
-              : "bg-gray-500 hover:bg-gray-600 text-white"
-          }`}
-          title={
-            isOptimized
-              ? "Optimization Enabled"
-              : "Optimization Disabled (Full State)"
-          }
-        >
-          {isOptimized ? (
-            <Zap className="w-5 h-5" />
-          ) : (
-            <ZapOff className="w-5 h-5" />
-          )}
-        </button>
-      )}
-    </div>
-  );
+  return <GameUI game={gameInstance} currentUserId={userId} />;
 }

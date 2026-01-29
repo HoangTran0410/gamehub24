@@ -9,7 +9,7 @@ export interface Point {
 export interface DrawStroke {
   id: string;
   playerId: string;
-  points: Point[];
+  points: number[]; // Flat array: [x1, y1, x2, y2, ...]
   color: string;
   width: number;
   duration: number; // How long it took to draw (ms)

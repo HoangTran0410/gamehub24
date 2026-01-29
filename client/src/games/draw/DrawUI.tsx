@@ -57,7 +57,7 @@ export default function CanvasGameUI({
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentColor, setCurrentColor] = useState(COLORS[6]); // Start with black
   const [currentStrokeWidth, setCurrentStrokeWidth] = useState(5); // Medium
-  const [currentStroke, setCurrentStroke] = useState<Point[]>([]);
+  const [currentStroke, setCurrentStroke] = useState<number[]>([]);
   const [showColorModal, setShowColorModal] = useState(false);
   const [chatInput, setChatInput] = useState("");
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -148,27 +148,28 @@ export default function CanvasGameUI({
 
     // Use stateRef to get latest strokes
     stateRef.current.strokes.forEach((stroke) => {
-      if (stroke.points.length < 2) return;
+      if (stroke.points.length < 4) return; // Need at least 2 points (4 numbers)
 
       // Determine how many points to draw
-      let pointsToDraw = stroke.points.length;
+      let numsToDraw = stroke.points.length;
       if (
         stroke.id === animatingStrokeId &&
         animatingPointCount !== undefined
       ) {
-        pointsToDraw = Math.max(2, animatingPointCount);
+        // animatingPointCount is the number of points (pairs of numbers)
+        numsToDraw = Math.max(4, animatingPointCount * 2);
       }
 
       ctx.strokeStyle = stroke.color;
-      ctx.lineWidth = stroke.width; // Scale width if needed? No, logic uses simulated width
+      ctx.lineWidth = stroke.width;
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
 
       ctx.beginPath();
-      ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
+      ctx.moveTo(stroke.points[0], stroke.points[1]);
 
-      for (let i = 1; i < pointsToDraw; i++) {
-        ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
+      for (let i = 2; i < numsToDraw; i += 2) {
+        ctx.lineTo(stroke.points[i], stroke.points[i + 1]);
       }
 
       ctx.stroke();
@@ -179,7 +180,7 @@ export default function CanvasGameUI({
   const animateStroke = (stroke: DrawStroke): Promise<void> => {
     return new Promise((resolve) => {
       const canvas = canvasRef.current;
-      if (!canvas || stroke.points.length < 2) {
+      if (!canvas || stroke.points.length < 4) {
         resolve();
         return;
       }
@@ -192,7 +193,7 @@ export default function CanvasGameUI({
 
       // Use stroke's actual duration (minimum 200ms for very fast strokes)
       const duration = Math.max(stroke.duration || 500, 200);
-      const pointCount = stroke.points.length;
+      const pointCount = stroke.points.length / 2;
       const startTime = performance.now();
 
       const animate = (currentTime: number) => {
@@ -307,28 +308,28 @@ export default function CanvasGameUI({
     setIsDrawing(true);
     strokeStartTimeRef.current = performance.now();
     const point = getCanvasPoint(e);
-    setCurrentStroke([point]);
+    setCurrentStroke([point.x, point.y]);
   };
 
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!isDrawing || !canDraw) return;
 
     const point = getCanvasPoint(e);
-    setCurrentStroke((prev) => [...prev, point]);
+    setCurrentStroke((prev) => [...prev, point.x, point.y]);
 
     // Draw current stroke in real-time
     const canvas = canvasRef.current!;
     const ctx = canvas.getContext("2d")!;
 
-    if (currentStroke.length > 0) {
+    if (currentStroke.length >= 2) {
       ctx.strokeStyle = currentColor;
       ctx.lineWidth = currentStrokeWidth;
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
       ctx.beginPath();
       ctx.moveTo(
-        currentStroke[currentStroke.length - 1].x,
-        currentStroke[currentStroke.length - 1].y,
+        currentStroke[currentStroke.length - 2],
+        currentStroke[currentStroke.length - 1],
       );
       ctx.lineTo(point.x, point.y);
       ctx.stroke();
@@ -336,7 +337,7 @@ export default function CanvasGameUI({
   };
 
   const handleMouseUp = () => {
-    if (!isDrawing || currentStroke.length < 2) {
+    if (!isDrawing || currentStroke.length < 4) {
       setIsDrawing(false);
       setCurrentStroke([]);
       return;
@@ -376,23 +377,23 @@ export default function CanvasGameUI({
     setIsDrawing(true);
     strokeStartTimeRef.current = performance.now();
     const point = getTouchPoint(e);
-    setCurrentStroke([point]);
+    setCurrentStroke([point.x, point.y]);
   };
   const handleTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
     if (!isDrawing || !canDraw) return;
     const point = getTouchPoint(e);
-    setCurrentStroke((prev) => [...prev, point]);
+    setCurrentStroke((prev) => [...prev, point.x, point.y]);
     const canvas = canvasRef.current!;
     const ctx = canvas.getContext("2d")!;
-    if (currentStroke.length > 0) {
+    if (currentStroke.length >= 2) {
       ctx.strokeStyle = currentColor;
       ctx.lineWidth = currentStrokeWidth;
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
       ctx.beginPath();
       ctx.moveTo(
-        currentStroke[currentStroke.length - 1].x,
-        currentStroke[currentStroke.length - 1].y,
+        currentStroke[currentStroke.length - 2],
+        currentStroke[currentStroke.length - 1],
       );
       ctx.lineTo(point.x, point.y);
       ctx.stroke();
@@ -426,28 +427,28 @@ export default function CanvasGameUI({
     setChatInput("");
   };
 
-  // Helper to get remaining time string (approx)
-  const getRemainingTime = () => {
-    if (!state.gartic?.roundEndTime) return 0;
-    if (state.gartic.isPaused) {
-      return Math.max(
-        0,
-        Math.floor((state.gartic.pausedRemainingTime || 0) / 1000),
-      );
-    }
-    const left = Math.max(
-      0,
-      Math.floor((state.gartic.roundEndTime - Date.now()) / 1000),
-    );
-    return left;
-  };
-
   // Force re-render for timer every second?
   const [timeLeft, setTimeLeft] = useState(0);
   useEffect(() => {
+    // Helper to get remaining time string (approx)
+    const getRemainingTime = () => {
+      if (!state.gartic?.roundEndTime) return 0;
+      if (state.gartic.isPaused) {
+        return Math.max(
+          0,
+          Math.floor((state.gartic.pausedRemainingTime || 0) / 1000),
+        );
+      }
+      const left = Math.max(
+        0,
+        Math.floor((state.gartic.roundEndTime - Date.now()) / 1000),
+      );
+      return left;
+    };
     const interval = setInterval(() => {
       setTimeLeft(getRemainingTime());
     }, 1000);
+    setTimeLeft(getRemainingTime()); // Update immediately
     return () => clearInterval(interval);
   }, [
     state.gartic?.roundEndTime,

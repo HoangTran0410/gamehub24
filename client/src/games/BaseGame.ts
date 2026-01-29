@@ -153,13 +153,16 @@ export abstract class BaseGame<T> {
     if (!this.updateScheduled) {
       this.updateScheduled = true;
       queueMicrotask(() => {
-        this.onStateUpdate(this.state);
-        if (this.isHost && this.autoBroadcast) {
-          this.broadcastState();
-        } else {
-          this.updateLastSynced();
+        try {
+          this.onStateUpdate(this.state);
+          if (this.isHost && this.autoBroadcast) {
+            this.broadcastState();
+          } else {
+            this.updateLastSynced();
+          }
+        } finally {
+          this.updateScheduled = false;
         }
-        this.updateScheduled = false;
       });
     }
   }
