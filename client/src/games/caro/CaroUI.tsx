@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
 import Caro from "./Caro";
-import { type CaroState } from "./types";
 import {
   X,
   Circle,
@@ -16,13 +15,14 @@ import useLanguage from "../../stores/languageStore";
 import type { GameUIProps } from "../types";
 import { useAlertStore } from "../../stores/alertStore";
 import { createPortal } from "react-dom";
+import useGameState from "../../hooks/useGameState";
 
 const BOARD_SIZE = 50;
 const CELL_SIZE = 40;
 
 export default function CaroUI({ game: baseGame }: GameUIProps) {
   const game = baseGame as Caro;
-  const [state, setState] = useState<CaroState>(game.getState());
+  const [state] = useGameState(game);
   const { userId } = useUserStore();
   const { confirm: showConfirm } = useAlertStore();
   const { ti, ts } = useLanguage();
@@ -32,10 +32,6 @@ export default function CaroUI({ game: baseGame }: GameUIProps) {
   const mySymbol = game.getPlayerSymbol();
   const isMyTurn = state.currentTurn === mySymbol;
   // Game logic handles turn validation, UI just needs to reflect it.
-
-  useEffect(() => {
-    return game.onUpdate((newState) => setState(newState));
-  }, [game]);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);

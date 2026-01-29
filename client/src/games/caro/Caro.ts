@@ -86,19 +86,16 @@ export default class Caro extends BaseGame<CaroState> {
   }
 
   reset(): void {
-    this.state = {
-      board: {},
-      currentTurn: "X",
-      winner: null,
-      winningLine: null,
-      isDraw: false,
-      players: this.state.players,
-      gameOver: false,
-      history: [],
-      lastMove: null,
-      pendingUndoRequest: null,
-      gamePhase: "waiting",
-    };
+    this.state.board = {};
+    this.state.currentTurn = "X";
+    this.state.winner = null;
+    this.state.winningLine = null;
+    this.state.isDraw = false;
+    this.state.gameOver = false;
+    this.state.history = [];
+    this.state.lastMove = null;
+    this.state.pendingUndoRequest = null;
+    this.state.gamePhase = "waiting";
   }
 
   updatePlayers(players: Player[]): void {
@@ -114,10 +111,8 @@ export default class Caro extends BaseGame<CaroState> {
       };
     }
 
-    this.state.players = {
-      X: x,
-      O: o,
-    };
+    this.state.players.X = x;
+    this.state.players.O = o;
   }
   // --- Helpers ---
 

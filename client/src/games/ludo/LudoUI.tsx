@@ -1,12 +1,13 @@
 import { useEffect, useState, useRef } from "react";
 import Ludo from "./Ludo";
-import type { LudoState, Token, PlayerColor, TokenPosition } from "./types";
+import type { Token, PlayerColor, TokenPosition } from "./types";
 import { SAFE_POSITIONS } from "./types";
 import { Play, RefreshCw, Dices, BookOpen, X } from "lucide-react";
 import { useAlertStore } from "../../stores/alertStore";
 import type { GameUIProps } from "../types";
 import useLanguage from "../../stores/languageStore";
 import { createPortal } from "react-dom";
+import useGameState from "../../hooks/useGameState";
 
 // Color mappings for CSS
 const COLOR_CLASSES: Record<
@@ -76,7 +77,7 @@ const animationStyles = `
 export default function LudoUI({ game: baseGame, currentUserId }: GameUIProps) {
   const game = baseGame as Ludo;
   const { ti, ts } = useLanguage();
-  const [state, setState] = useState<LudoState>(game.getState());
+  const [state] = useGameState(game);
   const [rolling, setRolling] = useState(false);
   const [displayDice, setDisplayDice] = useState<number>(1);
   const [showingResult, setShowingResult] = useState(false);
@@ -134,8 +135,6 @@ export default function LudoUI({ game: baseGame, currentUserId }: GameUIProps) {
       } else if (newState.diceValue === null) {
         prevDiceValue.current = null;
       }
-
-      setState(newState);
     });
 
     // Cleanup on unmount

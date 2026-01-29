@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Reversi from "./Reversi";
-import type { ReversiState, Cell } from "./types";
+import type { Cell } from "./types";
 import {
   Bot,
   RotateCcw,
@@ -14,6 +14,7 @@ import type { GameUIProps } from "../types";
 import useLanguage from "../../stores/languageStore";
 import { useAlertStore } from "../../stores/alertStore";
 import { createPortal } from "react-dom";
+import useGameState from "../../hooks/useGameState";
 
 // CSS for flip animation
 const flipStyle = `
@@ -29,14 +30,10 @@ export default function ReversiUI({
   currentUserId,
 }: GameUIProps) {
   const game = baseGame as Reversi;
-  const [state, setState] = useState<ReversiState>(game.getState());
+  const [state] = useGameState(game);
   const [showRules, setShowRules] = useState(false);
   const { ti, ts } = useLanguage();
   const { confirm: showConfirm } = useAlertStore();
-
-  useEffect(() => {
-    return game.onUpdate(setState);
-  }, [game]);
 
   const myColor = game.getMyColor();
   const currentTurn = state.turn;

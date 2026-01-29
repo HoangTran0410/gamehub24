@@ -693,15 +693,12 @@ export default class Poker extends BaseGame<PokerState> {
   // --- Slot Management ---
 
   private addBot(slotIndex: number) {
-    if (this.state.players[slotIndex].id !== null) return;
-    this.state.players[slotIndex] = {
-      ...this.state.players[slotIndex],
-      id: `BOT_${Date.now()}_${slotIndex}`,
-      username: `Bot ${slotIndex + 1}`,
-      isBot: true,
-      chips: 1000,
-    };
-    this.state.players = [...this.state.players]; // Update reference for React
+    const player = this.state.players[slotIndex];
+    if (player.id !== null) return;
+    player.id = `BOT_${Date.now()}_${slotIndex}`;
+    player.username = `Bot ${slotIndex + 1}`;
+    player.isBot = true;
+    player.chips = 1000;
   }
 
   private resetGame() {
@@ -728,8 +725,6 @@ export default class Poker extends BaseGame<PokerState> {
         p.chips = 1000;
       }
     });
-
-    this.state.players = [...this.state.players];
   }
 
   private joinSlot(slotIndex: number, playerId: string, playerName: string) {
@@ -740,36 +735,31 @@ export default class Poker extends BaseGame<PokerState> {
       this.removePlayer(existing);
     }
 
-    this.state.players[slotIndex] = {
-      ...this.state.players[slotIndex],
-      id: playerId,
-      username: playerName,
-      isBot: false,
-      isGuest: false, // Assume proper player
-      chips: 1000,
-    };
-    this.state.players = [...this.state.players]; // Update reference
+    const player = this.state.players[slotIndex];
+    player.id = playerId;
+    player.username = playerName;
+    player.isBot = false;
+    player.isGuest = false; // Assume proper player
+    player.chips = 1000;
   }
 
   private removePlayer(slotIndex: number) {
-    this.state.players[slotIndex] = {
-      id: null,
-      username: `Seat ${slotIndex + 1}`,
-      hand: [],
-      chips: 1000,
-      currentBet: 0,
-      isBot: false,
-      isGuest: false,
-      isHost: false,
-      hasFolded: false,
-      isAllIn: false,
-      isDealer: false,
-      isSmallBlind: false,
-      isBigBlind: false,
-      isActive: false,
-      hasActed: false,
-    };
-    this.state.players = [...this.state.players]; // Update reference
+    const player = this.state.players[slotIndex];
+    player.id = null;
+    player.username = `Seat ${slotIndex + 1}`;
+    player.hand = [];
+    player.chips = 1000;
+    player.currentBet = 0;
+    player.isBot = false;
+    player.isGuest = false;
+    player.isHost = false;
+    player.hasFolded = false;
+    player.isAllIn = false;
+    player.isDealer = false;
+    player.isSmallBlind = false;
+    player.isBigBlind = false;
+    player.isActive = false;
+    player.hasActed = false;
   }
 
   // --- Public Requests ---

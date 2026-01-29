@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
 import Poker from "./Poker";
-import type { PokerState, PokerPlayer, Card } from "./types";
+import type { PokerPlayer, Card } from "./types";
 import {
   SUIT_SYMBOLS,
   RANK_DISPLAY,
@@ -27,10 +27,11 @@ import {
 import useLanguage from "../../stores/languageStore";
 import { createPortal } from "react-dom";
 import { useAlertStore } from "../../stores/alertStore";
+import useGameState from "../../hooks/useGameState";
 
 export default function PokerUI({ game: baseGame }: GameUIProps) {
   const game = baseGame as Poker;
-  const [state, setState] = useState<PokerState>(game.getState());
+  const [state] = useGameState(game);
   // const { username } = useUserStore();
   const { ti, ts } = useLanguage();
   const { confirm: showConfirm } = useAlertStore();
@@ -41,15 +42,6 @@ export default function PokerUI({ game: baseGame }: GameUIProps) {
   const myIndex = game.getMyPlayerIndex();
   const mySlot = myIndex >= 0 ? state.players[myIndex] : null;
   const isMyTurn = state.currentTurnIndex === myIndex;
-
-  useEffect(() => {
-    return game.onUpdate((newState) => {
-      setState(newState);
-      // Reset raise amount when turn changes or round changes?
-      // Better to set default raise amount based on new state minRaise
-      // but only if it's my turn?
-    });
-  }, [game]);
 
   // Update local raise amount when minRaise changes or it becomes my turn
   useEffect(() => {

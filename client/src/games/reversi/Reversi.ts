@@ -422,16 +422,13 @@ export default class Reversi extends BaseGame<ReversiState> {
   }
 
   reset(): void {
-    this.state = {
-      ...this.state,
-      board: this.encodeBoard(this.createInitialBoard()),
-      turn: "black",
-      winner: null,
-      gamePhase: "waiting",
-      undoRequest: null,
-      moveHistory: [],
-      lastMove: null,
-    };
+    this.state.board = this.encodeBoard(this.createInitialBoard());
+    this.state.turn = "black";
+    this.state.winner = null;
+    this.state.gamePhase = "waiting";
+    this.state.undoRequest = null;
+    this.state.moveHistory = [];
+    this.state.lastMove = null;
   }
 
   updatePlayers(players: Player[]): void {

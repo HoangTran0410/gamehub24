@@ -399,7 +399,7 @@ games.set("maze", {
     vi: "Đua về đích trong mê cung được tạo ngẫu nhiên!",
   },
   icon: Accessibility,
-  categories: ["puzzle", "party", "strategy"],
+  categories: ["puzzle", "party"],
   minPlayers: 1,
   maxPlayers: 10,
   isAvailable: true,

@@ -360,12 +360,10 @@ export default class Ludo extends BaseGame<LudoState> {
     if (slotIndex < 0 || slotIndex >= 4) return;
     if (this.state.players[slotIndex].id !== null) return;
 
-    this.state.players[slotIndex] = {
-      ...this.state.players[slotIndex],
-      id: `BOT_${Date.now()}_${slotIndex}`,
-      username: `Bot ${slotIndex + 1}`,
-      isBot: true,
-    };
+    const player = this.state.players[slotIndex];
+    player.id = `BOT_${Date.now()}_${slotIndex}`;
+    player.username = `Bot ${slotIndex + 1}`;
+    player.isBot = true;
   }
 
   private handleRemoveBot(slotIndex: number): void {
@@ -373,12 +371,10 @@ export default class Ludo extends BaseGame<LudoState> {
     if (slotIndex < 0 || slotIndex >= 4) return;
     if (!this.state.players[slotIndex].isBot) return;
 
-    this.state.players[slotIndex] = {
-      ...this.state.players[slotIndex],
-      id: null,
-      username: `Player ${slotIndex + 1}`,
-      isBot: false,
-    };
+    const player = this.state.players[slotIndex];
+    player.id = null;
+    player.username = `Player ${slotIndex + 1}`;
+    player.isBot = false;
   }
 
   private checkBotTurn(): void {
@@ -533,22 +529,18 @@ export default class Ludo extends BaseGame<LudoState> {
   }
 
   reset(): void {
-    this.state = {
-      ...this.state,
-      players: this.state.players.map((p) => ({
-        ...p,
-        tokens: this.createInitialTokens(),
-        hasFinished: false,
-      })),
-      currentPlayerIndex: 0,
-      diceValue: null,
-      hasRolled: false,
-      canRollAgain: false,
-      gamePhase: "waiting",
-      winner: null,
-      lastMove: null,
-      consecutiveSixes: 0,
-    };
+    this.state.players.forEach((p) => {
+      p.tokens = this.createInitialTokens();
+      p.hasFinished = false;
+    });
+    this.state.currentPlayerIndex = 0;
+    this.state.diceValue = null;
+    this.state.hasRolled = false;
+    this.state.canRollAgain = false;
+    this.state.gamePhase = "waiting";
+    this.state.winner = null;
+    this.state.lastMove = null;
+    this.state.consecutiveSixes = 0;
   }
 
   updatePlayers(players: { id: string; username: string }[]): void {

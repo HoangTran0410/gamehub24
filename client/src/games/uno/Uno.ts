@@ -177,7 +177,7 @@ export default class Uno extends BaseGame<UnoState> {
     const cardsPerPlayer = 7;
 
     let cardIndex = 0;
-    for (const player of this.getState().players) {
+    for (const player of this.state.players) {
       if (player.id !== null) {
         player.hand = deck.slice(cardIndex, cardIndex + cardsPerPlayer);
         cardIndex += cardsPerPlayer;
@@ -456,7 +456,7 @@ export default class Uno extends BaseGame<UnoState> {
       isHost: false,
       calledUno: false,
     };
-    this.state = { ...this.state, players: newPlayers };
+    this.state.players = newPlayers;
   }
 
   private handleJoinSlot(
@@ -478,7 +478,7 @@ export default class Uno extends BaseGame<UnoState> {
       isHost: false,
       calledUno: false,
     };
-    this.state = { ...this.state, players: newPlayers };
+    this.state.players = newPlayers;
   }
 
   private handleRemovePlayer(slotIndex: number): void {
@@ -497,7 +497,7 @@ export default class Uno extends BaseGame<UnoState> {
       isHost: false,
       calledUno: false,
     };
-    this.state = { ...this.state, players: newPlayers };
+    this.state.players = newPlayers;
   }
 
   // ============== Game Flow ==============

@@ -168,7 +168,8 @@ export default class MyGame extends BaseGame<MyGameState> {
         this.handleMove(action);
         break;
       case 'RESET':
-        this.setState(this.getInitState());
+        // DÙNG: Cập nhật từng field hoặc dùng Object.assign
+        Object.assign(this.state, this.getInitState());
         break;
     }
   }
@@ -198,16 +199,8 @@ import MyGame from './MyGame';
 
 const MyGameUI: React.FC<GameUIProps> = ({ game, currentUserId }) => {
   const myGame = game as MyGame;
-  // Hook state vào React
-  const [gameState, setGameState] = useState(myGame.getState());
-
-  useEffect(() => {
-    // Subscribe lắng nghe thay đổi từ game core
-    const unsubscribe = myGame.onUpdate((newState) => {
-      setGameState(newState);
-    });
-    return unsubscribe;
-  }, [myGame]);
+  // Hook state vào React - giúp UI tự động re-render khi state thay đổi
+  const state = useGameState(myGame);
 
   const handleCellClick = (x: number, y: number) => {
     // Gửi action (Game Core sẽ tự quyết định gửi Socket hay xử lý luôn)
@@ -216,8 +209,8 @@ const MyGameUI: React.FC<GameUIProps> = ({ game, currentUserId }) => {
 
   return (
     <div>
-        <h1>Turn: {gameState.currentTurn}</h1>
-        {/* Render Board */}
+        <h1>Turn: {state.currentTurn}</h1>
+        {/* Render Board dùng 'state' */}
     </div>
   );
 };
@@ -253,6 +246,8 @@ games.set('mygame', {
 ## 💡 Best Practices
 
 1.  **State phải Serializable:** State chỉ được chứa dữ liệu đơn giản (object, array, string, number). Không lưu class instance, function, hay DOM element vào state.
-2.  **Logic hoàn toàn ở Host:** UI (`MyGameUI`) chỉ nên hiển thị và gửi action. Đừng viết logic tính điểm hay thắng thua ở UI.
-3.  **Bot AI:** Viết logic bot trong class Game. Dùng `setTimeout` để tạo độ trễ cho bot, giúp cảm giác tự nhiên hơn.
-4.  **Debug:** Dùng `console.log(this.state)` trong `onSocketGameAction` để xem state thay đổi thế nào.
+2.  **KHÔNG re-assign `this.state`:** Tuyệt đối không dùng `this.state = { ... }`. Hãy mutate trực tiếp (ví dụ: `this.state.score = 10`) hoặc dùng `Object.assign(this.state, newState)`. Việc re-assign sẽ làm hỏng hệ thống Proxy theo dõi thay đổi.
+3.  **Dùng `useGameState` hook:** Luôn sử dụng `useGameState(game)` trong React component để đảm bảo re-render tối ưu và nhận được immutable snapshot với structural sharing.
+4.  **Logic hoàn toàn ở Host:** UI (`MyGameUI`) chỉ nên hiển thị và gửi action. Đừng viết logic tính điểm hay thắng thua ở UI.
+5.  **Bot AI:** Viết logic bot trong class Game. Dùng `setTimeout` để tạo độ trễ cho bot, giúp cảm giác tự nhiên hơn.
+6.  **Debug:** Dùng `console.log(this.state)` trong `onSocketGameAction` để xem state thay đổi thế nào.

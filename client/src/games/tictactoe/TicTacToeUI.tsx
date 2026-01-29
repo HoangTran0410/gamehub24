@@ -1,13 +1,13 @@
-import { useEffect, useState } from "react";
 import TicTacToe from "./TicTacToe";
 import type { TicTacToeAction, TicTacToeState } from "./types";
 import { RefreshCcw, X, Circle, Bot, Play } from "lucide-react";
 import useLanguage from "../../stores/languageStore";
 import type { GameUIProps } from "../types";
+import useGameState from "../../hooks/useGameState";
 
 export default function TicTacToeUI({ game: baseGame }: GameUIProps) {
   const game = baseGame as TicTacToe;
-  const [state, setState] = useState<TicTacToeState>(game.getState());
+  const [state] = useGameState<TicTacToeState>(game);
   const { ti } = useLanguage();
 
   const mySymbol = game.getPlayerSymbol();
@@ -15,13 +15,6 @@ export default function TicTacToeUI({ game: baseGame }: GameUIProps) {
   const board = state.board;
   const winningLine = state.winningLine;
   const lastMoveIndex = state.lastMoveIndex;
-
-  useEffect(() => {
-    // Subscribe to game state updates
-    return game.onUpdate((state) => {
-      setState(state);
-    });
-  }, [game]);
 
   const handleCellClick = (index: number) => {
     if (state.gameOver) return;

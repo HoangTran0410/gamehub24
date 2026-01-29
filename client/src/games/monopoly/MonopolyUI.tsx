@@ -1,5 +1,6 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import Monopoly from "./Monopoly";
+import useGameState from "../../hooks/useGameState";
 import {
   type MonopolyState,
   type BoardSpace,
@@ -72,16 +73,15 @@ export default function MonopolyUI({
 }: GameUIProps) {
   const game = baseGame as Monopoly;
   const { confirm: showConfirm } = useAlertStore();
-  const [state, setState] = useState<MonopolyState>(game.getState());
-  const [historyLogs, setHistoryLogs] = useState<GameLog[]>(
-    Object.values(game.getState().logs || {}).sort(
+  const [historyLogs, setHistoryLogs] = useState<GameLog[]>(() =>
+    Object.values(game.snapshot.logs || {}).sort(
       (a, b) => a.timestamp - b.timestamp,
     ),
   );
   const { ti, ts } = useLanguage();
   const [rolling, setRolling] = useState(false);
   const [displayDice, setDisplayDice] = useState<[number, number]>(
-    game.getState().diceValues || [1, 1],
+    game.snapshot.diceValues || [1, 1],
   );
   const [selectedProperty, setSelectedProperty] = useState<BoardSpace | null>(
     null,
@@ -95,6 +95,91 @@ export default function MonopolyUI({
     Record<string, boolean>
   >({});
   const [tradePlayerId, setTradePlayerId] = useState<string | null>(null);
+
+  const isRollingRef = useRef(false);
+  const lastDiceRef = useRef<number[] | undefined>(game.snapshot.diceValues);
+  const latestStateRef = useRef<MonopolyState>(game.snapshot);
+  const lastPositionsRef = useRef<Record<string, number>>({});
+
+  const handleGameStateUpdate = useCallback(
+    (newState: MonopolyState, _setState: (s: MonopolyState) => void) => {
+      latestStateRef.current = newState;
+
+      const newDice = newState.diceValues;
+      const isNewRoll =
+        newDice &&
+        (!lastDiceRef.current ||
+          newDice[0] !== lastDiceRef.current[0] ||
+          newDice[1] !== lastDiceRef.current[1]);
+
+      if (isNewRoll && !isRollingRef.current) {
+        isRollingRef.current = true;
+        lastDiceRef.current = newDice;
+        setRolling(true);
+
+        let count = 0;
+        const interval = setInterval(() => {
+          setDisplayDice([
+            Math.floor(Math.random() * 6) + 1,
+            Math.floor(Math.random() * 6) + 1,
+          ]);
+          count++;
+          if (count > 8) {
+            clearInterval(interval);
+            const finalState = latestStateRef.current;
+
+            setDisplayDice(finalState.diceValues || newDice);
+            setRolling(false);
+            isRollingRef.current = false;
+
+            _setState(finalState);
+
+            const posMap: Record<string, number> = {};
+            finalState.players.forEach((p) => {
+              if (p.id) posMap[p.id] = p.position;
+            });
+            lastPositionsRef.current = posMap;
+          }
+        }, 80);
+      } else if (!isRollingRef.current) {
+        _setState(newState);
+        if (newState.diceValues) {
+          setDisplayDice(newState.diceValues);
+        }
+        lastDiceRef.current = newState.diceValues || undefined;
+
+        const posMap: Record<string, number> = {};
+        newState.players.forEach((p) => {
+          if (p.id) posMap[p.id] = p.position;
+        });
+        lastPositionsRef.current = posMap;
+      }
+
+      setHistoryLogs((prevLogs) => {
+        const newLogsObj = newState.logs || {};
+        const newLogs = Object.values(newLogsObj);
+
+        if (
+          Object.keys(newLogsObj).length === 0 &&
+          newState.gamePhase === "waiting"
+        ) {
+          return [];
+        }
+
+        const existingIds = new Set(prevLogs.map((l) => l.id));
+        const uniqueNewLogs = newLogs.filter((l) => !existingIds.has(l.id));
+
+        if (uniqueNewLogs.length === 0) return prevLogs;
+
+        return [...prevLogs, ...uniqueNewLogs].sort(
+          (a, b) => a.timestamp - b.timestamp,
+        );
+      });
+    },
+    [],
+  );
+
+  const [state] = useGameState(game, handleGameStateUpdate);
 
   // View Mode for Mobile
   const [viewMode, setViewMode] = useState<"fit" | "zoom">("fit");
@@ -163,119 +248,6 @@ export default function MonopolyUI({
       if (rafId) cancelAnimationFrame(rafId);
     };
   }, [hoveredPropertyId, selectedProperty]);
-
-  const isRollingRef = useRef(false);
-  const lastDiceRef = useRef<number[] | undefined>(game.getState().diceValues);
-  // Track latest state to prevent stale closures during animation
-  const latestStateRef = useRef<MonopolyState>(game.getState());
-
-  // Cache player positions to handle mutated state delay
-  const lastPositionsRef = useRef<Record<string, number>>({});
-
-  useEffect(() => {
-    // Init positions cache
-    const initialPos: Record<string, number> = {};
-    game.getState().players.forEach((p) => {
-      if (p.id) initialPos[p.id] = p.position;
-    });
-    lastPositionsRef.current = initialPos;
-    latestStateRef.current = game.getState();
-
-    return game.onUpdate((newState) => {
-      latestStateRef.current = newState;
-
-      // Detect new dice roll by comparing with last known dice values
-      const newDice = newState.diceValues;
-      const isNewRoll =
-        newDice &&
-        (!lastDiceRef.current ||
-          newDice[0] !== lastDiceRef.current[0] ||
-          newDice[1] !== lastDiceRef.current[1]);
-
-      if (isNewRoll && !isRollingRef.current) {
-        // Start animation sequence
-        isRollingRef.current = true;
-        lastDiceRef.current = newDice;
-        setRolling(true);
-
-        let count = 0;
-        const interval = setInterval(() => {
-          setDisplayDice([
-            Math.floor(Math.random() * 6) + 1,
-            Math.floor(Math.random() * 6) + 1,
-          ]);
-          count++;
-          if (count > 8) {
-            clearInterval(interval);
-            // Use LATEST state from ref to avoid stale closure (e.g. if player moved during animation)
-            const finalState = latestStateRef.current;
-
-            setDisplayDice(finalState.diceValues || newDice); // Fallback to current roll if nulled (unlikely)
-            setRolling(false);
-            isRollingRef.current = false;
-
-            // UPDATE STATE ONLY AFTER ANIMATION FINISHES
-            setState(finalState);
-
-            // Update cache after animation
-            const posMap: Record<string, number> = {};
-            finalState.players.forEach((p) => {
-              if (p.id) posMap[p.id] = p.position;
-            });
-            lastPositionsRef.current = posMap;
-          }
-        }, 80);
-        return;
-      }
-
-      // If not rolling, update immediately
-      if (!isRollingRef.current) {
-        setState(newState);
-        // Sync displayDice if needed (e.g. valid dice but missed animation or initial load)
-        if (newState.diceValues) {
-          setDisplayDice(newState.diceValues);
-        }
-
-        // Important: Reset lastDiceRef if new dice is null (end of turn)
-        // or update it if it's a re-load/sync without animation
-        lastDiceRef.current = newState.diceValues || undefined;
-
-        // Update positions cache
-        const posMap: Record<string, number> = {};
-        newState.players.forEach((p) => {
-          if (p.id) posMap[p.id] = p.position;
-        });
-        lastPositionsRef.current = posMap;
-      }
-
-      // Update local history logs (accumulate unique logs)
-      setHistoryLogs((prevLogs) => {
-        const newLogsObj = newState.logs || {};
-        const newLogs = Object.values(newLogsObj);
-
-        // Detect reset: if newLogs are empty but we had logs before (and it's a reset action)
-        // Actually, since we accumulate, we might want to respect the server's truth if it cleared logs
-        // BUT, usually we want to keep history.
-        // If the server explicitly has empty logs and game phase is waiting (reset), clear history
-        if (
-          Object.keys(newLogsObj).length === 0 &&
-          newState.gamePhase === "waiting"
-        ) {
-          return [];
-        }
-
-        const existingIds = new Set(prevLogs.map((l) => l.id));
-        const uniqueNewLogs = newLogs.filter((l) => !existingIds.has(l.id));
-
-        if (uniqueNewLogs.length === 0) return prevLogs;
-
-        // Merge and Sort
-        return [...prevLogs, ...uniqueNewLogs].sort(
-          (a, b) => a.timestamp - b.timestamp,
-        );
-      });
-    });
-  }, [game]);
 
   const myIndex = game.getMyPlayerIndex();
   const currentPlayer = state.players[state.currentPlayerIndex];

@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import DotsAndBoxes from "./DotsAndBoxes";
-import type { DotsAndBoxesState, PlayerColor } from "./types";
+import type { PlayerColor } from "./types";
 import { Play, RefreshCw, BookOpen, X } from "lucide-react";
 import useLanguage from "../../stores/languageStore";
 import type { GameUIProps } from "../types";
 import { createPortal } from "react-dom";
+import useGameState from "../../hooks/useGameState";
 
 const PLAYER_BG_COLORS: Record<PlayerColor, string> = {
   red: "bg-red-500/60",
@@ -21,13 +22,9 @@ export default function DotsAndBoxesUI({
   currentUserId,
 }: GameUIProps) {
   const game = baseGame as DotsAndBoxes;
-  const [state, setState] = useState<DotsAndBoxesState>(game.getState());
+  const [state] = useGameState(game);
   const [showRules, setShowRules] = useState(false);
   const { ti, ts } = useLanguage();
-
-  useEffect(() => {
-    return game.onUpdate(setState);
-  }, [game]);
 
   const currentPlayer = state.players[state.currentPlayerIndex];
   const isMyTurn = currentPlayer?.id === currentUserId;

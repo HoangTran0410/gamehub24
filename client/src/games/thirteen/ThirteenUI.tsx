@@ -1,6 +1,6 @@
-import { useEffect, useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Thirteen from "./Thirteen";
-import type { ThirteenState, Card, PlayerSlot } from "./types";
+import type { Card, PlayerSlot } from "./types";
 import { SUIT_SYMBOLS, RANK_DISPLAY, Suit } from "./types";
 import { useRoomStore } from "../../stores/roomStore";
 import {
@@ -20,17 +20,18 @@ import { useAlertStore } from "../../stores/alertStore";
 import useLanguage from "../../stores/languageStore";
 import type { GameUIProps } from "../types";
 import { createPortal } from "react-dom";
+import useGameState from "../../hooks/useGameState";
 
 export default function ThirteenUI({ game: baseGame }: GameUIProps) {
   const game = baseGame as Thirteen;
-  const [state, setState] = useState<ThirteenState>(game.getState());
+  const [state] = useGameState(game);
   const [selectedCards, setSelectedCards] = useState<number[]>([]);
   const [expandPlays, setExpandPlays] = useState(false);
   const [showRules, setShowRules] = useState(false);
   const { username } = useUserStore();
   const { ti, ts } = useLanguage();
   const { confirm: showConfirm } = useAlertStore();
-  const currentRoom = useRoomStore((state) => state.currentRoom);
+  const { currentRoom } = useRoomStore();
 
   const isHost = game.isHost;
   const myIndex = game.getMyPlayerIndex();
@@ -49,8 +50,7 @@ export default function ThirteenUI({ game: baseGame }: GameUIProps) {
   }, [selectedCards, mySlot, game]);
 
   useEffect(() => {
-    return game.onUpdate((newState) => {
-      setState(newState);
+    return game.onUpdate((_newState) => {
       setSelectedCards([]);
     });
   }, [game]);

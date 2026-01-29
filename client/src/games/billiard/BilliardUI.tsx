@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import Billiard from "./Billiard";
-import type { BilliardState, Ball } from "./types";
+import type { Ball } from "./types";
 import {
   TABLE_WIDTH,
   TABLE_HEIGHT,
@@ -26,10 +26,12 @@ import { useUserStore } from "../../stores/userStore";
 import useLanguage from "../../stores/languageStore";
 import type { GameUIProps } from "../types";
 import { useAlertStore } from "../../stores/alertStore";
+import useGameState from "../../hooks/useGameState";
 
 export default function BilliardUI({ game: baseGame }: GameUIProps) {
   const game = baseGame as Billiard;
-  const [state, setState] = useState<BilliardState>(game.getState());
+  const [state] = useGameState(game);
+
   const { username: myUsername } = useUserStore();
   const { ti, ts } = useLanguage();
   const { confirm: showConfirm } = useAlertStore();
@@ -39,7 +41,7 @@ export default function BilliardUI({ game: baseGame }: GameUIProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Store balls in a ref for 60fps drawing without React re-renders
-  const ballsRef = useRef<Ball[]>(game.getState().balls);
+  const ballsRef = useRef<Ball[]>(state.balls);
 
   // Ball trails for moving balls
   const trailsRef = useRef<Map<number, { x: number; y: number }[]>>(new Map());
@@ -348,7 +350,7 @@ export default function BilliardUI({ game: baseGame }: GameUIProps) {
     });
 
     // Get current game state for highlighting
-    const currentState = game.getState();
+    const currentState = game.state;
     const mySlot = game.getMySlot();
     const canAct =
       mySlot === currentState.currentTurn &&
@@ -729,18 +731,13 @@ export default function BilliardUI({ game: baseGame }: GameUIProps) {
 
   // Initial draw and redraw on state changes (STATIC updates)
   useEffect(() => {
-    drawCanvas();
-    console.log("drawCanvas");
-  }, [drawCanvas, state, isAiming, aimAngle, aimPower, scale]);
+    const frameId = requestAnimationFrame(drawCanvas);
+    return () => cancelAnimationFrame(frameId);
+  }, [drawCanvas, isAiming, aimAngle, aimPower, scale]);
 
   // Subscribe to game updates
   useEffect(() => {
     const unsub = game.onUpdate((newState) => {
-      // TODO this will call multiple times on simulating state
-      // if (!newState.isSimulating) {
-      setState(newState);
-      // }
-
       ballsRef.current = newState.balls;
 
       if (
@@ -1025,7 +1022,7 @@ export default function BilliardUI({ game: baseGame }: GameUIProps) {
 
     const onTouchStart = (e: TouchEvent) => {
       // Check turn and state
-      if (!game.isMyTurn() || game.getState().isSimulating) return;
+      if (!game.isMyTurn() || game.state.isSimulating) return;
 
       const cueBallNow = ballsRef.current.find(
         (b) => b.id === 0 && !b.pocketed,

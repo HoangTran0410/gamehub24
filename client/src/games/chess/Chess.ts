@@ -141,24 +141,19 @@ export default class ChessGame extends BaseGame<ChessState> {
 
   reset(): void {
     chess.reset();
-    this.state = {
-      fen: chess.fen(),
-      turn: "w",
-      winner: null,
-      isDraw: false,
-      check: false,
-      players: this.state.players,
-      gameOver: false,
-      history: [],
-      lastMove: null,
-      capturedPieces: {
-        white: [],
-        black: [],
-      },
-      pendingUndoRequest: null,
-      pendingNewGameRequest: null,
-      isBotLoading: false,
-    };
+    this.state.fen = chess.fen();
+    this.state.turn = "w";
+    this.state.winner = null;
+    this.state.isDraw = false;
+    this.state.check = false;
+    this.state.gameOver = false;
+    this.state.history = [];
+    this.state.lastMove = null;
+    this.state.capturedPieces.white = [];
+    this.state.capturedPieces.black = [];
+    this.state.pendingUndoRequest = null;
+    this.state.pendingNewGameRequest = null;
+    this.state.isBotLoading = false;
 
     this.checkBotTurn();
   }

@@ -18,7 +18,6 @@ export default class Maze extends BaseGame<MazeState> {
   // Cache the maze grid to avoid regenerating it constantly
   // The grid is deterministic based on seed + config
   private mazeGrid: Cell[][] | null = null;
-  private seed: number | null = null;
 
   constructor(room: any, socket: any, isHost: boolean, userId: string) {
     super(room, socket, isHost, userId);
@@ -47,27 +46,12 @@ export default class Maze extends BaseGame<MazeState> {
     };
   }
 
-  public onStateUpdate(
-    state: MazeState,
-    prop?: string | symbol | null,
-    newValue?: MazeState | undefined,
-    oldValue?: MazeState | undefined,
-  ): void {
-    super.onStateUpdate(state, prop, newValue, oldValue);
-
-    // reset maze if seed changed
-    if (state.seed != this.seed) {
-      this.mazeGrid = null;
-    }
-  }
-
   // Helper to ensure maze grid exists and matches current state
   public getMazeGrid(): Cell[][] | null {
     if (!this.mazeGrid && this.state.seed) {
       const { rows, cols } = this.state.config;
       const generator = new MazeGenerator(rows, cols, this.state.seed);
       this.mazeGrid = generator.generate();
-      this.seed = this.state.seed;
     }
     return this.mazeGrid ?? null;
   }
@@ -116,11 +100,9 @@ export default class Maze extends BaseGame<MazeState> {
         ) {
           const config = DIFFICULTY_CONFIG[action.difficulty];
           if (config) {
-            this.state.config = {
-              ...this.state.config,
-              ...config,
-              difficulty: action.difficulty,
-            };
+            this.state.config.rows = config.rows;
+            this.state.config.cols = config.cols;
+            this.state.config.difficulty = action.difficulty;
             this.state.seed = Math.floor(Math.random() * 1000000);
             this.mazeGrid = null; // Clear cache to force regenerate
           }
@@ -263,10 +245,10 @@ export default class Maze extends BaseGame<MazeState> {
     );
     const difficulty = difficultyKeys[diffIndex];
 
-    this.state.config = {
-      ...DIFFICULTY_CONFIG[difficulty],
-      difficulty,
-    };
+    const config = DIFFICULTY_CONFIG[difficulty];
+    this.state.config.rows = config.rows;
+    this.state.config.cols = config.cols;
+    this.state.config.difficulty = difficulty;
 
     // Add some organic growth for higher levels beyond HARD default?
     // if (this.state.level > 6) {
@@ -285,7 +267,9 @@ export default class Maze extends BaseGame<MazeState> {
 
   private resetGame() {
     this.state.level = 1;
-    this.state.config = { ...DIFFICULTY_CONFIG.EASY, difficulty: "EASY" };
+    this.state.config.rows = DIFFICULTY_CONFIG.EASY.rows;
+    this.state.config.cols = DIFFICULTY_CONFIG.EASY.cols;
+    this.state.config.difficulty = "EASY";
     this.state.seed = Math.floor(Math.random() * 1000000);
     this.state.winners = [];
     this.state.status = "WAITING";
@@ -319,7 +303,6 @@ export default class Maze extends BaseGame<MazeState> {
       hash = id.charCodeAt(i) + ((hash << 5) - hash);
     }
     const res = colors[Math.abs(hash) % colors.length];
-    console.log(id, res);
     return res;
   }
 }

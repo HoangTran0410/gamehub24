@@ -448,24 +448,21 @@ export default class DotsAndBoxes extends BaseGame<DotsAndBoxesState> {
   }
 
   reset(): void {
-    this.state = {
-      ...this.state,
-      horizontalLines: Array(this.state.gridSize)
-        .fill(null)
-        .map(() => Array(this.state.gridSize - 1).fill(false)),
-      verticalLines: Array(this.state.gridSize - 1)
-        .fill(null)
-        .map(() => Array(this.state.gridSize).fill(false)),
-      boxes: Array(this.state.gridSize - 1)
-        .fill(null)
-        .map(() => Array(this.state.gridSize - 1).fill(null)),
-      currentPlayerIndex: 0,
-      winner: null,
-      isGameEnded: false,
-      gamePhase: "waiting",
-      lastLine: null,
-      undoRequest: null,
-    };
+    this.state.horizontalLines = Array(this.state.gridSize)
+      .fill(null)
+      .map(() => Array(this.state.gridSize - 1).fill(false));
+    this.state.verticalLines = Array(this.state.gridSize - 1)
+      .fill(null)
+      .map(() => Array(this.state.gridSize).fill(false));
+    this.state.boxes = Array(this.state.gridSize - 1)
+      .fill(null)
+      .map(() => Array(this.state.gridSize - 1).fill(null));
+    this.state.currentPlayerIndex = 0;
+    this.state.winner = null;
+    this.state.isGameEnded = false;
+    this.state.gamePhase = "waiting";
+    this.state.lastLine = null;
+    this.state.undoRequest = null;
     this.state.players.forEach((p) => p && (p.score = 0));
     this.moveHistory = [];
   }

@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import ChessGame from "./Chess";
-import type { ChessState } from "./types";
 import { Chess } from "chess.js";
 import { Chessground as ChessgroundApi } from "chessground";
 import type { Api } from "chessground/api";
@@ -13,20 +12,16 @@ import { useUserStore } from "../../stores/userStore";
 import useLanguage from "../../stores/languageStore";
 import type { GameUIProps } from "../types";
 import { createPortal } from "react-dom";
+import useGameState from "../../hooks/useGameState";
 
 export default function ChessUI({ game: baseGame }: GameUIProps) {
   const game = baseGame as ChessGame;
-  const [state, setState] = useState<ChessState>(game.getState());
+  const [state] = useGameState(game);
   const { userId } = useUserStore();
   const { ti, ts } = useLanguage();
   const [showRules, setShowRules] = useState(false);
   const boardRef = useRef<HTMLDivElement>(null);
   const chessgroundRef = useRef<Api | null>(null);
-
-  // Sync state
-  useEffect(() => {
-    return game.onUpdate((newState) => setState(newState));
-  }, [game]);
 
   const myColorCode = game.getPlayerColor();
   const isMyTurn = myColorCode ? state.turn === myColorCode : false;

@@ -58,7 +58,7 @@ export default class Billiard extends BaseGame<BilliardState> {
       // Periodic sync every 5 seconds during simulation
       this.syncIntervalId = setInterval(() => {
         if (this.state.isSimulating) {
-          this.broadcastState();
+          this.broadcastState(true);
         }
       }, 5000);
     }
@@ -77,7 +77,7 @@ export default class Billiard extends BaseGame<BilliardState> {
       this.runPhysicsLoop();
     }
 
-    return state;
+    return this.state;
   }
 
   onSocketGameAction(data: { action: GameAction }): void {
@@ -101,16 +101,16 @@ export default class Billiard extends BaseGame<BilliardState> {
         }
         break;
       case "RESET_GAME":
-        if (this.isHost) this.reset();
+        this.reset();
         break;
       case "START_GAME":
-        if (this.isHost) this.handleStartGame();
+        this.handleStartGame();
         break;
       case "ADD_BOT":
-        if (this.isHost) this.handleAddBot();
+        this.handleAddBot();
         break;
       case "REMOVE_BOT":
-        if (this.isHost) this.handleRemoveBot();
+        this.handleRemoveBot();
         break;
     }
   }
@@ -519,22 +519,17 @@ export default class Billiard extends BaseGame<BilliardState> {
 
   reset(): void {
     this.stopSimulation();
-    this.state = {
-      ...this.getInitState(),
-      players: {
-        1: {
-          id: this.state.players[1].id,
-          username: this.state.players[1].username,
-          ballType: null,
-        },
-        2: {
-          id: this.state.players[2].id,
-          username: this.state.players[2].username,
-          ballType: null,
-        },
-      },
-      gamePhase: "waiting",
-    };
+    const initState = this.getInitState();
+    this.state.balls = initState.balls;
+    this.state.players[1].ballType = null;
+    this.state.players[2].ballType = null;
+    this.state.currentTurn = initState.currentTurn;
+    this.state.gamePhase = "waiting";
+    this.state.winner = null;
+    this.state.lastShot = null;
+    this.state.isSimulating = false;
+    this.state.foul = false;
+    this.state.turnMessage = null;
     this.syncState();
   }
 
@@ -592,7 +587,9 @@ export default class Billiard extends BaseGame<BilliardState> {
     if (!this.isHost) return;
     if (this.state.gamePhase !== "waiting") return;
 
-    this.state.players[2] = { id: "BOT", username: "Bot", ballType: null };
+    this.state.players[2].id = "BOT";
+    this.state.players[2].username = "Bot";
+    this.state.players[2].ballType = null;
     this.syncState();
   }
 
@@ -601,7 +598,9 @@ export default class Billiard extends BaseGame<BilliardState> {
     if (this.state.gamePhase !== "waiting") return;
     if (this.state.players[2].id !== "BOT") return;
 
-    this.state.players[2] = { id: null, username: null, ballType: null };
+    this.state.players[2].id = null;
+    this.state.players[2].username = null;
+    this.state.players[2].ballType = null;
     this.syncState();
   }
 
@@ -628,6 +627,7 @@ export default class Billiard extends BaseGame<BilliardState> {
 
     this.state.gamePhase = "playing";
     this.state.balls = createInitialBalls();
+    debugger;
     this.syncState();
 
     this.checkBotTurn();
@@ -649,7 +649,8 @@ export default class Billiard extends BaseGame<BilliardState> {
 
     const currentPlayerId = this.state.players[this.state.currentTurn].id;
     if (currentPlayerId === "BOT") {
-      setTimeout(() => this.makeBotMove(), 800);
+      this.makeBotMove();
+      // setTimeout(() => this.makeBotMove(), 800);
     }
   }
 

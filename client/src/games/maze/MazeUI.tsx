@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useAlertStore } from "../../stores/alertStore";
 import useLanguage from "../../stores/languageStore";
+import useGameState from "../../hooks/useGameState";
 
 const APP_PADDING = 32; // Total horizontal padding of the app container
 const HUD_HEIGHT = 180; // Approximate height of HUD
@@ -30,9 +31,9 @@ const initCanvas = (canvas: HTMLCanvasElement, w: number, h: number) => {
   return ctx;
 };
 
-const MazeUI: React.FC<GameUIProps> = ({ game, currentUserId }) => {
-  const mazeGame = game as Maze;
-  const [state, setState] = useState<MazeState>(mazeGame.getState());
+const MazeUI: React.FC<GameUIProps> = ({ game: baseGame, currentUserId }) => {
+  const game = baseGame as Maze;
+  const [state] = useGameState<MazeState>(game);
   const staticCanvasRef = useRef<HTMLCanvasElement>(null);
   const dynamicCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -46,18 +47,10 @@ const MazeUI: React.FC<GameUIProps> = ({ game, currentUserId }) => {
 
   const myPlayer = currentUserId ? state.players[currentUserId] : undefined;
 
-  // Subscribe to state updates
-  useEffect(() => {
-    const unsubscribe = mazeGame.onUpdate((newState) => {
-      setState(newState);
-    });
-    return unsubscribe;
-  }, [mazeGame]);
-
   // Generate maze grid locally based on seed & config
   const mazeGrid = useMemo(() => {
-    return mazeGame.getMazeGrid();
-  }, [state.config, state.seed, mazeGame]);
+    return game.getMazeGrid();
+  }, [state.config, state.seed, game]);
 
   // Dynamic Layout Calculation
   useEffect(() => {
@@ -129,7 +122,7 @@ const MazeUI: React.FC<GameUIProps> = ({ game, currentUserId }) => {
     const newSet = new Set<string>();
     setVisitedCells(newSet);
     visitedCellsRef.current = newSet;
-  }, [state.seed, state.level, state.status, mazeGame]);
+  }, [state.seed, state.level, state.status, game]);
 
   // Ensure current position is always visited (handles teleport/spawn/finish move)
   // We strictly check timestamps to avoid marking the TARGET of a move before we get there
@@ -187,9 +180,7 @@ const MazeUI: React.FC<GameUIProps> = ({ game, currentUserId }) => {
   // Draw Static Maze (Top Layer)
   useEffect(() => {
     const canvas = staticCanvasRef.current;
-    if (!canvas) return;
-
-    if (!mazeGrid) return;
+    if (!canvas || !mazeGrid) return;
 
     const { rows, cols } = state.config;
     const width = cols * cellSize;
@@ -221,8 +212,8 @@ const MazeUI: React.FC<GameUIProps> = ({ game, currentUserId }) => {
     ctx.lineWidth = 3;
     for (let y = 0; y < rows; y++) {
       for (let x = 0; x < cols; x++) {
-        const cell = mazeGrid[y][x];
-        if (cell.portalTo) {
+        const cell = mazeGrid?.[y]?.[x];
+        if (cell?.portalTo) {
           const px = x * cellSize + cellSize / 2;
           const py = y * cellSize + cellSize / 2;
 
@@ -300,7 +291,7 @@ const MazeUI: React.FC<GameUIProps> = ({ game, currentUserId }) => {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [state.status, mazeGame]);
+  }, [state.status, game]);
 
   // Animation Loop
   useEffect(() => {
@@ -413,16 +404,16 @@ const MazeUI: React.FC<GameUIProps> = ({ game, currentUserId }) => {
 
   const handleTeleport = () => {
     if (currentUserId)
-      mazeGame.makeAction({ type: "TELEPORT", playerId: currentUserId });
+      game.makeAction({ type: "TELEPORT", playerId: currentUserId });
   };
 
   const handleMove = (direction: Direction) => {
     if (currentUserId)
-      mazeGame.makeAction({ type: "MOVE", direction, playerId: currentUserId });
+      game.makeAction({ type: "MOVE", direction, playerId: currentUserId });
   };
 
   const handleStart = () => {
-    mazeGame.makeAction({ type: "START_GAME" });
+    game.makeAction({ type: "START_GAME" });
   };
 
   const handleReset = async () => {
@@ -438,15 +429,15 @@ const MazeUI: React.FC<GameUIProps> = ({ game, currentUserId }) => {
         }),
       )
     )
-      mazeGame.makeAction({ type: "RESET_GAME" });
+      game.makeAction({ type: "RESET_GAME" });
   };
 
   const handleNextLevel = () => {
-    mazeGame.makeAction({ type: "NEXT_LEVEL" });
+    game.makeAction({ type: "NEXT_LEVEL" });
   };
 
   const handleDifficulty = (difficulty: Difficulty) => {
-    mazeGame.makeAction({ type: "UPDATE_SETTINGS", difficulty });
+    game.makeAction({ type: "UPDATE_SETTINGS", difficulty });
   };
 
   const renderMoveButtons = () => {
@@ -558,7 +549,7 @@ const MazeUI: React.FC<GameUIProps> = ({ game, currentUserId }) => {
         )}
 
         {/* Teleport Button */}
-        {mazeGrid && mazeGrid[myPlayer.y][myPlayer.x].portalTo && (
+        {mazeGrid?.[myPlayer.y]?.[myPlayer.x]?.portalTo && (
           <button
             onPointerDown={(e) => {
               e.stopPropagation();
@@ -601,7 +592,7 @@ const MazeUI: React.FC<GameUIProps> = ({ game, currentUserId }) => {
             </span>
 
             <div className="flex gap-1 mt-2">
-              {mazeGame.isHost && (
+              {game.isHost && (
                 <button
                   onClick={handleReset}
                   className="p-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg"
@@ -705,7 +696,7 @@ const MazeUI: React.FC<GameUIProps> = ({ game, currentUserId }) => {
           {state.status === "WAITING" && (
             <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center gap-6 z-50 p-4 text-center">
               <div className="text-white text-3xl font-bold">
-                {mazeGame.isHost
+                {game.isHost
                   ? ts({ en: "Setup Game", vi: "Cài đặt Game" })
                   : ts({
                       en: "Waiting for Host...",
@@ -713,7 +704,7 @@ const MazeUI: React.FC<GameUIProps> = ({ game, currentUserId }) => {
                     })}
               </div>
 
-              {mazeGame.isHost && (
+              {game.isHost && (
                 <div className="flex flex-col gap-4 items-center animate-in fade-in zoom-in duration-300">
                   <div className="flex bg-gray-800 rounded-lg p-1.5 ring-1 ring-gray-700">
                     {Object.keys(DIFFICULTY_CONFIG).map((diff) => (
@@ -755,7 +746,7 @@ const MazeUI: React.FC<GameUIProps> = ({ game, currentUserId }) => {
                 </div>
               )}
 
-              {mazeGame.isHost ? (
+              {game.isHost ? (
                 <button
                   onClick={handleNextLevel}
                   className="flex items-center gap-2 px-8 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold text-lg shadow-lg hover:shadow-blue-500/20 transition-all hover:-translate-y-0.5"

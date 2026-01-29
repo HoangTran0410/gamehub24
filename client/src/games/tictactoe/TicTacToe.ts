@@ -110,17 +110,14 @@ export default class TicTacToe extends BaseGame<TicTacToeState> {
   }
 
   reset(): void {
-    this.state = {
-      board: Array(9).fill(null),
-      currentTurn: "X",
-      winner: null,
-      winningLine: null,
-      isDraw: false,
-      players: this.state.players, // Keep same players
-      gameOver: false,
-      lastMoveIndex: null,
-      gamePhase: "waiting",
-    };
+    this.state.board = Array(9).fill(null);
+    this.state.currentTurn = "X";
+    this.state.winner = null;
+    this.state.winningLine = null;
+    this.state.isDraw = false;
+    this.state.gameOver = false;
+    this.state.lastMoveIndex = null;
+    this.state.gamePhase = "waiting";
   }
 
   updatePlayers(players: Player[]): void {
@@ -249,7 +246,7 @@ export default class TicTacToe extends BaseGame<TicTacToeState> {
   }
 
   private getBestMove(): number {
-    const board = this.state.board;
+    const board = JSON.parse(JSON.stringify(this.state.board));
     let bestScore = -Infinity;
     let move = -1;
 

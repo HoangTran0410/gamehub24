@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import type { GameUIProps } from "../types";
 import type BauCua from "./BauCua";
 import type {
-  BauCuaState,
   BauCuaSymbol,
   PlayerBalance,
   PowerUpType,
@@ -36,6 +35,7 @@ import {
 import { createPortal } from "react-dom";
 import { formatPrice } from "../../utils";
 import BettingModal from "./BettingModal";
+import useGameState from "../../hooks/useGameState";
 
 // Get power-up icon
 const getPowerUpIcon = (type: PowerUpType) => {
@@ -53,7 +53,7 @@ export default function BauCuaUI({
   currentUserId: userId = "",
 }: GameUIProps) {
   const game = baseGame as BauCua;
-  const [state, setState] = useState<BauCuaState>(game.getState());
+  const [state] = useGameState(game);
   // Removed global betAmount state as it's now handled in the modal
   const { confirm: showConfirm, show: showAlert } = useAlertStore();
   const { ti, ts } = useLanguage();
@@ -183,9 +183,6 @@ export default function BauCuaUI({
           setIsRolling(false);
         }, 3000);
       }
-
-      setState(newState);
-      // console.log(newState);
 
       // Clear local bets and selected power-up when new round starts
       if (

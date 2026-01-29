@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import YouTube, { type YouTubeProps, type YouTubePlayer } from "react-youtube";
-import YouTubeWatch, { type YouTubeWatchState } from "./YouTubeWatch";
+import YouTubeWatch from "./YouTubeWatch";
 import {
   Play,
   Pause,
@@ -11,24 +11,18 @@ import {
 } from "lucide-react";
 import type { GameUIProps } from "../types";
 import useLanguage from "../../stores/languageStore";
+import useGameState from "../../hooks/useGameState";
 
 export default function YouTubeWatchUI({ game: baseGame }: GameUIProps) {
   const game = baseGame as YouTubeWatch;
 
   const { ts } = useLanguage();
-  const [state, setState] = useState<YouTubeWatchState>(game.getState());
+  const [state] = useGameState(game);
   const [urlInput, setUrlInput] = useState("");
   const [player, setPlayer] = useState<YouTubePlayer | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const ignoreNextUpdate = useRef(false);
-
-  useEffect(() => {
-    const handleStateChange = (newState: YouTubeWatchState) => {
-      setState(newState);
-    };
-    return game.onUpdate(handleStateChange);
-  }, [game]);
 
   useEffect(() => {
     if (!player || !state.videoId) return;
@@ -91,7 +85,7 @@ export default function YouTubeWatchUI({ game: baseGame }: GameUIProps) {
     if (
       pState === 2 &&
       document.visibilityState === "hidden" &&
-      game.getState().isPlaying
+      state.isPlaying
     ) {
       event.target.playVideo();
       return;

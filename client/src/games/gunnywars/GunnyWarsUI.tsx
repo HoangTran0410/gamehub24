@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import GunnyWars from "./GunnyWars";
-import type { GunnyWarsState, Tank, Projectile, MoveDirection } from "./types";
+import type { Tank, Projectile, MoveDirection } from "./types";
 import { GamePhase, WeaponType } from "./types";
 import {
   WORLD_WIDTH,
@@ -28,6 +28,7 @@ import {
 import type { GameUIProps } from "../types";
 import useLanguage from "../../stores/languageStore";
 import { formatNumber } from "../../utils";
+import useGameState from "../../hooks/useGameState";
 
 // Star type for background
 interface Star {
@@ -59,7 +60,7 @@ export default function GunnyWarsUI({ game: baseGame }: GameUIProps) {
   const { ts, ti } = useLanguage();
 
   // UI state
-  const [state, setState] = useState<GunnyWarsState>(game.getState());
+  const [state] = useGameState(game);
   const [viewportSize, setViewportSize] = useState({ width: 800, height: 600 });
   const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -137,18 +138,10 @@ export default function GunnyWarsUI({ game: baseGame }: GameUIProps) {
 
   // Initialize
   useEffect(() => {
-    // Subscribe to game state updates (for non-physics updates like turn changes)
-    const unsubscribe = game.onUpdate((newState) => {
-      setState(newState);
-    });
-
     return () => {
-      unsubscribe();
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
-      }
+      if (animationRef.current) cancelAnimationFrame(animationRef.current);
     };
-  }, [game]);
+  }, []);
 
   // Initialize WebGL shader renderer
   const callInitShaderRef = useRef(false);

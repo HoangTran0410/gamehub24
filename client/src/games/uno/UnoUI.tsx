@@ -27,9 +27,11 @@ import useLanguage from "../../stores/languageStore";
 import type { GameUIProps } from "../types";
 import { createPortal } from "react-dom";
 
+import useGameState from "../../hooks/useGameState";
+
 export default function UnoUI({ game: baseGame }: GameUIProps) {
   const game = baseGame as Uno;
-  const [state, setState] = useState<UnoState>(game.getState());
+  const [state] = useGameState<UnoState>(game);
   const [selectedCard, setSelectedCard] = useState<UnoCard | null>(null);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showDiscardHistory, setShowDiscardHistory] = useState(false);
@@ -155,7 +157,6 @@ export default function UnoUI({ game: baseGame }: GameUIProps) {
       prevHandLengthsRef.current = newState.players.map((p) => p.hand.length);
       prevTurnIndexRef.current = newState.currentTurnIndex;
 
-      setState(newState);
       setSelectedCard(null);
     });
   }, [game, myIndex]);

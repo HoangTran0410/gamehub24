@@ -25,6 +25,7 @@ import { useAlertStore } from "../../stores/alertStore";
 import useLanguage from "../../stores/languageStore";
 import type { GameUIProps } from "../types";
 import { createPortal } from "react-dom";
+import useGameState from "../../hooks/useGameState";
 
 const COLORS = [
   "#f5f5f5", // trắng
@@ -51,8 +52,8 @@ export default function CanvasGameUI({
   currentUserId,
 }: GameUIProps) {
   const game = baseGame as CanvasGame;
+  const [state] = useGameState(game);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [state, setState] = useState<CanvasState>(game.getState());
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentColor, setCurrentColor] = useState(COLORS[6]); // Start with black
   const [currentStrokeWidth, setCurrentStrokeWidth] = useState(5); // Medium
@@ -239,14 +240,13 @@ export default function CanvasGameUI({
       hasInitializedRef.current = true;
     }, 500);
 
-    const handleStateChange = (newState: CanvasState) => {
+    const unsub = game.onUpdate((newState: CanvasState) => {
       // During initial sync period, mark all strokes as already drawn
       if (!hasInitializedRef.current) {
         newState.strokes.forEach((s) => {
           drawnStrokeIdsRef.current.add(s.id);
           animatedStrokeIdsRef.current.add(s.id);
         });
-        setState(newState);
         return;
       }
 
@@ -269,12 +269,9 @@ export default function CanvasGameUI({
         }
       });
 
-      setState(newState);
-
       // Trigger animation processing
       setTimeout(() => processAnimationQueue(), 0);
-    };
-    const unsub = game.onUpdate(handleStateChange);
+    });
 
     return () => {
       unsub();

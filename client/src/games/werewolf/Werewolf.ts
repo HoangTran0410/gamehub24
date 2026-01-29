@@ -1888,7 +1888,7 @@ export default class Werewolf extends BaseGame<WerewolfState> {
       }
     });
 
-    this.state = newState;
+    this.state.players = newState.players;
   }
 
   // === Public API ===

@@ -1,6 +1,5 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Connect4 from "./Connect4";
-import type { Connect4State } from "./types";
 import { ROWS, COLS } from "./types";
 import {
   Bot,
@@ -14,6 +13,7 @@ import {
 import useLanguage from "../../stores/languageStore";
 import type { GameUIProps } from "../types";
 import { createPortal } from "react-dom";
+import useGameState from "../../hooks/useGameState";
 
 // CSS for drop animation
 const dropStyle = `
@@ -30,14 +30,10 @@ export default function Connect4UI({
   currentUserId,
 }: GameUIProps) {
   const game = baseGame as Connect4;
-  const [state, setState] = useState<Connect4State>(game.getState());
+  const [state] = useGameState(game);
   const [hoverCol, setHoverCol] = useState<number | null>(null);
   const [showRules, setShowRules] = useState(false);
   const { ti, ts } = useLanguage();
-
-  useEffect(() => {
-    return game.onUpdate(setState);
-  }, [game]);
 
   const myIndex = game.getMyPlayerIndex();
   const myColor = myIndex >= 0 ? state.players[myIndex].color : null;

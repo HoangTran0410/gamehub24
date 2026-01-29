@@ -26,10 +26,7 @@ export default class OAnQuan extends BaseGame<OAnQuanState> {
   }
 
   updatePlayers(players: Player[]): void {
-    this.state = {
-      ...this.state,
-      players: players.map((p) => ({ ...p, isBot: false })),
-    };
+    this.state.players = players.map((p) => ({ ...p, isBot: false }));
   }
 
   getMyPlayerIndex(): number {
@@ -76,15 +73,12 @@ export default class OAnQuan extends BaseGame<OAnQuanState> {
       newScores[p.id] = 0;
     });
 
-    this.state = {
-      ...this.state,
-      gamePhase: "playing",
-      currentTurn: this.state.players[0].id,
-      board: initialBoard,
-      playerScores: newScores,
-      winner: null,
-      lastMove: undefined,
-    };
+    this.state.gamePhase = "playing";
+    this.state.currentTurn = this.state.players[0].id;
+    this.state.board = initialBoard;
+    this.state.playerScores = newScores;
+    this.state.winner = null;
+    this.state.lastMove = undefined;
 
     this.checkPopulationIfNeeded();
 
@@ -92,12 +86,9 @@ export default class OAnQuan extends BaseGame<OAnQuanState> {
   }
 
   private resetGame() {
-    this.state = {
-      ...this.state,
-      gamePhase: "waiting",
-      winner: null,
-      lastMove: undefined,
-    };
+    this.state.gamePhase = "waiting";
+    this.state.winner = null;
+    this.state.lastMove = undefined;
   }
 
   private addBot() {
@@ -110,11 +101,8 @@ export default class OAnQuan extends BaseGame<OAnQuanState> {
       isBot: true,
     };
 
-    this.state = {
-      ...this.state,
-      players: [...this.state.players, newPlayer],
-      playerScores: { ...this.state.playerScores, [botId]: 0 },
-    };
+    this.state.players.push(newPlayer);
+    this.state.playerScores[botId] = 0;
   }
 
   private removeBot(index: number | undefined) {
@@ -127,11 +115,8 @@ export default class OAnQuan extends BaseGame<OAnQuanState> {
       const newScores = { ...this.state.playerScores };
       delete newScores[player.id];
 
-      this.state = {
-        ...this.state,
-        players: newPlayers,
-        playerScores: newScores,
-      };
+      this.state.players = newPlayers;
+      this.state.playerScores = newScores;
     }
   }
 
@@ -167,13 +152,10 @@ export default class OAnQuan extends BaseGame<OAnQuanState> {
     this.executeMoveLogic(playerIndex, action.squareId, resolvedDir);
 
     // Record last move (store as cw/ccw for consistent replay)
-    this.state = {
-      ...this.state,
-      lastMove: {
-        player: this.state.players[playerIndex].id,
-        squareId: action.squareId,
-        direction: resolvedDir,
-      },
+    this.state.lastMove = {
+      player: this.state.players[playerIndex].id,
+      squareId: action.squareId,
+      direction: resolvedDir,
     };
 
     // Check end game
@@ -196,12 +178,9 @@ export default class OAnQuan extends BaseGame<OAnQuanState> {
       }
     }
 
-    this.state = {
-      ...this.state,
-      winner,
-      gamePhase,
-      currentTurn: this.state.currentTurn, // Updated by checkPopulation possibly
-    };
+    this.state.winner = winner;
+    this.state.gamePhase = gamePhase;
+    this.state.currentTurn = currentTurn;
 
     if (!this.state.winner) {
       this.checkBotTurn();
@@ -223,10 +202,7 @@ export default class OAnQuan extends BaseGame<OAnQuanState> {
     this.state.board = result.finalBoard;
     const newScores = { ...this.state.playerScores };
     newScores[this.state.players[playerIndex].id] += result.score;
-    this.state = {
-      ...this.state,
-      playerScores: newScores,
-    };
+    this.state.playerScores = newScores;
   }
 
   private checkPopulationIfNeeded() {
@@ -247,19 +223,13 @@ export default class OAnQuan extends BaseGame<OAnQuanState> {
       // Borrow 5 stones from score
       const newScores = { ...this.state.playerScores };
       newScores[pid] -= 5;
-      this.state = {
-        ...this.state,
-        playerScores: newScores,
-      };
+      this.state.playerScores = newScores;
 
       const newBoard = [...this.state.board];
       for (let i = range[0]; i <= range[1]; i++) {
         newBoard[i] = 1;
       }
-      this.state = {
-        ...this.state,
-        board: newBoard,
-      };
+      this.state.board = newBoard;
     }
   }
 
@@ -277,11 +247,8 @@ export default class OAnQuan extends BaseGame<OAnQuanState> {
       if (this.state.players[1]) {
         newScores[this.state.players[1].id] += p2Extra;
       }
-      this.state = {
-        ...this.state,
-        playerScores: newScores,
-        board: Array(12).fill(0),
-      };
+      this.state.playerScores = newScores;
+      this.state.board = Array(12).fill(0);
 
       // Determine winner
       const p1Score = this.state.playerScores[this.state.players[0].id];

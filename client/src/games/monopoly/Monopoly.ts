@@ -643,13 +643,10 @@ export default class Monopoly extends BaseGame<MonopolyState> {
     const activePlayers = this.state.players.filter((p) => p.id !== null);
     if (activePlayers.length < 2) return;
 
-    this.state = {
-      ...this.state,
-      gamePhase: "playing",
-      currentPlayerIndex: this.findFirstActivePlayer(),
-      lastAction: { en: "Game started!", vi: "Trò chơi bắt đầu!" },
-      logs: {},
-    };
+    this.state.gamePhase = "playing";
+    this.state.currentPlayerIndex = this.findFirstActivePlayer();
+    this.state.lastAction = { en: "Game started!", vi: "Trò chơi bắt đầu!" };
+    this.state.logs = {};
     this.addLog({ en: "Game started!", vi: "Trò chơi bắt đầu!" }, "info");
 
     this.notifyAndBroadcast();
@@ -1518,7 +1515,7 @@ export default class Monopoly extends BaseGame<MonopolyState> {
       isBot: true,
     };
 
-    this.state = { ...this.state, players: newPlayers };
+    this.state.players = newPlayers;
     this.notifyAndBroadcast();
   }
 
@@ -1535,7 +1532,7 @@ export default class Monopoly extends BaseGame<MonopolyState> {
       isBot: false,
     };
 
-    this.state = { ...this.state, players: newPlayers };
+    this.state.players = newPlayers;
     this.notifyAndBroadcast();
   }
 

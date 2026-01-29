@@ -1,8 +1,9 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import type { GameUIProps } from "../types";
 import OAnQuan, { simulateOAnQuanMove } from "./OAnQuan";
 import type { OAnQuanState } from "./types";
 import useLanguage from "../../stores/languageStore";
+import useGameState from "../../hooks/useGameState";
 import {
   Play,
   RotateCcw,
@@ -35,9 +36,8 @@ const OAnQuanUI: React.FC<GameUIProps> = ({
   const { ti, ts } = useLanguage();
 
   // State
-  const [state, setState] = useState<OAnQuanState>(game.getState());
-  const [displayBoard, setDisplayBoard] = useState<number[]>([
-    ...game.getState().board,
+  const [displayBoard, setDisplayBoard] = useState<number[]>(() => [
+    ...game.snapshot.board,
   ]);
   const [animating, setAnimating] = useState(false);
   const [flyingState, setFlyingState] = useState<{
@@ -64,8 +64,39 @@ const OAnQuanUI: React.FC<GameUIProps> = ({
     boardRef.current = displayBoard;
   }, [displayBoard]);
 
-  useEffect(() => {
-    const handleUpdate = (newState: OAnQuanState) => {
+  const processNextAnimation = useCallback(
+    async (_setState: (s: OAnQuanState) => void) => {
+      if (animationQueueRef.current.length === 0) {
+        setAnimating(false);
+        if (pendingStateRef.current) {
+          _setState(pendingStateRef.current);
+          setDisplayBoard(pendingStateRef.current.board);
+          pendingStateRef.current = null;
+        }
+        return;
+      }
+
+      setAnimating(true);
+      // Cache positions once before animation sequence starts
+      squarePositionsRef.current = squareRefs.current.map((el) =>
+        getCenter(el),
+      );
+
+      const item = animationQueueRef.current.shift();
+      if (item) {
+        await runAnimation(item.move);
+        _setState(item.state);
+        setDisplayBoard(item.state.board);
+        boardRef.current = item.state.board; // Sync ref immediately
+
+        processNextAnimation(_setState);
+      }
+    },
+    [game],
+  );
+
+  const handleUpdate = useCallback(
+    (newState: OAnQuanState, _setState: (s: OAnQuanState) => void) => {
       if (newState.lastMove && newState.lastMove !== lastMoveRef.current) {
         animationQueueRef.current.push({
           move: newState.lastMove,
@@ -73,58 +104,22 @@ const OAnQuanUI: React.FC<GameUIProps> = ({
         });
         lastMoveRef.current = newState.lastMove;
 
-        // Removed pendingStateRef update here because we want to use the state from the queue
-        // pendingStateRef.current = newState;
-
         if (!animating) {
-          processNextAnimation();
+          processNextAnimation(_setState);
         }
       } else {
         if (!animating && animationQueueRef.current.length === 0) {
-          setState(newState);
+          _setState(newState);
           setDisplayBoard(newState.board);
         } else {
-          // If animating or queue not empty, store as pending final state
           pendingStateRef.current = newState;
         }
       }
-    };
+    },
+    [animating, processNextAnimation],
+  );
 
-    return game.onUpdate(handleUpdate);
-  }, [game, animating]);
-
-  const processNextAnimation = async () => {
-    if (animationQueueRef.current.length === 0) {
-      setAnimating(false);
-      if (pendingStateRef.current) {
-        setState(pendingStateRef.current);
-        setDisplayBoard(pendingStateRef.current.board);
-        pendingStateRef.current = null;
-      }
-      return;
-    }
-
-    setAnimating(true);
-    // Cache positions once before animation sequence starts
-    cacheSquarePositions();
-
-    const item = animationQueueRef.current.shift();
-    if (item) {
-      await runAnimation(item.move);
-      // APPLY STATE AFTER ANIMATION
-      // This ensures the UI updates to "Bot's turn" (or whatever the state was at this snapshot)
-      // right after the move completes.
-      setState(item.state);
-      setDisplayBoard(item.state.board);
-      boardRef.current = item.state.board; // Sync ref immediately
-
-      processNextAnimation();
-    }
-  };
-
-  const cacheSquarePositions = () => {
-    squarePositionsRef.current = squareRefs.current.map((el) => getCenter(el));
-  };
+  const [state] = useGameState(game, handleUpdate);
 
   const runAnimation = async (move: NonNullable<OAnQuanState["lastMove"]>) => {
     const startBoard = [...boardRef.current];
@@ -213,9 +208,9 @@ const OAnQuanUI: React.FC<GameUIProps> = ({
         lastSquareId = step.squareId;
         await new Promise((r) => setTimeout(r, 150)); // Reduced pickup delay slightly
       } else if (step.type === "capture") {
-        const playerIndex = game
-          .getState()
-          .players.findIndex((p) => p.id === move.player);
+        const playerIndex = game.state.players.findIndex(
+          (p) => p.id === move.player,
+        );
 
         if (playerIndex !== -1 && scoreRefs.current[playerIndex]) {
           const startRect =
@@ -278,7 +273,7 @@ const OAnQuanUI: React.FC<GameUIProps> = ({
   const handleSquareClick = (index: number) => {
     if (!isMyTurn || animating) return;
     if (index === 0 || index === 6) return;
-    if (game.getState().board[index] === 0) return;
+    if (game.state.board[index] === 0) return;
 
     const myIndex = game.getMyPlayerIndex();
     const validRange = myIndex === 0 ? [7, 11] : [1, 5];

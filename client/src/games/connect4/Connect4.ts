@@ -682,17 +682,14 @@ export default class Connect4 extends BaseGame<Connect4State> {
   }
 
   reset(): void {
-    this.state = {
-      ...this.state,
-      board: this.createEmptyBoard(),
-      currentPlayerIndex: 0,
-      winner: null,
-      gamePhase: "waiting",
-      undoRequest: null,
-      moveHistory: {},
-      lastMove: null,
-      winningCells: [],
-    };
+    this.state.board = this.createEmptyBoard();
+    this.state.currentPlayerIndex = 0;
+    this.state.winner = null;
+    this.state.gamePhase = "waiting";
+    this.state.undoRequest = null;
+    this.state.moveHistory = {};
+    this.state.lastMove = null;
+    this.state.winningCells = [];
   }
 
   updatePlayers(players: { id: string; username: string }[]): void {

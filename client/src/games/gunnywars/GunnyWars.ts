@@ -1152,21 +1152,17 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
 
   reset(): void {
     this.stopSimulation();
-    const initState = this.getInitState();
-    initState.players = {
-      1: {
-        id: this.state.players[1].id,
-        username: this.state.players[1].username,
-        tankId: null,
-      },
-      2: {
-        id: this.state.players[2].id,
-        username: this.state.players[2].username,
-        tankId: null,
-      },
-    };
-    initState.terrainSeed = Math.random() * 10000;
-    this.state = initState;
+    this.state.phase = GamePhase.WAITING;
+    this.state.tanks = [];
+    this.state.currentTurnIndex = 0;
+    this.state.wind = 0;
+    this.state.winner = null;
+    this.state.turnTimeEnd = 0;
+    this.state.players[1].tankId = null;
+    this.state.players[2].tankId = null;
+    this.state.terrainSeed = Math.random() * 10000;
+    this.state.terrainModifications = [];
+    this.state.isSimulating = false;
   }
 
   addBot(): void {

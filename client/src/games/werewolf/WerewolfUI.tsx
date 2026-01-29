@@ -49,6 +49,7 @@ import { useAlertStore } from "../../stores/alertStore";
 import useLanguage from "../../stores/languageStore";
 import { useRoomStore } from "../../stores/roomStore";
 import { useUserStore } from "../../stores/userStore";
+import useGameState from "../../hooks/useGameState";
 
 const getPhaseIcon = (phase: GamePhase) => {
   switch (phase) {
@@ -1604,7 +1605,7 @@ const WerewolfUI: React.FC<GameUIProps> = ({ game, currentUserId = "" }) => {
   const { ti, ts } = useLanguage();
 
   const werewolf = game as Werewolf;
-  const [state, setState] = useState<WerewolfState>(werewolf.getState());
+  const [state] = useGameState<WerewolfState>(werewolf);
   const [showRules, setShowRules] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
@@ -1635,10 +1636,6 @@ const WerewolfUI: React.FC<GameUIProps> = ({ game, currentUserId = "" }) => {
 
   const myPlayer = state.players.find((p) => p.id === currentUserId);
   const myRole = myPlayer?.role ? ROLE_INFO[myPlayer.role] : null;
-
-  useEffect(() => {
-    return werewolf.onUpdate(setState);
-  }, [werewolf]);
 
   // Reset selection when phase changes
   useEffect(() => {

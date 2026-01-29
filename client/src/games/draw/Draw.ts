@@ -136,7 +136,7 @@ export default class CanvasGame extends BaseGame<CanvasState> {
     } else {
       // Client-side prediction for drawing
       if (action.type === "DRAW") {
-        this.state.strokes = [...this.state.strokes, action.payload];
+        this.state.strokes.push(action.payload);
       } else if (action.type === "CLEAR") {
         if (
           this.state.mode === "FREE" ||
@@ -155,9 +155,7 @@ export default class CanvasGame extends BaseGame<CanvasState> {
           }
         }
         if (lastIndex !== -1) {
-          this.state.strokes = this.state.strokes.filter(
-            (_, i) => i !== lastIndex,
-          );
+          this.state.strokes.splice(lastIndex, 1);
         }
       }
 
@@ -182,7 +180,7 @@ export default class CanvasGame extends BaseGame<CanvasState> {
       if (this.state.gartic?.drawerId !== stroke.playerId) return;
     }
 
-    this.state.strokes = [...this.state.strokes, stroke];
+    this.state.strokes.push(stroke);
   }
 
   private handleClear() {
@@ -202,7 +200,7 @@ export default class CanvasGame extends BaseGame<CanvasState> {
     }
     if (lastIndex === -1) return;
 
-    this.state.strokes = this.state.strokes.filter((_, i) => i !== lastIndex);
+    this.state.strokes.splice(lastIndex, 1);
   }
 
   private handleStartGartic() {
@@ -548,7 +546,10 @@ export default class CanvasGame extends BaseGame<CanvasState> {
       similarity,
       timestamp: Date.now(),
     };
-    this.state.messages = [...this.state.messages, msg].slice(-50); // Keep last 50
+    this.state.messages.push(msg);
+    if (this.state.messages.length > 50) {
+      this.state.messages.shift();
+    }
   }
 
   private addSystemMessage(
@@ -563,7 +564,10 @@ export default class CanvasGame extends BaseGame<CanvasState> {
       subType,
       timestamp: Date.now(),
     };
-    this.state.messages = [...this.state.messages, msg].slice(-50);
+    this.state.messages.push(msg);
+    if (this.state.messages.length > 50) {
+      this.state.messages.shift();
+    }
   }
 
   // Public methods for UI

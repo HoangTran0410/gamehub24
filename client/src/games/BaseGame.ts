@@ -43,10 +43,10 @@ export abstract class BaseGame<T> {
   protected autoBroadcast: boolean = true;
 
   // Optimization: State syncing
-  private lastSyncedState?: T;
-  private lastSyncedJson?: string;
-  private isOptimizationEnabled: boolean = true;
   private stateVersion: number = 0;
+  private pendingPatches: Array<{ path: string[]; value: any }> = [];
+  private hasPendingPatch: boolean = false;
+  private lastSnapshot: T | null = null;
 
   constructor(room: Room, socket: Socket, isHost: boolean, userId: string) {
     this.room = room;
@@ -56,15 +56,17 @@ export abstract class BaseGame<T> {
     this.isHost = isHost;
     this.userId = userId;
 
+    // Initialize state
     const initState = this.getInitState();
     this._state = this.setState(initState);
 
-    // Initialize sync tracking (Host only needs this, but safe to init)
-    this.lastSyncedJson = JSON.stringify(this.state);
-    this.lastSyncedState = JSON.parse(this.lastSyncedJson);
-
     // All players listen for game actions
     this.socket.on("game:action", this.onSocketGameAction.bind(this));
+
+    // Listen for sync requests (Host)
+    if (this.isHost) {
+      this.socket.on("game:request_sync", this.onRequestSync.bind(this));
+    }
 
     // Bind socket listeners
     if (!this.isHost) {
@@ -76,12 +78,9 @@ export abstract class BaseGame<T> {
       );
 
       // Client request sync state from host
-      this.requestSync();
-    }
-
-    // Listen for sync requests (Host)
-    if (this.isHost) {
-      this.socket.on("game:request_sync", this.onRequestSync.bind(this));
+      queueMicrotask(() => {
+        this.requestSync();
+      });
     }
 
     this.init();
@@ -109,13 +108,7 @@ export abstract class BaseGame<T> {
   public updatePlayers(players: Player[]) {
     this.players = players;
 
-    console.log(players);
-    this.syncState();
-  }
-
-  public setOptimization(enabled: boolean): void {
-    this.isOptimizationEnabled = enabled;
-    console.log(`State optimization ${enabled ? "enabled" : "disabled"}`);
+    this.syncState(false);
   }
 
   // Game persistent state name (e.g. "tictactoe")
@@ -124,7 +117,7 @@ export abstract class BaseGame<T> {
     this.gameName = name;
   }
 
-  public getState(): T {
+  private getState(): T {
     if (!this.state) {
       throw new Error("Game state is not initialized");
     }
@@ -132,23 +125,49 @@ export abstract class BaseGame<T> {
   }
 
   public onStateUpdate(state: T): void {
-    this.stateListeners.forEach((listener) => listener({ ...state }));
+    const isFullUpdate =
+      !this.lastSnapshot ||
+      !this.hasPendingPatch ||
+      (this.hasPendingPatch && this.pendingPatches.length === 0);
+
+    if (isFullUpdate) {
+      // Deep clone for initial snapshot or when root state is replaced
+      this.lastSnapshot = JSON.parse(JSON.stringify(state));
+    } else {
+      // Incrementally update the snapshot immutably using Immer
+      this.lastSnapshot = produce(this.lastSnapshot, (draft: any) => {
+        for (const { path, value } of this.pendingPatches) {
+          applyMutation(draft, path, value);
+        }
+      });
+    }
+
+    this.stateListeners.forEach((listener) => listener(this.lastSnapshot!));
   }
 
-  protected scheduleUpdate(): void {
+  public get snapshot(): T {
+    return this.lastSnapshot || (this.state as T);
+  }
+
+  private scheduleUpdate(): void {
     if (!this.updateScheduled) {
       this.updateScheduled = true;
       queueMicrotask(() => {
         this.onStateUpdate(this.state);
-        if (this.autoBroadcast) {
+        if (this.isHost && this.autoBroadcast) {
           this.broadcastState();
+        } else {
+          this.updateLastSynced();
         }
         this.updateScheduled = false;
       });
     }
   }
 
-  protected syncState(forceFull = false): void {
+  protected syncState(forceFull = true): void {
+    if (forceFull) {
+      this.lastSnapshot = null; // Force fresh snapshot
+    }
     this.onStateUpdate(this.state);
     this.broadcastState(forceFull);
   }
@@ -156,13 +175,25 @@ export abstract class BaseGame<T> {
   public setState(state: T): T {
     this._state =
       typeof state === "object" && state !== null
-        ? (createGameProxy(state as object, () =>
-            this.scheduleUpdate(),
-          ) as unknown as T)
+        ? (createGameProxy(state as object, (path, newValue) => {
+            this.recordPatch(path, newValue);
+            this.scheduleUpdate();
+          }) as unknown as T)
         : state;
+
+    this.hasPendingPatch = true;
+    this.pendingPatches = []; // Clear any old patches as we have a new root state
     this.scheduleUpdate();
 
     return this._state;
+  }
+
+  private recordPatch(path: string[], value: any) {
+    this.hasPendingPatch = true;
+    this.pendingPatches.push({
+      path,
+      value: value === undefined ? DELETED_VALUE : value,
+    });
   }
 
   public onUpdate(callback: (state: T) => void): () => void {
@@ -183,65 +214,55 @@ export abstract class BaseGame<T> {
 
   // host broadcast state to all guests
   public broadcastState(forceFull = false): void {
-    if (this.isHost) {
-      const state = this.getState();
-      let currentJson: string;
+    if (!this.isHost) return;
 
-      try {
-        currentJson = JSON.stringify(state);
-      } catch (e) {
-        console.error("Failed to stringify state for broadcast:", e);
-        return;
-      }
+    // 1. Optimization: Skip if state hasn't changed
+    if (!forceFull && !this.hasPendingPatch) return;
 
-      // 1. Optimization: Skip if state hasn't changed (string check)
-      if (
-        this.isOptimizationEnabled &&
-        !forceFull &&
-        this.lastSyncedJson === currentJson
-      ) {
-        return;
-      }
+    // Increment version before any update
+    this.stateVersion++;
 
-      // Increment version before any update
-      this.stateVersion++;
+    const hasSomeone = this.hasSomeoneElseInRoom();
+    if (!hasSomeone) return;
 
-      // 2. Optimization: Send delta (patch) if possible
-      if (this.isOptimizationEnabled && !forceFull && this.lastSyncedState) {
-        const patch = getDiff(this.lastSyncedState, state);
-        // Only send patch if it's not empty and safe to do so
-        if (patch && Object.keys(patch).length > 0) {
-          if (this.hasSomeoneElseInRoom()) {
-            this.socket.emit("game:state:patch", {
-              roomId: this.roomId,
-              patch,
-              version: this.stateVersion,
-            });
-          }
-          this.updateLastSynced(currentJson);
-          return;
-        }
-      }
+    console.log(this.pendingPatches);
 
-      // 3. Fallback: Send full state
-      // only emit if there are someone else in the room
-      if (this.hasSomeoneElseInRoom()) {
-        this.socket.emit("game:state", {
-          roomId: this.roomId,
-          state: { ...state },
-          version: this.stateVersion,
-        });
-      }
+    // 2. Optimization: Send accumulated patch if possible
+    if (!forceFull && this.hasPendingPatch && this.pendingPatches.length > 0) {
+      // Compact patches to object
+      const pathesObject = this.pendingPatches.reduce(
+        (acc, patch) => {
+          acc[patch.path.join(".")] = patch.value;
+          return acc;
+        },
+        {} as Record<string, any>,
+      );
 
-      // Update tracking and Auto-save
-      this.updateLastSynced(currentJson);
+      this.socket.emit("game:state:patch", {
+        roomId: this.roomId,
+        patch: pathesObject,
+        version: this.stateVersion,
+      });
     }
+    // 3. Fallback: Send full state
+    // only emit if there are someone else in the room
+    else {
+      const state = this.getState();
+      console.log("send full state", state);
+      this.socket.emit("game:state", {
+        roomId: this.roomId,
+        state: { ...state },
+        version: this.stateVersion,
+      });
+    }
+
+    this.updateLastSynced();
   }
 
-  private updateLastSynced(json: string) {
-    this.lastSyncedJson = json;
-    this.lastSyncedState = JSON.parse(json);
-    this.saveStateToStorage();
+  private updateLastSynced() {
+    this.pendingPatches = [];
+    this.hasPendingPatch = false;
+    if (this.isHost) this.saveStateToStorage();
   }
 
   public requestSync(): void {
@@ -273,13 +294,14 @@ export abstract class BaseGame<T> {
         console.log("updated state version", this.stateVersion, data.version);
         this.stateVersion = data.version;
       }
+
+      console.log("onSocketGameState", data.state);
       this.setState(data.state);
     }
   }
 
-  // Client receives partial state update (patch)
   protected onSocketGameStatePatch(data: {
-    patch: any;
+    patch: any[];
     version?: number;
   }): void {
     if (!this.isHost) {
@@ -296,17 +318,19 @@ export abstract class BaseGame<T> {
         return;
       }
 
-      // Use immer to apply patch immutably
-      const newState = produce(this.state, (draft: any) => {
-        applyPatch(draft, data.patch);
-      });
+      console.log("onSocketGameStatePatch", data.patch);
+
+      // Apply mutations directly to the Proxy state
+      // This triggers recordPatch and onStateUpdate to update the snapshot
+      // De-compact patches
+      for (const [path, value] of Object.entries(data.patch)) {
+        applyMutation(this.state, path.split("."), value);
+      }
 
       // Update version
       if (typeof data.version === "number") {
         this.stateVersion = data.version;
       }
-
-      this.setState(newState);
     }
   }
 
@@ -319,6 +343,7 @@ export abstract class BaseGame<T> {
       if (data.requesterSocketId) {
         // Optimization: Send state ONLY to the requester
         const state = this.getState();
+        console.log("onRequestSync -> send state", state);
         this.socket.emit("game:state:direct", {
           roomId: this.roomId,
           targetUser: data.targetUser,
@@ -371,80 +396,30 @@ export abstract class BaseGame<T> {
     // Clean up local listeners to prevent memory leaks or calling on unmounted components
     this.stateListeners.length = 0;
   }
-  // Optional: Help GC
-  // this.state = null as any;
-  // this.lastSyncedState = undefined;
 }
 
 // --- Helper Functions ---
 
 const DELETED_VALUE = "__$$DELETED$$__";
 
-function getDiff(oldObj: any, newObj: any): any {
-  if (oldObj === newObj) return undefined;
-  if (oldObj === null || newObj === null) return newObj; // Handle null explicitly (typeof null === 'object')
-  if (typeof oldObj !== typeof newObj) return newObj;
-  if (typeof newObj !== "object") return newObj;
-
-  const diff: any = {};
-  let changed = false;
-
-  // Check for keys in newObj (Updates & Adds)
-  for (const key in newObj) {
-    // If key not in oldObj, it's new
-    if (!(key in oldObj)) {
-      if (newObj[key] === undefined) continue;
-      diff[key] = newObj[key];
-      changed = true;
-      continue;
-    }
-
-    // Recursive diff
-    const changes = getDiff(oldObj[key], newObj[key]);
-    if (changes !== undefined) {
-      diff[key] = changes;
-      changed = true;
-    }
-  }
-
-  // Check for deleted keys
-  for (const key in oldObj) {
-    if (!(key in newObj)) {
-      diff[key] = DELETED_VALUE;
-      changed = true;
-    }
-  }
-
-  // Handle Array length mismatch
-  if (Array.isArray(oldObj) && Array.isArray(newObj)) {
-    if (oldObj.length !== newObj.length) {
-      diff.length = newObj.length;
-      changed = true;
-    }
-  }
-
-  return changed ? diff : undefined;
-}
-
-function applyPatch(draft: any, patch: any) {
-  if (!patch || typeof patch !== "object") return;
-
-  for (const key in patch) {
-    const value = patch[key];
-
-    if (value === DELETED_VALUE) {
-      delete draft[key];
-    } else if (
-      draft[key] &&
-      typeof draft[key] === "object" &&
-      value &&
-      typeof value === "object" &&
-      !Array.isArray(value)
+function applyMutation(target: any, path: string[], value: any) {
+  if (!path || path.length === 0) return;
+  let current = target;
+  for (let i = 0; i < path.length - 1; i++) {
+    const key = path[i];
+    if (
+      !(key in current) ||
+      current[key] === null ||
+      typeof current[key] !== "object"
     ) {
-      applyPatch(draft[key], value);
-    } else {
-      // Direct replacement (primitives, arrays, or object overwrites)
-      draft[key] = value;
+      current[key] = {};
     }
+    current = current[key];
+  }
+  const lastKey = path[path.length - 1];
+  if (value === DELETED_VALUE) {
+    delete current[lastKey];
+  } else {
+    current[lastKey] = value;
   }
 }

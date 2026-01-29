@@ -408,8 +408,7 @@ export default class Thirteen extends BaseGame<ThirteenState> {
     if (this.state.players[slotIndex].id !== null) return;
 
     const botId = `BOT_${slotIndex}_${Date.now()}`;
-    const newPlayers = [...this.state.players];
-    newPlayers[slotIndex] = {
+    this.state.players[slotIndex] = {
       id: botId,
       username: `Bot ${slotIndex + 1}`,
       hand: [],
@@ -418,7 +417,6 @@ export default class Thirteen extends BaseGame<ThirteenState> {
       isHost: false,
       passed: false,
     };
-    this.state = { ...this.state, players: newPlayers };
   }
 
   private handleJoinSlot(
@@ -432,8 +430,7 @@ export default class Thirteen extends BaseGame<ThirteenState> {
     // Check if player is already in another slot
     if (this.state.players.some((p) => p.id === playerId)) return;
 
-    const newPlayers = [...this.state.players];
-    newPlayers[slotIndex] = {
+    this.state.players[slotIndex] = {
       id: playerId,
       username: playerName,
       hand: [],
@@ -442,7 +439,6 @@ export default class Thirteen extends BaseGame<ThirteenState> {
       isHost: false,
       passed: false,
     };
-    this.state = { ...this.state, players: newPlayers };
   }
 
   private handleRemovePlayer(slotIndex: number): void {
@@ -453,8 +449,7 @@ export default class Thirteen extends BaseGame<ThirteenState> {
     // Can only remove bots and guests, not real players
     if (!player.isBot && !player.isGuest) return;
 
-    const newPlayers = [...this.state.players];
-    newPlayers[slotIndex] = {
+    this.state.players[slotIndex] = {
       id: null,
       username: `Slot ${slotIndex + 1}`,
       hand: [],
@@ -463,7 +458,6 @@ export default class Thirteen extends BaseGame<ThirteenState> {
       isHost: false,
       passed: false,
     };
-    this.state = { ...this.state, players: newPlayers };
   }
 
   // ============== Game Flow ==============
