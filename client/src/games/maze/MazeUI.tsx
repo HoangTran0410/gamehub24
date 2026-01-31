@@ -436,16 +436,8 @@ const MazeUI: React.FC<GameUIProps> = ({ game: baseGame }) => {
       isAnimating ||
       getRank(myPlayer.id)
     ) {
-      console.log("Not rendering move buttons", {
-        status: state.status,
-        myPlayer,
-        isAnimating,
-        rank: getRank(myPlayer?.id ?? ""),
-      });
       return null;
     }
-
-    console.log("myplayer", myPlayer.x, myPlayer.y);
 
     // Calculate available moves for UI feedback
     const availableMoves = (() => {

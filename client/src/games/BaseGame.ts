@@ -142,11 +142,16 @@ export abstract class BaseGame<T> {
           applyMutation(draft, path, value);
         }
       });
-      console.log(
-        "lastSnapshot updated with",
-        this.pendingPatches.size,
-        "patches",
-      );
+
+      // Optimization: Always ensure a new reference for React, even if Immer detected no changes
+      // (e.g. if a value was set to the same primitive, but we still want listeners to trigger)
+      if (this.lastSnapshot) {
+        this.lastSnapshot = (
+          Array.isArray(this.lastSnapshot)
+            ? [...this.lastSnapshot]
+            : { ...this.lastSnapshot }
+        ) as T;
+      }
     }
 
     this.stateListeners.forEach((listener) => listener(this.lastSnapshot!));
@@ -193,6 +198,7 @@ export abstract class BaseGame<T> {
 
     this.hasPendingPatch = true;
     this.pendingPatches.clear(); // Clear any old patches as we have a new root state
+    this.lastSnapshot = JSON.parse(JSON.stringify(state)); // Ensure we have a plain object snapshot
     this.scheduleUpdate();
 
     return this._state;
