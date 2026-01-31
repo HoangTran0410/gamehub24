@@ -20,6 +20,13 @@ const updates: {
   link?: string;
 }[] = [
   {
+    type: "fix",
+    en: "Fix bug hang web: Uno",
+    vi: "Fix bug đứng web: Uno",
+    gameId: "uno",
+    timestamp: 1769855181340,
+  },
+  {
     type: "new",
     en: "New game: Maze Race",
     vi: "Game mới: Đua Mê Cung",
