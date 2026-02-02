@@ -154,7 +154,10 @@ const WeaponSelectModal = ({
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 grid grid-cols-1 @md:grid-cols-2 gap-3 no-scrollbar">
+          <div
+            className="flex-1 overflow-y-auto p-4 grid grid-cols-1 @md:grid-cols-2 gap-3 no-scrollbar touch-auto overscroll-contain select-auto"
+            style={{ WebkitOverflowScrolling: "touch" }}
+          >
             {SELECTABLE_WEAPONS.map((w) => (
               <button
                 key={w.type}
