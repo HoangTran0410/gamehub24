@@ -6,6 +6,7 @@ import {
   generateSuffix,
   generateRandomUsername,
 } from "../stores/userStore";
+import Portal from "./Portal";
 
 interface UsernameModalProps {
   onSubmit: (username: string) => void;
@@ -43,100 +44,102 @@ export default function UsernameModal({
     inputValue.trim().length >= 2 && inputValue.trim().length <= 20;
 
   return (
-    <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-100 animate-fadeIn">
-      <div className="bg-background-secondary border border-white/10 rounded-2xl p-8 max-w-md w-full shadow-2xl mx-4 animate-scaleIn">
-        <div className="flex flex-col items-center text-center mb-6">
-          <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4 text-primary">
-            <User className="w-8 h-8" />
-          </div>
-          <h2 className="text-2xl font-display text-text-primary mb-2">
-            {ti({
-              en: "Welcome to GameHub24",
-              vi: "Chào mừng đến GameHub24",
-            })}
-          </h2>
-          <p className="text-text-secondary">
-            {ti({
-              en: "Enter your username to get started",
-              vi: "Nhập tên của bạn để bắt đầu",
-            })}
-          </p>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-text-secondary mb-2">
-              {ti({ en: "Username", vi: "Tên người dùng" })}
-            </label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={inputValue}
-                onChange={(e) =>
-                  setInputValue(
-                    e.target.value
-                      .normalize("NFD")
-                      .replace(/[\u0300-\u036f]/g, ""),
-                  )
-                }
-                placeholder={ts({
-                  en: "Enter your desired username",
-                  vi: "Nhập tên bạn muốn",
-                })}
-                autoFocus
-                maxLength={20}
-                className="flex-1 px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent min-w-0"
-              />
-              <button
-                type="button"
-                onClick={() =>
-                  setInputValue(generateRandomUsername(undefined, false))
-                }
-                className="px-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-text-primary transition-colors mb-0"
-                title={ts({
-                  en: "Generate random username",
-                  vi: "Tạo tên ngẫu nhiên",
-                })}
-              >
-                <Dices className="w-5 h-5" />
-              </button>
+    <Portal>
+      <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-100 animate-fadeIn">
+        <div className="bg-background-secondary border border-white/10 rounded-2xl p-8 max-w-md w-full shadow-2xl mx-4 animate-scaleIn">
+          <div className="flex flex-col items-center text-center mb-6">
+            <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4 text-primary">
+              <User className="w-8 h-8" />
             </div>
-            <p className="text-xs text-text-muted mt-1">
+            <h2 className="text-2xl font-display text-text-primary mb-2">
               {ti({
-                en: "2-20 characters. Random numbers will be added automatically.",
-                vi: "2-20 ký tự. Số ngẫu nhiên sẽ được thêm tự động.",
+                en: "Welcome to GameHub24",
+                vi: "Chào mừng đến GameHub24",
+              })}
+            </h2>
+            <p className="text-text-secondary">
+              {ti({
+                en: "Enter your username to get started",
+                vi: "Nhập tên của bạn để bắt đầu",
               })}
             </p>
           </div>
 
-          {/* Preview */}
-          {previewUsername && (
-            <div className="bg-primary/10 border border-primary/20 rounded-xl p-4">
-              <p className="text-xs text-text-muted mb-1">
-                {ti({ en: "Preview:", vi: "Xem trước:" })}
-              </p>
-              <p className="text-lg font-bold font-mono text-primary">
-                {previewUsername}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-text-secondary mb-2">
+                {ti({ en: "Username", vi: "Tên người dùng" })}
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={inputValue}
+                  onChange={(e) =>
+                    setInputValue(
+                      e.target.value
+                        .normalize("NFD")
+                        .replace(/[\u0300-\u036f]/g, ""),
+                    )
+                  }
+                  placeholder={ts({
+                    en: "Enter your desired username",
+                    vi: "Nhập tên bạn muốn",
+                  })}
+                  autoFocus
+                  maxLength={20}
+                  className="flex-1 px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent min-w-0"
+                />
+                <button
+                  type="button"
+                  onClick={() =>
+                    setInputValue(generateRandomUsername(undefined, false))
+                  }
+                  className="px-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-text-primary transition-colors mb-0"
+                  title={ts({
+                    en: "Generate random username",
+                    vi: "Tạo tên ngẫu nhiên",
+                  })}
+                >
+                  <Dices className="w-5 h-5" />
+                </button>
+              </div>
+              <p className="text-xs text-text-muted mt-1">
+                {ti({
+                  en: "2-20 characters. Random numbers will be added automatically.",
+                  vi: "2-20 ký tự. Số ngẫu nhiên sẽ được thêm tự động.",
+                })}
               </p>
             </div>
-          )}
 
-          <button
-            type="submit"
-            disabled={!isValid}
-            className="w-full px-4 py-3 bg-primary hover:bg-primary-light disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl shadow-lg shadow-primary/20 transition-all cursor-pointer"
-          >
-            {ti({ en: "Continue", vi: "Tiếp tục" })}
-          </button>
-        </form>
+            {/* Preview */}
+            {previewUsername && (
+              <div className="bg-primary/10 border border-primary/20 rounded-xl p-4">
+                <p className="text-xs text-text-muted mb-1">
+                  {ti({ en: "Preview:", vi: "Xem trước:" })}
+                </p>
+                <p className="text-lg font-bold font-mono text-primary">
+                  {previewUsername}
+                </p>
+              </div>
+            )}
 
-        <p className="text-xs text-text-muted text-center mt-4">
-          {ti({
-            en: "You can change this later in settings",
-            vi: "Bạn có thể thay đổi sau trong cài đặt",
-          })}
-        </p>
+            <button
+              type="submit"
+              disabled={!isValid}
+              className="w-full px-4 py-3 bg-primary hover:bg-primary-light disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl shadow-lg shadow-primary/20 transition-all cursor-pointer"
+            >
+              {ti({ en: "Continue", vi: "Tiếp tục" })}
+            </button>
+          </form>
+
+          <p className="text-xs text-text-muted text-center mt-4">
+            {ti({
+              en: "You can change this later in settings",
+              vi: "Bạn có thể thay đổi sau trong cài đặt",
+            })}
+          </p>
+        </div>
       </div>
-    </div>
+    </Portal>
   );
 }

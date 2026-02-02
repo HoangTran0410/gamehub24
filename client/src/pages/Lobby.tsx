@@ -26,6 +26,7 @@ import GameCategoryFilter from "../components/GameCategoryFilter";
 import RecentUpdates from "../components/RecentUpdates";
 import { CATEGORY_CONFIG, type GameCategory } from "../constants";
 import { useChatStore } from "../stores/chatStore";
+import Portal from "../components/Portal";
 
 export default function Lobby() {
   const { ti } = useLanguage();
@@ -613,142 +614,144 @@ const CreateRoomModal = memo(
     };
 
     return (
-      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 animate-fadeIn">
-        <div className="bg-background-secondary border border-white/10 rounded-2xl p-8 max-w-md w-full shadow-2xl mx-4 text-center">
-          <h2 className="font-display text-2xl text-text-primary mb-6">
-            {ti({ en: "Create Room", vi: "Tạo Phòng" })}
-          </h2>
+      <Portal>
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 animate-fadeIn">
+          <div className="bg-background-secondary border border-white/10 rounded-2xl p-8 max-w-md w-full shadow-2xl mx-4 text-center">
+            <h2 className="font-display text-2xl text-text-primary mb-6">
+              {ti({ en: "Create Room", vi: "Tạo Phòng" })}
+            </h2>
 
-          <div className="space-y-4 mb-6">
-            {/* Room Name */}
-            <div>
-              <label className="block text-sm text-text-secondary mb-2 text-left">
-                {ti({ en: "Room Name", vi: "Tên Phòng" })}
-              </label>
-              <input
-                type="text"
-                value={roomName}
-                onChange={(e) => setRoomName(e.target.value)}
-                placeholder={ts({
-                  en: `Name your room (default: ${username})`,
-                  vi: `Đặt tên phòng (mặc định: ${username})`,
-                })}
-                className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-              />
-            </div>
-
-            {/* Game Type */}
-            <div>
-              <label className="block text-sm font-medium text-text-secondary mb-2 text-left">
-                {ti({ en: "Game", vi: "Trò chơi" })}
-              </label>
-              <select
-                value={gameType}
-                onChange={(e) => setGameType(e.target.value)}
-                className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent cursor-pointer"
-              >
-                {allGames.map((game) => (
-                  <option
-                    key={game.id}
-                    value={game.id}
-                    disabled={!game.isAvailable}
-                  >
-                    {ts(game.name)}
-                    {!game.isAvailable &&
-                      ` (${ts({ en: "Coming Soon", vi: "Sắp ra mắt" })})`}
-                  </option>
-                ))}{" "}
-              </select>
-
-              {selectedGame && (
-                <div className="mt-2 text-center">
-                  <p className="text-sm text-text-muted">
-                    {ts(selectedGame.description)}
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* Public/Private */}
-            <div>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={isPublic}
-                  onChange={(e) => setIsPublic(e.target.checked)}
-                  className="w-4 h-4 text-primary bg-white/5 border-white/10 rounded focus:ring-2 focus:ring-primary cursor-pointer"
-                />
-                <span className="text-sm text-text-secondary">
-                  {ti({ en: "Public Room", vi: "Phòng công khai" })}
-                </span>
-              </label>
-              {isPublic && (
-                <label className="text-xs text-text-muted">
-                  {ti({
-                    en: "Everyone can see your public room",
-                    vi: "Ai cũng có thể thấy phòng công khai của bạn",
-                  })}
-                </label>
-              )}
-            </div>
-
-            {/* Require Password */}
-            <div>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={requirePassword}
-                  onChange={(e) => setRequirePassword(e.target.checked)}
-                  className="w-4 h-4 text-primary bg-white/5 border-white/10 rounded focus:ring-2 focus:ring-primary cursor-pointer"
-                />
-                <span className="text-sm text-text-secondary">
-                  {ti({ en: "Require Password", vi: "Yêu cầu mật khẩu" })}
-                </span>
-              </label>
-            </div>
-
-            {/* Password (if private) */}
-            {requirePassword && (
+            <div className="space-y-4 mb-6">
+              {/* Room Name */}
               <div>
+                <label className="block text-sm text-text-secondary mb-2 text-left">
+                  {ti({ en: "Room Name", vi: "Tên Phòng" })}
+                </label>
                 <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  type="text"
+                  value={roomName}
+                  onChange={(e) => setRoomName(e.target.value)}
                   placeholder={ts({
-                    en: "Enter password",
-                    vi: "Nhập mật khẩu",
+                    en: `Name your room (default: ${username})`,
+                    vi: `Đặt tên phòng (mặc định: ${username})`,
                   })}
                   className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
                 />
               </div>
-            )}
-          </div>
 
-          <div className="flex gap-2 flex-col md:flex-row justify-center items-center">
-            <div className="flex gap-2">
-              <button
-                onClick={handleCreateOffline}
-                className="px-4 py-2 md:py-2.5 bg-slate-700 hover:bg-slate-500 text-white rounded-lg cursor-pointer"
-              >
-                {ti({ en: "Play Offline", vi: "Chơi Offline" })}
-              </button>
+              {/* Game Type */}
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-2 text-left">
+                  {ti({ en: "Game", vi: "Trò chơi" })}
+                </label>
+                <select
+                  value={gameType}
+                  onChange={(e) => setGameType(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent cursor-pointer"
+                >
+                  {allGames.map((game) => (
+                    <option
+                      key={game.id}
+                      value={game.id}
+                      disabled={!game.isAvailable}
+                    >
+                      {ts(game.name)}
+                      {!game.isAvailable &&
+                        ` (${ts({ en: "Coming Soon", vi: "Sắp ra mắt" })})`}
+                    </option>
+                  ))}{" "}
+                </select>
 
+                {selectedGame && (
+                  <div className="mt-2 text-center">
+                    <p className="text-sm text-text-muted">
+                      {ts(selectedGame.description)}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Public/Private */}
+              <div>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={isPublic}
+                    onChange={(e) => setIsPublic(e.target.checked)}
+                    className="w-4 h-4 text-primary bg-white/5 border-white/10 rounded focus:ring-2 focus:ring-primary cursor-pointer"
+                  />
+                  <span className="text-sm text-text-secondary">
+                    {ti({ en: "Public Room", vi: "Phòng công khai" })}
+                  </span>
+                </label>
+                {isPublic && (
+                  <label className="text-xs text-text-muted">
+                    {ti({
+                      en: "Everyone can see your public room",
+                      vi: "Ai cũng có thể thấy phòng công khai của bạn",
+                    })}
+                  </label>
+                )}
+              </div>
+
+              {/* Require Password */}
+              <div>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={requirePassword}
+                    onChange={(e) => setRequirePassword(e.target.checked)}
+                    className="w-4 h-4 text-primary bg-white/5 border-white/10 rounded focus:ring-2 focus:ring-primary cursor-pointer"
+                  />
+                  <span className="text-sm text-text-secondary">
+                    {ti({ en: "Require Password", vi: "Yêu cầu mật khẩu" })}
+                  </span>
+                </label>
+              </div>
+
+              {/* Password (if private) */}
+              {requirePassword && (
+                <div>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder={ts({
+                      en: "Enter password",
+                      vi: "Nhập mật khẩu",
+                    })}
+                    className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-2 flex-col md:flex-row justify-center items-center">
+              <div className="flex gap-2">
+                <button
+                  onClick={handleCreateOffline}
+                  className="px-4 py-2 md:py-2.5 bg-slate-700 hover:bg-slate-500 text-white rounded-lg cursor-pointer"
+                >
+                  {ti({ en: "Play Offline", vi: "Chơi Offline" })}
+                </button>
+
+                <button
+                  onClick={handleCreate}
+                  className="px-4 py-2 md:py-2.5 bg-primary hover:bg-primary-light text-white rounded-lg shadow-lg shadow-primary/30 transition-all cursor-pointer"
+                >
+                  {ti({ en: "Create Online", vi: "Tạo Online" })}
+                </button>
+              </div>
               <button
-                onClick={handleCreate}
-                className="px-4 py-2 md:py-2.5 bg-primary hover:bg-primary-light text-white rounded-lg shadow-lg shadow-primary/30 transition-all cursor-pointer"
+                onClick={onClose}
+                className="px-4 py-2 md:py-2.5 bg-white/5 hover:bg-white/10 text-text-secondary rounded-lg transition-colors cursor-pointer"
               >
-                {ti({ en: "Create Online", vi: "Tạo Online" })}
+                {ti({ en: "Cancel", vi: "Hủy" })}
               </button>
             </div>
-            <button
-              onClick={onClose}
-              className="px-4 py-2 md:py-2.5 bg-white/5 hover:bg-white/10 text-text-secondary rounded-lg transition-colors cursor-pointer"
-            >
-              {ti({ en: "Cancel", vi: "Hủy" })}
-            </button>
           </div>
         </div>
-      </div>
+      </Portal>
     );
   },
 );
@@ -787,59 +790,61 @@ const JoinRoomModal = memo(({ onClose }: { onClose: () => void }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 animate-fadeIn">
-      <div className="bg-background-secondary border border-white/10 rounded-2xl p-8 max-w-md w-full shadow-2xl mx-4">
-        <h2 className="font-display text-2xl text-text-primary mb-6">
-          {ti({ en: "Join Room", vi: "Vào Phòng" })}
-        </h2>
+    <Portal>
+      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 animate-fadeIn">
+        <div className="bg-background-secondary border border-white/10 rounded-2xl p-8 max-w-md w-full shadow-2xl mx-4">
+          <h2 className="font-display text-2xl text-text-primary mb-6">
+            {ti({ en: "Join Room", vi: "Vào Phòng" })}
+          </h2>
 
-        <div className="space-y-4 mb-6">
-          <div>
-            <label className="block text-sm font-medium text-text-secondary mb-2">
-              {ti({ en: "Room ID", vi: "ID Phòng" })}
-            </label>
-            <input
-              type="text"
-              value={roomId}
-              onChange={(e) => setRoomId(e.target.value)}
-              placeholder={ts({ en: "Enter room ID", vi: "Nhập ID phòng" })}
-              className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-            />
+          <div className="space-y-4 mb-6">
+            <div>
+              <label className="block text-sm font-medium text-text-secondary mb-2">
+                {ti({ en: "Room ID", vi: "ID Phòng" })}
+              </label>
+              <input
+                type="text"
+                value={roomId}
+                onChange={(e) => setRoomId(e.target.value)}
+                placeholder={ts({ en: "Enter room ID", vi: "Nhập ID phòng" })}
+                className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-text-secondary mb-2">
+                {ti({ en: "Password (Optional)", vi: "Mật khẩu (Tùy chọn)" })}
+              </label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder={ts({
+                  en: "Enter password if required",
+                  vi: "Nhập mật khẩu nếu cần",
+                })}
+                className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+              />
+            </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-text-secondary mb-2">
-              {ti({ en: "Password (Optional)", vi: "Mật khẩu (Tùy chọn)" })}
-            </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder={ts({
-                en: "Enter password if required",
-                vi: "Nhập mật khẩu nếu cần",
-              })}
-              className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-            />
+          <div className="flex gap-3">
+            <button
+              onClick={onClose}
+              className="flex-1 px-4 py-2.5 bg-white/5 hover:bg-white/10 text-text-secondary rounded-lg transition-colors cursor-pointer"
+            >
+              {ti({ en: "Cancel", vi: "Hủy" })}
+            </button>
+            <button
+              onClick={handleJoin}
+              disabled={!roomId.trim()}
+              className="flex-1 px-4 py-2.5 bg-primary hover:bg-primary-light disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg shadow-lg shadow-primary/30 transition-all cursor-pointer"
+            >
+              {ti({ en: "Join", vi: "Vào" })}
+            </button>
           </div>
-        </div>
-
-        <div className="flex gap-3">
-          <button
-            onClick={onClose}
-            className="flex-1 px-4 py-2.5 bg-white/5 hover:bg-white/10 text-text-secondary rounded-lg transition-colors cursor-pointer"
-          >
-            {ti({ en: "Cancel", vi: "Hủy" })}
-          </button>
-          <button
-            onClick={handleJoin}
-            disabled={!roomId.trim()}
-            className="flex-1 px-4 py-2.5 bg-primary hover:bg-primary-light disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg shadow-lg shadow-primary/30 transition-all cursor-pointer"
-          >
-            {ti({ en: "Join", vi: "Vào" })}
-          </button>
         </div>
       </div>
-    </div>
+    </Portal>
   );
 });

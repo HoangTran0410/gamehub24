@@ -30,6 +30,7 @@ import ChatPanel from "../components/ChatPanel";
 import UserList from "../components/UserList";
 import GameContainer from "../games/GameContainer";
 import ShareModal from "../components/ShareModal";
+import Portal from "../components/Portal";
 import type { GameCategory } from "../constants";
 
 export default function RoomPage() {
@@ -735,57 +736,59 @@ function PasswordPromptModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-100 animate-fadeIn">
-      <div className="bg-background-secondary border border-white/10 rounded-2xl p-8 max-w-md w-full shadow-2xl mx-4 animate-scaleIn">
-        <div className="flex flex-col items-center text-center mb-6">
-          <div className="w-16 h-16 rounded-full bg-yellow-500/10 flex items-center justify-center mb-4 text-yellow-500">
-            <Lock className="w-8 h-8" />
+    <Portal>
+      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-100 animate-fadeIn">
+        <div className="bg-background-secondary border border-white/10 rounded-2xl p-8 max-w-md w-full shadow-2xl mx-4 animate-scaleIn">
+          <div className="flex flex-col items-center text-center mb-6">
+            <div className="w-16 h-16 rounded-full bg-yellow-500/10 flex items-center justify-center mb-4 text-yellow-500">
+              <Lock className="w-8 h-8" />
+            </div>
+            <h2 className="text-2xl font-display text-text-primary">
+              {ti({ en: "Password Required", vi: "Yêu cầu mật khẩu" })}
+            </h2>
+            <p className="text-text-secondary mt-2">
+              {ti({
+                en: "This room is private. Please enter the password to join.",
+                vi: "Phòng này riêng tư. Vui lòng nhập mật khẩu để tham gia.",
+              })}
+            </p>
           </div>
-          <h2 className="text-2xl font-display text-text-primary">
-            {ti({ en: "Password Required", vi: "Yêu cầu mật khẩu" })}
-          </h2>
-          <p className="text-text-secondary mt-2">
-            {ti({
-              en: "This room is private. Please enter the password to join.",
-              vi: "Phòng này riêng tư. Vui lòng nhập mật khẩu để tham gia.",
-            })}
-          </p>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder={ts({
+                en: "Enter room password",
+                vi: "Nhập mật khẩu phòng",
+              })}
+              autoFocus
+              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-center text-lg dating-tighter"
+            />
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={onCancel}
+                className="flex-1 px-4 py-3 bg-white/5 hover:bg-white/10 text-text-secondary font-medium rounded-xl transition-colors cursor-pointer"
+              >
+                {ti({ en: "Cancel", vi: "Hủy" })}
+              </button>
+              <button
+                type="submit"
+                disabled={!password || isSubmitting}
+                className="flex-1 px-4 py-3 bg-primary hover:bg-primary-light disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl shadow-lg shadow-primary/20 transition-all cursor-pointer"
+              >
+                {isSubmitting
+                  ? ti({ en: "Joining...", vi: "Đang vào..." })
+                  : ti({ en: "Join Room", vi: "Vào phòng" })}
+              </button>
+            </div>
+          </form>
         </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder={ts({
-              en: "Enter room password",
-              vi: "Nhập mật khẩu phòng",
-            })}
-            autoFocus
-            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-center text-lg dating-tighter"
-          />
-
-          <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={onCancel}
-              className="flex-1 px-4 py-3 bg-white/5 hover:bg-white/10 text-text-secondary font-medium rounded-xl transition-colors cursor-pointer"
-            >
-              {ti({ en: "Cancel", vi: "Hủy" })}
-            </button>
-            <button
-              type="submit"
-              disabled={!password || isSubmitting}
-              className="flex-1 px-4 py-3 bg-primary hover:bg-primary-light disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl shadow-lg shadow-primary/20 transition-all cursor-pointer"
-            >
-              {isSubmitting
-                ? ti({ en: "Joining...", vi: "Đang vào..." })
-                : ti({ en: "Join Room", vi: "Vào phòng" })}
-            </button>
-          </div>
-        </form>
       </div>
-    </div>
+    </Portal>
   );
 }
 
@@ -817,103 +820,105 @@ function ChangeGameModal({
   );
 
   return (
-    <div
-      className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-100 animate-fadeIn"
-      onClick={onClose}
-    >
+    <Portal>
       <div
-        className="bg-background-secondary border border-white/10 rounded-2xl p-4 max-w-2xl w-full shadow-2xl mx-4 animate-scaleIn relative flex flex-col"
-        onClick={(e) => e.stopPropagation()}
+        className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-100 animate-fadeIn"
+        onClick={onClose}
       >
-        <div className="flex items-center justify-between">
-          <button
-            onClick={onClose}
-            className="absolute top-4 right-4 p-1 hover:bg-white/10 rounded-lg transition-colors text-text-secondary z-10"
-          >
-            <X className="w-5 h-5" />
-          </button>
+        <div
+          className="bg-background-secondary border border-white/10 rounded-2xl p-4 max-w-2xl w-full shadow-2xl mx-4 animate-scaleIn relative flex flex-col"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between">
+            <button
+              onClick={onClose}
+              className="absolute top-4 right-4 p-1 hover:bg-white/10 rounded-lg transition-colors text-text-secondary z-10"
+            >
+              <X className="w-5 h-5" />
+            </button>
 
-          <h3 className="text-2xl font-display text-text-primary mb-3">
-            {ti({ en: "Change Game", vi: "Đổi game" })}
-          </h3>
-        </div>
-
-        <div className="flex-1 max-h-[80vh] overflow-y-auto">
-          <div className="mb-6">
-            <GameCategoryFilter
-              selectedCategory={selectedCategory}
-              onSelectCategory={setSelectedCategory}
-              favoritesCount={favoritesCount}
-            />
+            <h3 className="text-2xl font-display text-text-primary mb-3">
+              {ti({ en: "Change Game", vi: "Đổi game" })}
+            </h3>
           </div>
 
-          {gamesToShow.length <= 0 && (
-            <p className="text-text-secondary text-center w-full">
-              {ti({ en: "No games found", vi: "Không tìm thấy game" })}
-            </p>
-          )}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {gamesToShow.map((game) => {
-              const Icon = game.icon;
-              const isSelected = currentRoom.gameType === game.id;
-              return (
-                <div key={game.id} className="relative group">
-                  <button
-                    onClick={(e) => toggleFavorite(game.id, e)}
-                    className={`absolute top-2 right-2 p-1.5 rounded-full transition-all duration-200 z-10 ${
-                      favorites.includes(game.id)
-                        ? "text-yellow-500 bg-yellow-500/10 hover:bg-yellow-500/20"
-                        : "text-text-muted hover:text-yellow-500 hover:bg-white/5 md:opacity-0 group-hover:opacity-100"
-                    }`}
-                    title={ts({
-                      en: "Toggle Favorite",
-                      vi: "Đánh dấu yêu thích",
-                    })}
-                  >
-                    <Star
-                      className={`w-4 h-4 ${favorites.includes(game.id) ? "fill-current" : ""}`}
-                    />
-                  </button>
+          <div className="flex-1 max-h-[80vh] overflow-y-auto">
+            <div className="mb-6">
+              <GameCategoryFilter
+                selectedCategory={selectedCategory}
+                onSelectCategory={setSelectedCategory}
+                favoritesCount={favoritesCount}
+              />
+            </div>
 
-                  <button
-                    onClick={() => onChangeGame(game.id)}
-                    disabled={!game.isAvailable || isSelected}
-                    className={`flex items-center gap-4 p-4 rounded-xl border transition-all text-left w-full ${
-                      isSelected
-                        ? "bg-primary/20 border-primary cursor-default"
-                        : !game.isAvailable
-                          ? "opacity-50 cursor-not-allowed border-white/5 bg-white/5"
-                          : "bg-white/5 border-white/10 hover:border-primary/50 hover:bg-white/10 cursor-pointer"
-                    }`}
-                  >
-                    <div
-                      className={`p-3 rounded-lg ${
+            {gamesToShow.length <= 0 && (
+              <p className="text-text-secondary text-center w-full">
+                {ti({ en: "No games found", vi: "Không tìm thấy game" })}
+              </p>
+            )}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {gamesToShow.map((game) => {
+                const Icon = game.icon;
+                const isSelected = currentRoom.gameType === game.id;
+                return (
+                  <div key={game.id} className="relative group">
+                    <button
+                      onClick={(e) => toggleFavorite(game.id, e)}
+                      className={`absolute top-2 right-2 p-1.5 rounded-full transition-all duration-200 z-10 ${
+                        favorites.includes(game.id)
+                          ? "text-yellow-500 bg-yellow-500/10 hover:bg-yellow-500/20"
+                          : "text-text-muted hover:text-yellow-500 hover:bg-white/5 md:opacity-0 group-hover:opacity-100"
+                      }`}
+                      title={ts({
+                        en: "Toggle Favorite",
+                        vi: "Đánh dấu yêu thích",
+                      })}
+                    >
+                      <Star
+                        className={`w-4 h-4 ${favorites.includes(game.id) ? "fill-current" : ""}`}
+                      />
+                    </button>
+
+                    <button
+                      onClick={() => onChangeGame(game.id)}
+                      disabled={!game.isAvailable || isSelected}
+                      className={`flex items-center gap-4 p-4 rounded-xl border transition-all text-left w-full ${
                         isSelected
-                          ? "bg-primary text-white"
-                          : "bg-white/10 text-primary"
+                          ? "bg-primary/20 border-primary cursor-default"
+                          : !game.isAvailable
+                            ? "opacity-50 cursor-not-allowed border-white/5 bg-white/5"
+                            : "bg-white/5 border-white/10 hover:border-primary/50 hover:bg-white/10 cursor-pointer"
                       }`}
                     >
-                      <Icon className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <h4
-                        className={`font-bold ${
-                          isSelected ? "text-primary" : "text-text-primary"
+                      <div
+                        className={`p-3 rounded-lg ${
+                          isSelected
+                            ? "bg-primary text-white"
+                            : "bg-white/10 text-primary"
                         }`}
                       >
-                        {ti(game.name)}
-                      </h4>
-                      <p className="text-xs text-text-secondary line-clamp-2 opacity-50">
-                        {ti(game.description)}
-                      </p>
-                    </div>
-                  </button>
-                </div>
-              );
-            })}
+                        <Icon className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <h4
+                          className={`font-bold ${
+                            isSelected ? "text-primary" : "text-text-primary"
+                          }`}
+                        >
+                          {ti(game.name)}
+                        </h4>
+                        <p className="text-xs text-text-secondary line-clamp-2 opacity-50">
+                          {ti(game.description)}
+                        </p>
+                      </div>
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </Portal>
   );
 }
