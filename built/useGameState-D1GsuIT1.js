@@ -1,1 +1,0 @@
-import{c as t}from"./react-vendor-DeJ0i39y.js";function e(e,n){const[o,r]=t.useState(e.snapshot);return t.useEffect(()=>{const t=e.onUpdate(t=>{n?n(t,r):r(t)});return()=>{t()}},[e,n]),[o,r]}export{e as u};
