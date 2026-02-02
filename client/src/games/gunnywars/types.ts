@@ -64,6 +64,8 @@ export interface Weapon {
   count: number; // Projectile count per shot
   spread?: number; // Spread angle for multiple projectiles
   terrainDamageMultiplier: number;
+  description: string;
+  descriptionVi: string;
 }
 
 export type MoveDirection = -1 | 1;

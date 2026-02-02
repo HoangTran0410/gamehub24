@@ -3,6 +3,8 @@ import {
   WORLD_HEIGHT,
   BIOME_SCALE,
   SNOW_THRESHOLD_HEIGHT,
+  BIOME_BLEND_WIDTH,
+  DAY_NIGHT_CYCLE_DURATION,
 } from "./constants";
 import type { TerrainModification } from "./types";
 
@@ -108,10 +110,15 @@ int getBiomeIndex(float x) {
   // Sample at the center of each 256-pixel chunk
   float chunkX = floor(x / 256.0) * 256.0 + 128.0;
   float biomeNoise = fbm1D(chunkX * BIOME_SCALE, u_seed, 2);
-  if (biomeNoise < 0.15) return 2; // Valley
-  if (biomeNoise < 0.30) return 0; // Plains
-  if (biomeNoise < 0.45) return 1; // Mountains
-  if (biomeNoise < 0.60) return 3; // Desert
+
+  // Map noise value (0-1) to biome index (0-6)
+  // Sync with CPU distribution logic
+  if (biomeNoise < 0.1) return 2; // Valley
+  if (biomeNoise < 0.2) return 0; // Plains
+  if (biomeNoise < 0.3) return 1; // Mountains
+  if (biomeNoise < 0.4) return 3; // Desert
+  if (biomeNoise < 0.5) return 5; // Swamp
+  if (biomeNoise < 0.6) return 6; // Volcanic
   return 4; // Tundra
 }
 
@@ -253,10 +260,11 @@ float weatherParticle(vec2 screenPos, vec2 cameraPos, float particleSize, float 
       float randY = hash1D(id.y * 0.3, id.x * 0.4);
       float randPresent = hash1D(id.x, id.y + 200.0);
 
-      if (randPresent < 0.25) {
+      // Reduced density from 0.25 to 0.15
+      if (randPresent < 0.15) {
         vec2 particlePos = neighbor + vec2(randX * 0.8 + 0.1, randY * 0.8 + 0.1);
 
-        // Slowed down falling motion (0.0006 instead of 0.001)
+        // Time-based motion with CPU-side modulo for precision
         float timeScale = u_time * 0.0006;
         float progress = fract(randY * 10.0 - timeScale * fallSpeed * 10.0);
         particlePos.y += progress;
@@ -273,6 +281,62 @@ float weatherParticle(vec2 screenPos, vec2 cameraPos, float particleSize, float 
   }
 
   return clamp(particles, 0.0, 1.0);
+}
+
+// === Rain Particles (thin streaks) ===
+float rainParticle(vec2 screenPos, vec2 cameraPos) {
+  // Elongated grid for streaks
+  vec2 uv = (screenPos + vec2(cameraPos.x, -cameraPos.y) * 0.4 * u_zoom) / vec2(8.0, 80.0);
+  vec2 cellId = floor(uv);
+  vec2 cellUV = fract(uv);
+
+  float rain = 0.0;
+  for (int dy = -1; dy <= 0; dy++) {
+    vec2 id = cellId + vec2(0.0, float(dy));
+    float randX = hash1D(id.x, id.y + 500.0);
+    float randY = hash1D(id.y, id.x + 600.0);
+
+    if (randX < 0.2) {
+      float timeScale = u_time * 0.005;
+      float progress = fract(randY - timeScale * (1.2 + randX));
+
+      float xOffset = randX * 5.0; // Random horizontal placement in cell
+      float dX = abs(cellUV.x - xOffset);
+      float dY = abs(cellUV.y - (float(dy) + progress));
+
+      // Thin vertical streak
+      if (dX < 0.1 && dY < 0.4) {
+        rain += (1.0 - dY * 2.5) * (1.0 - dX * 10.0);
+      }
+    }
+  }
+  return clamp(rain, 0.0, 1.0);
+}
+
+// === Point Light Calculation ===
+#define MAX_LIGHTS 10 // Define max number of lights
+uniform vec2 u_lightPos[MAX_LIGHTS];
+uniform vec3 u_lightColor[MAX_LIGHTS];
+uniform float u_lightRadius[MAX_LIGHTS];
+uniform int u_lightCount;
+
+vec3 calculateLighting(vec2 worldPos, vec3 baseColor) {
+  vec3 totalLight = vec3(0.0);
+  for (int i = 0; i < u_lightCount; i++) {
+    float dx = worldPos.x - u_lightPos[i].x;
+    float dy = worldPos.y - u_lightPos[i].y;
+    float dist = sqrt(dx*dx + dy*dy);
+
+    if (dist < u_lightRadius[i]) {
+      float atten = 1.0 - smoothstep(0.0, u_lightRadius[i], dist);
+      // Square the attenuation for a more natural falloff
+      atten = atten * atten;
+      totalLight += u_lightColor[i] * atten;
+    }
+  }
+
+  // Apply light to the base color (additive for a "glow" feel)
+  return baseColor + totalLight * 0.8;
 }
 
 // === Biome color palettes ===
@@ -343,6 +407,34 @@ vec3 getTundraColor(float depth, float worldY, float baseH) {
   return color;
 }
 
+vec3 getSwampColor(float worldX, float depth, float worldY, float baseH) {
+  vec3 muckColor = vec3(0.15, 0.18, 0.12);
+  vec3 waterColor = vec3(0.1, 0.25, 0.15);
+  vec3 mossColor = vec3(0.2, 0.4, 0.1);
+  vec3 grassColor = vec3(0.1, 0.3, 0.05);
+
+  vec3 color = mix(muckColor, vec3(0.05, 0.08, 0.05), worldY / u_worldSize.y);
+  if (depth >= 0.0 && depth < 15.0) {
+    color = depth < 4.0 ? mossColor : grassColor;
+    if (noise(vec2(worldX * 0.1, worldY * 0.5)) > 0.6) color = waterColor;
+  }
+  return color;
+}
+
+vec3 getVolcanicColor(float worldX, float depth, float worldY, float baseH) {
+  vec3 basaltColor = vec3(0.12, 0.12, 0.15);
+  vec3 ashColor = vec3(0.25, 0.25, 0.28);
+  vec3 lavaGlow = vec3(0.8, 0.2, 0.0);
+
+  vec3 color = mix(basaltColor, vec3(0.05, 0.05, 0.08), worldY / u_worldSize.y);
+  if (depth >= 0.0 && depth < 10.0) {
+    float lavaNoise = noise(vec2(worldX * 0.05, worldY * 0.1 + u_time * 0.001));
+    color = depth < 3.0 ? ashColor : basaltColor;
+    if (lavaNoise > 0.8) color = mix(color, lavaGlow, (lavaNoise - 0.8) * 5.0);
+  }
+  return color;
+}
+
 // === Terrain Decorations (Trees, Rocks) ===
 vec4 getDecorationColor(float worldX, float worldY, float baseH, int biomeIdx) {
   float dy_ground = worldY - baseH;
@@ -390,20 +482,56 @@ vec4 getDecorationColor(float worldX, float worldY, float baseH, int biomeIdx) {
         }
       }
     }
-    // Large Boulders (Mountains/Desert)
+    // Swamp Trees
+    else if (biomeIdx == 5) {
+      float trunkW = 6.0;
+      float trunkH = 50.0 + cellRand * 40.0;
+      if (abs(dx) < trunkW && dy < 0.0 && dy > -trunkH) {
+        return vec4(0.18, 0.12, 0.05, 1.0); // Darker trunk
+      }
+      // Drooping foliage
+      float leafY = dy + trunkH * 0.8;
+      float dLeaf = length(vec2(dx * 0.7, leafY));
+      float leafRadius = 40.0 + cellRand * 25.0;
+      if (dLeaf < leafRadius) {
+        float noiseVal = noise(vec2(worldX * 0.1, worldY * 0.1));
+        vec3 leafColor = mix(vec3(0.05, 0.15, 0.05), vec3(0.1, 0.25, 0.1), noiseVal);
+        return vec4(leafColor, 1.0);
+      }
+    }
+    // Volcanic Pillars/Rocks
+    else if (biomeIdx == 6) {
+      float pillarW = 15.0 + cellRand * 20.0;
+      float pillarH = 30.0 + cellRand * 60.0;
+      // Sharp, jagged shapes
+      float jagged = noise(vec2(worldX * 0.2, worldY * 0.1)) * 10.0;
+      if (abs(dx) < (pillarW - dy * 0.2) + jagged && dy < 0.0 && dy > -pillarH) {
+        float glow = step(0.8, noise(vec2(worldX * 0.1, worldY * 0.1 + u_time * 0.002)));
+        vec3 color = mix(vec3(0.1, 0.1, 0.12), vec3(0.6, 0.2, 0.0), glow * 0.5);
+        return vec4(color, 1.0);
+      }
+    }
+    // Smooth Boulders (Mountains/Desert)
     else {
-      float rockSize = 15.0 + cellRand * 15.0; // Smaller rocks (was 25+25)
-      float dRock = length(vec2(dx, dy + rockSize * 0.4));
+      // Use elliptical shape and low-frequency noise for smoothness
+      float rockSize = 25.0 + cellRand * 25.0;
+      vec2 stretch = vec2(1.2 + cellRand * 0.4, 0.8 + cellRand * 0.2); // Elliptical distortion
 
-      // Much more irregular rock shape (multiple layers of noise)
-      float rockNoise = noise(vec2(worldX * 0.2, worldY * 0.2 + cellId)) * (rockSize * 0.5);
-      rockNoise += noise(vec2(worldX * 0.5, worldY * 0.5 - cellId)) * (rockSize * 0.2);
+      // Sink rock into the ground by a random amount (0.2 to 0.7 of its size)
+      float sinkDepth = rockSize * (0.2 + cellRand * 0.5);
+      vec2 rockUV = vec2(dx / stretch.x, (dy + sinkDepth) / stretch.y);
+      float dRock = length(rockUV);
+
+      // Smooth, low-frequency noise instead of jagged detail
+      float rockNoise = noise(vec2(worldX * 0.05, worldY * 0.05 + cellId)) * (rockSize * 0.3);
+      rockNoise += noise(vec2(worldX * 0.1, worldY * 0.1)) * (rockSize * 0.1);
 
       if (dRock < rockSize + rockNoise) {
         vec3 rockBase = (biomeIdx == 3) ? vec3(0.7, 0.55, 0.35) : vec3(0.4, 0.4, 0.45);
         vec3 rockHighlight = rockBase + 0.15;
-        float shading = dot(normalize(vec2(dx, dy)), normalize(vec2(-1.0, -1.0)));
-        vec3 rockColor = mix(rockBase, rockHighlight, shading * 0.5 + 0.5);
+        // Smooth shading
+        float shading = dot(normalize(rockUV), normalize(vec2(-1.0, -1.0)));
+        vec3 rockColor = mix(rockBase, rockHighlight, shading * 0.4 + 0.6);
         return vec4(rockColor, 1.0);
       }
     }
@@ -418,7 +546,7 @@ vec3 getBiomeColorBlended(float worldX, float worldY, float baseH) {
   float depth = worldY - baseH;
 
   // BIOME_SCALE is very small, so we use a reasonable transition width
-  float blendWidth = 500.0;
+  float blendWidth = ${BIOME_BLEND_WIDTH.toFixed(1)};
 
   // Find current and neighbor biomes for blending
   int currentBiome = getBiomeIndex(worldX);
@@ -439,7 +567,9 @@ vec3 getBiomeColorBlended(float worldX, float worldY, float baseH) {
   else if (currentBiome == 1) color = getMountainsColor(depth, worldY, baseH);
   else if (currentBiome == 2) color = getValleyColor(depth, worldY, baseH);
   else if (currentBiome == 3) color = getDesertColor(depth, worldY, baseH);
-  else color = getTundraColor(depth, worldY, baseH);
+  else if (currentBiome == 4) color = getTundraColor(depth, worldY, baseH);
+  else if (currentBiome == 5) color = getSwampColor(worldX, depth, worldY, baseH);
+  else color = getVolcanicColor(worldX, depth, worldY, baseH);
 
   // Smoothly blend with neighbors
   float distToNext = nextChunkX - 128.0 - worldX;
@@ -452,7 +582,9 @@ vec3 getBiomeColorBlended(float worldX, float worldY, float baseH) {
     else if (nextBiome == 1) nextColor = getMountainsColor(depth, worldY, baseH);
     else if (nextBiome == 2) nextColor = getValleyColor(depth, worldY, baseH);
     else if (nextBiome == 3) nextColor = getDesertColor(depth, worldY, baseH);
-    else nextColor = getTundraColor(depth, worldY, baseH);
+    else if (nextBiome == 4) nextColor = getTundraColor(depth, worldY, baseH);
+    else if (nextBiome == 5) nextColor = getSwampColor(worldX, depth, worldY, baseH);
+    else nextColor = getVolcanicColor(worldX, depth, worldY, baseH);
     color = mix(color, nextColor, t * 0.5);
   }
 
@@ -463,7 +595,9 @@ vec3 getBiomeColorBlended(float worldX, float worldY, float baseH) {
     else if (prevBiome == 1) prevColor = getMountainsColor(depth, worldY, baseH);
     else if (prevBiome == 2) prevColor = getValleyColor(depth, worldY, baseH);
     else if (prevBiome == 3) prevColor = getDesertColor(depth, worldY, baseH);
-    else prevColor = getTundraColor(depth, worldY, baseH);
+    else if (prevBiome == 4) prevColor = getTundraColor(depth, worldY, baseH);
+    else if (prevBiome == 5) prevColor = getSwampColor(worldX, depth, worldY, baseH);
+    else prevColor = getVolcanicColor(worldX, depth, worldY, baseH);
     color = mix(color, prevColor, t * 0.5);
   }
 
@@ -531,30 +665,79 @@ void main() {
   // === Sky rendering (for non-solid pixels) ===
   if (!solid) {
     float skyT = screenPos.y / u_viewSize.y;
-    vec3 skyTop = vec3(0.008, 0.024, 0.09);
-    vec3 skyBot = vec3(0.09, 0.145, 0.33);
+    // === Day/Night Cycle ===
+    float timeOfDay = fract(u_time / ${DAY_NIGHT_CYCLE_DURATION.toFixed(1)});
+
+    // Light factor (0.0 at midnight, 1.0 at noon)
+    // Shifted so 0.25 is noon, 0.75 is midnight
+    float lightFactor = smoothstep(-0.5, 0.5, cos((timeOfDay - 0.25) * 6.283185));
+
+    // Dusk/Dawn factor for reddish horizon
+    float horizonFactor = smoothstep(0.3, 0.0, abs(timeOfDay - 0.0)) +
+                          smoothstep(0.3, 0.0, abs(timeOfDay - 0.5)) +
+                          smoothstep(0.3, 0.0, abs(timeOfDay - 1.0));
+    horizonFactor = clamp(horizonFactor, 0.0, 1.0);
+
+    vec3 skyTopNight = vec3(0.008, 0.02, 0.08);
+    vec3 skyBotNight = vec3(0.05, 0.08, 0.2);
+    vec3 skyTopDay = vec3(0.2, 0.4, 0.8);
+    vec3 skyBotDay = vec3(0.5, 0.7, 0.95);
+    vec3 horizonColor = vec3(1.0, 0.4, 0.2);
+
+    vec3 skyTop = mix(skyTopNight, skyTopDay, lightFactor);
+    vec3 skyBot = mix(skyBotNight, skyBotDay, lightFactor);
+    skyBot = mix(skyBot, horizonColor, horizonFactor * (1.0 - skyT));
+
     vec3 skyColor = mix(skyBot, skyTop, skyT);
 
-    // Stars
-    vec2 starUV = (screenPos + vec2(u_cameraPos.x, -u_cameraPos.y) * 0.05) / 40.0;
-    float stars = star(starUV, 1.0) * 0.8 + star(starUV * 1.5 + 100.0, 2.0) * 0.5 + star(starUV * 2.0 + 200.0, 3.0) * 0.3;
-    skyColor += vec3(stars);
+    // Stars (only at night)
+    float starIntensity = smoothstep(0.4, 0.1, lightFactor);
+    if (starIntensity > 0.0) {
+      vec2 starUV = (screenPos + vec2(u_cameraPos.x, -u_cameraPos.y) * 0.05) / 40.0;
+      float stars = star(starUV, 1.0) * 0.8 + star(starUV * 1.5 + 100.0, 2.0) * 0.5 + star(starUV * 2.0 + 200.0, 3.0) * 0.3;
+      skyColor += vec3(stars) * starIntensity;
+    }
 
     // === Weather particles based on biome ===
-    int skyBiomeIdx = getBiomeIndex(worldX);
+    // Lower threshold globally (0.5 -> 0.3) to make weather more common
+    float weatherIntensity = noise1D(worldX * 0.0005, u_seed + 1234.0);
+    float weatherThreshold = 0.3;
 
-    // Tundra - falling snow
-    if (skyBiomeIdx == 4) {
-      float snow = weatherParticle(screenPos, u_cameraPos, 20.0, 0.6, 0.2);
-      skyColor = mix(skyColor, vec3(1.0), snow * 0.8);
-    }
-    // Desert - blowing sand/dust
-    else if (skyBiomeIdx == 3) {
-      float sand = weatherParticle(screenPos, u_cameraPos, 25.0, 0.3, 0.7);
-      skyColor = mix(skyColor, vec3(0.9, 0.8, 0.6), sand * 0.3);
+    // Tundra override: Snow is even more frequent
+    if (biomeIdx == 4) weatherThreshold = 0.15;
+
+    if (weatherIntensity > weatherThreshold) {
+      float intensity = smoothstep(weatherThreshold, weatherThreshold + 0.1, weatherIntensity);
+
+      // Tundra - falling snow
+      if (biomeIdx == 4) {
+        float snow = weatherParticle(screenPos, u_cameraPos, 20.0, 0.6, 0.2);
+        skyColor = mix(skyColor, vec3(1.0), snow * 0.5 * intensity);
+      }
+      // Desert - blowing sand/dust
+      else if (biomeIdx == 3) {
+        float sand = weatherParticle(screenPos, u_cameraPos, 25.0, 0.3, 0.7);
+        skyColor = mix(skyColor, vec3(0.9, 0.8, 0.6), sand * 0.2 * intensity);
+      }
+      // Plain, Valley, Swamp - rain
+      else if (biomeIdx == 0 || biomeIdx == 2 || biomeIdx == 5) {
+        float rain = rainParticle(screenPos, u_cameraPos);
+        vec3 rainColor = (biomeIdx == 5) ? vec3(0.4, 0.5, 0.4) : vec3(0.6, 0.7, 0.8);
+        skyColor = mix(skyColor, rainColor, rain * 0.5 * intensity);
+      }
+      // Volcanic - rising ash/embers
+      else if (biomeIdx == 6) {
+        // Use weatherParticle with negative fallSpeed for "rising" ash
+        float ash = weatherParticle(screenPos, u_cameraPos, 15.0, -0.3, 0.5);
+        vec3 emberColor = mix(vec3(0.2, 0.2, 0.2), vec3(1.0, 0.3, 0.0), step(0.7, noise(screenPos * 0.1)));
+        skyColor = mix(skyColor, emberColor, ash * 0.4 * intensity);
+      }
     }
 
     fragColor = vec4(skyColor, 1.0);
+
+    // Apply lighting to sky (smoke/fog effect)
+    fragColor.rgb = calculateLighting(vec2(worldX, worldY), fragColor.rgb);
     return;
   }
 
@@ -600,10 +783,26 @@ void main() {
     }
   }
 
+  // Apply Day/Night lighting (re-use factor)
+  float timeOfDay = fract(u_time / ${DAY_NIGHT_CYCLE_DURATION.toFixed(1)});
+  float lightFactor = smoothstep(-0.5, 0.5, cos((timeOfDay - 0.25) * 6.283185));
+  float ambLight = mix(0.25, 1.0, lightFactor);
+
+  // Tint during dusk/dawn
+  float horizonFactor = smoothstep(0.3, 0.0, abs(timeOfDay - 0.0)) +
+                        smoothstep(0.3, 0.0, abs(timeOfDay - 0.5)) +
+                        smoothstep(0.3, 0.0, abs(timeOfDay - 1.0));
+  horizonFactor = clamp(horizonFactor, 0.0, 1.0);
+  vec3 tint = mix(vec3(1.0), vec3(1.0, 0.8, 0.7), horizonFactor);
+
+  color *= ambLight * tint;
+
+  // Apply Point Lights
+  color = calculateLighting(vec2(worldX, worldY), color);
+
   fragColor = vec4(color, 1.0);
 }
 `;
-
 const MAX_MODIFICATIONS = 4096;
 
 /**
@@ -626,6 +825,10 @@ export class TerrainShaderRenderer {
     modTexture: WebGLUniformLocation | null;
     modCount: WebGLUniformLocation | null;
     time: WebGLUniformLocation | null;
+    lightPos: WebGLUniformLocation | null;
+    lightColor: WebGLUniformLocation | null;
+    lightRadius: WebGLUniformLocation | null;
+    lightCount: WebGLUniformLocation | null;
   } = {
     seed: null,
     cameraPos: null,
@@ -635,6 +838,10 @@ export class TerrainShaderRenderer {
     modTexture: null,
     modCount: null,
     time: null,
+    lightPos: null,
+    lightColor: null,
+    lightRadius: null,
+    lightCount: null,
   };
 
   private modTextureData: Float32Array;
@@ -702,6 +909,10 @@ export class TerrainShaderRenderer {
       modTexture: gl.getUniformLocation(program, "u_modTexture"),
       modCount: gl.getUniformLocation(program, "u_modCount"),
       time: gl.getUniformLocation(program, "u_time"),
+      lightPos: gl.getUniformLocation(program, "u_lightPos"),
+      lightColor: gl.getUniformLocation(program, "u_lightColor"),
+      lightRadius: gl.getUniformLocation(program, "u_lightRadius"),
+      lightCount: gl.getUniformLocation(program, "u_lightCount"),
     };
 
     // Create VAO (empty - we use gl_VertexID in shader)
@@ -729,16 +940,59 @@ export class TerrainShaderRenderer {
 
   /**
    * Upload modifications to GPU texture.
+   * OPTIMIZED: Culls modifications outside current viewport to minimize GPU loop work.
    */
-  uploadModifications(modifications: TerrainModification[]): void {
+  uploadModifications(
+    modifications: TerrainModification[],
+    camX?: number,
+    camY?: number,
+    viewW?: number,
+    viewH?: number,
+    zoom?: number,
+  ): void {
     if (!this.gl || !this.modTexture) return;
 
-    const count = Math.min(modifications.length, MAX_MODIFICATIONS);
+    let filteredMods = modifications;
+    if (
+      camX !== undefined &&
+      camY !== undefined &&
+      viewW !== undefined &&
+      viewH !== undefined &&
+      zoom !== undefined
+    ) {
+      const margin = 200; // Large margin to handle irregular crater edges
+      const worldW = viewW / zoom;
+      const worldH = viewH / zoom;
+
+      const viewLeft = camX - margin;
+      const viewRight = camX + worldW + margin;
+      const viewTop = camY - margin;
+      const viewBottom = camY + worldH + margin;
+
+      filteredMods = modifications.filter((mod) => {
+        // Simple bounding box check for culling
+        const radius =
+          mod.type === "carve" ? (mod.length || 100) + mod.radius : mod.radius;
+        const modLeft = mod.x - radius;
+        const modRight = mod.x + radius;
+        const modTop = mod.y - radius;
+        const modBottom = mod.y + radius;
+
+        return !(
+          modRight < viewLeft ||
+          modLeft > viewRight ||
+          modBottom < viewTop ||
+          modTop > viewBottom
+        );
+      });
+    }
+
+    const count = Math.min(filteredMods.length, MAX_MODIFICATIONS);
     this.lastModCount = count;
 
     // Pack modifications into texture data
     for (let i = 0; i < count; i++) {
-      const mod = modifications[i];
+      const mod = filteredMods[i];
       const baseIdx = i * 4;
 
       // Row 0: type, x, y, radius
@@ -775,6 +1029,22 @@ export class TerrainShaderRenderer {
     );
   }
 
+  setLights(
+    positions: Float32Array,
+    colors: Float32Array,
+    radii: Float32Array,
+    count: number,
+  ): void {
+    const gl = this.gl;
+    if (!gl || !this.program) return; // Check for program as well
+
+    gl.useProgram(this.program); // Ensure the program is active before setting uniforms
+    gl.uniform2fv(this.uniforms.lightPos, positions);
+    gl.uniform3fv(this.uniforms.lightColor, colors);
+    gl.uniform1fv(this.uniforms.lightRadius, radii);
+    gl.uniform1i(this.uniforms.lightCount, count);
+  }
+
   /**
    * Render terrain to WebGL canvas.
    */
@@ -804,14 +1074,16 @@ export class TerrainShaderRenderer {
     gl.uniform1f(this.uniforms.zoom, zoom);
     gl.uniform2f(this.uniforms.worldSize, WORLD_WIDTH, WORLD_HEIGHT);
     gl.uniform1i(this.uniforms.modCount, this.lastModCount);
-    gl.uniform1f(this.uniforms.time, performance.now());
+    // CRITICAL: Use modulo on CPU to preserve precision for 32-bit float in shader.
+    // Use a multiple of cycle duration to avoid jumps in day/night transitions.
+    const timeModulo = DAY_NIGHT_CYCLE_DURATION * 10;
+    gl.uniform1f(this.uniforms.time, performance.now() % timeModulo);
 
     // Bind modification texture
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.modTexture);
     gl.uniform1i(this.uniforms.modTexture, 0);
 
-    // Draw fullscreen quad (6 vertices = 2 triangles)
     gl.drawArrays(gl.TRIANGLES, 0, 6);
   }
 

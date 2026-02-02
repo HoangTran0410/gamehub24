@@ -59,12 +59,15 @@ export function getBiomeIndex(x: number, seed: number): number {
   // Use low-frequency noise for biome zones
   const biomeNoise = fbm(x * BIOME_SCALE, seed, 2);
 
-  // Map noise value (0-1) to biome index (0-4)
-  if (biomeNoise < 0.15) return 2; // Valley (15%)
-  if (biomeNoise < 0.3) return 0; // Plains (15%)
-  if (biomeNoise < 0.45) return 1; // Mountains (15%)
-  if (biomeNoise < 0.6) return 3; // Desert (15%)
-  return 4; // Tundra (40%)
+  // Map noise value (0-1) to biome index (0-6)
+  // Re-weighted to make Tundra (Snow) more common (40% -> 30%, but thresholds adjusted)
+  if (biomeNoise < 0.1) return 2; // Valley (10%)
+  if (biomeNoise < 0.2) return 0; // Plains (10%)
+  if (biomeNoise < 0.3) return 1; // Mountains (10%)
+  if (biomeNoise < 0.4) return 3; // Desert (10%)
+  if (biomeNoise < 0.5) return 5; // Swamp (10%)
+  if (biomeNoise < 0.6) return 6; // Volcanic (10%)
+  return 4; // Tundra (40% - now more frequent since others are smaller)
 }
 
 /**
@@ -77,6 +80,8 @@ export function getBiome(x: number, seed: number): BiomeType {
     "valley",
     "desert",
     "tundra",
+    "swamp",
+    "volcanic",
   ];
   return biomes[getBiomeIndex(x, seed)];
 }

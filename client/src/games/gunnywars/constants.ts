@@ -1,7 +1,7 @@
 import { type Weapon, WeaponType } from "./types";
 
 // World Dimensions (Large Map)
-export const WORLD_WIDTH = 30000;
+export const WORLD_WIDTH = 50000;
 export const WORLD_HEIGHT = 1000;
 
 // Biome System
@@ -11,12 +11,15 @@ export const BIOME_TYPES = [
   "valley",
   "desert",
   "tundra",
+  "swamp",
+  "volcanic",
 ] as const;
 export type BiomeType = (typeof BIOME_TYPES)[number];
 
 // Biome generation parameters
 export const BIOME_SCALE = 0.0001; // Controls biome zone size (higher = smaller zones, more variety)
 export const BIOME_BLEND_WIDTH = 500; // Pixels for smooth biome transitions
+export const DAY_NIGHT_CYCLE_DURATION = 120000; // 120 seconds for a full loop
 
 // Snow cap threshold (Y position, lower = higher on screen)
 export const SNOW_THRESHOLD_HEIGHT = 280; // Snow appears above this Y
@@ -54,6 +57,8 @@ export const WEAPONS: Record<WeaponType, Weapon> = {
     color: "#38bdf8", // Neon Sky Blue
     count: 1,
     terrainDamageMultiplier: 1,
+    description: "Standard explosive shell. Balanced damage and radius.",
+    descriptionVi: "Đạn nổ tiêu chuẩn. Sát thương và bán kính cân bằng.",
   },
   [WeaponType.SCATTER]: {
     type: WeaponType.SCATTER,
@@ -64,6 +69,8 @@ export const WEAPONS: Record<WeaponType, Weapon> = {
     count: 3,
     spread: 10,
     terrainDamageMultiplier: 0.5,
+    description: "Fires 3 small shells in a spread. Good for close range.",
+    descriptionVi: "Bắn 3 viên đạn nhỏ tỏa ra. Tốt khi ở gần.",
   },
   [WeaponType.BARRAGE]: {
     type: WeaponType.BARRAGE,
@@ -74,6 +81,8 @@ export const WEAPONS: Record<WeaponType, Weapon> = {
     count: 5,
     spread: 5,
     terrainDamageMultiplier: 0.8,
+    description: "Fires 5 shells in a tight sequence. Covers a wide area.",
+    descriptionVi: "Bắn 5 viên đạn liên tiếp. Che phủ diện rộng.",
   },
   [WeaponType.DRILL]: {
     type: WeaponType.DRILL,
@@ -83,6 +92,8 @@ export const WEAPONS: Record<WeaponType, Weapon> = {
     color: "#a3e635", // Neon Lime
     count: 1,
     terrainDamageMultiplier: 1, // Handled via carveTunnel
+    description: "Blasts a deep tunnel into the terrain. Great for digging.",
+    descriptionVi: "Tạo một đường hầm sâu vào địa hình. Rất tốt để đào.",
   },
   [WeaponType.NUKE]: {
     type: WeaponType.NUKE,
@@ -92,6 +103,8 @@ export const WEAPONS: Record<WeaponType, Weapon> = {
     color: "#d946ef", // Neon Fuchsia
     count: 1,
     terrainDamageMultiplier: 1.5,
+    description: "Massive explosion with huge radius and damage.",
+    descriptionVi: "Vụ nổ khổng lồ với bán kính và sát thương cực lớn.",
   },
   [WeaponType.HEAL]: {
     type: WeaponType.HEAL,
@@ -101,6 +114,8 @@ export const WEAPONS: Record<WeaponType, Weapon> = {
     color: "#4ade80", // Green
     count: 1,
     terrainDamageMultiplier: 0,
+    description: "Heals tanks in the blast radius. Does not damage terrain.",
+    descriptionVi: "Hồi máu cho xe tăng trong vùng nổ. Không phá địa hình.",
   },
   [WeaponType.AIRSTRIKE]: {
     type: WeaponType.AIRSTRIKE,
@@ -110,6 +125,8 @@ export const WEAPONS: Record<WeaponType, Weapon> = {
     color: "#ef4444",
     count: 1,
     terrainDamageMultiplier: 0,
+    description: "Calls for a rain of bombs from the sky at target location.",
+    descriptionVi: "Gọi một cơn mưa bom từ trên trời xuống vị trí chỉ định.",
   },
   [WeaponType.AIRSTRIKE_BOMB]: {
     // Internal
@@ -120,6 +137,8 @@ export const WEAPONS: Record<WeaponType, Weapon> = {
     color: "#ef4444",
     count: 1,
     terrainDamageMultiplier: 1,
+    description: "Internal bomb used for airstrikes.",
+    descriptionVi: "Bom nội bộ dùng cho không kích.",
   },
   [WeaponType.BUILDER]: {
     type: WeaponType.BUILDER,
@@ -129,6 +148,8 @@ export const WEAPONS: Record<WeaponType, Weapon> = {
     color: "#60a5fa",
     count: 1,
     terrainDamageMultiplier: 0,
+    description: "Adds terrain in a circle. Good for defense or repair.",
+    descriptionVi: "Thêm địa hình hình tròn. Tốt để phòng thủ hoặc sửa chữa.",
   },
   [WeaponType.TELEPORT]: {
     type: WeaponType.TELEPORT,
@@ -138,6 +159,8 @@ export const WEAPONS: Record<WeaponType, Weapon> = {
     color: "#c084fc",
     count: 1,
     terrainDamageMultiplier: 0,
+    description: "Teleports your tank to the landing location.",
+    descriptionVi: "Dịch chuyển xe tăng của bạn đến vị trí rơi.",
   },
   [WeaponType.MIRV]: {
     type: WeaponType.MIRV,
@@ -147,6 +170,8 @@ export const WEAPONS: Record<WeaponType, Weapon> = {
     color: "#a78bfa", // Purple
     count: 1,
     terrainDamageMultiplier: 0.8,
+    description: "Splits into multiple small bombs before impact.",
+    descriptionVi: "Tách thành nhiều quả bom nhỏ trước khi va chạm.",
   },
   [WeaponType.MIRV_MINI]: {
     type: WeaponType.MIRV_MINI,
@@ -156,6 +181,8 @@ export const WEAPONS: Record<WeaponType, Weapon> = {
     color: "#a78bfa",
     count: 1,
     terrainDamageMultiplier: 1,
+    description: "Smaller cluster bombs from MIRV.",
+    descriptionVi: "Các quả bom chùm nhỏ từ MIRV.",
   },
   [WeaponType.BOUNCY]: {
     type: WeaponType.BOUNCY,
@@ -165,6 +192,8 @@ export const WEAPONS: Record<WeaponType, Weapon> = {
     color: "#4ade80", // Emerald
     count: 1,
     terrainDamageMultiplier: 1,
+    description: "Bounces off terrain multiple times before exploding.",
+    descriptionVi: "Nảy trên địa hình nhiều lần trước khi nổ.",
   },
   [WeaponType.VAMPIRE]: {
     type: WeaponType.VAMPIRE,
@@ -174,6 +203,8 @@ export const WEAPONS: Record<WeaponType, Weapon> = {
     color: "#f43f5e", // Rose
     count: 1,
     terrainDamageMultiplier: 0.5,
+    description: "Heals you for a portion of the damage dealt.",
+    descriptionVi: "Hồi máu cho bạn dựa trên sát thương gây ra.",
   },
   [WeaponType.METEOR]: {
     type: WeaponType.METEOR,
@@ -183,6 +214,8 @@ export const WEAPONS: Record<WeaponType, Weapon> = {
     color: "#f87171", // Red
     count: 1,
     terrainDamageMultiplier: 0,
+    description: "Calls down a giant meteor from space.",
+    descriptionVi: "Gọi một thiên thạch khổng lồ từ không gian.",
   },
   [WeaponType.METEOR_STRIKE]: {
     type: WeaponType.METEOR_STRIKE,
@@ -192,6 +225,8 @@ export const WEAPONS: Record<WeaponType, Weapon> = {
     color: "#fb923c", // Orange
     count: 1,
     terrainDamageMultiplier: 2.5,
+    description: "Devastating meteor impact. Huge terrain damage.",
+    descriptionVi: "Thiên thạch va chạm tàn khốc. Phá hủy địa hình cực lớn.",
   },
 };
 

@@ -11,6 +11,7 @@ import {
   MAX_POWER,
   WEAPONS,
   PARTICLE_STRIDE,
+  DAY_NIGHT_CYCLE_DURATION,
 } from "./constants";
 import {
   ArrowLeft,
@@ -28,12 +29,20 @@ import {
   Minimize,
   Compass,
   LogOut,
+  Sun,
+  Moon,
+  Sunrise,
+  Sunset,
+  Wind,
+  Sword,
+  X,
 } from "lucide-react";
 import type { GameUIProps } from "../types";
 import useLanguage from "../../stores/languageStore";
 import { formatNumber } from "../../utils";
 import useGameState from "../../hooks/useGameState";
 import { useAlertStore } from "../../stores/alertStore";
+import Portal from "../../components/Portal";
 
 // Star type for background
 interface Star {
@@ -62,9 +71,143 @@ let lastFrameTime = performance.now();
 let fps = 0;
 let fpsTimer = 0;
 
+const GameTimeClock = () => {
+  const [gameTime, setGameTime] = useState<{
+    hh: string;
+    mm: string;
+    icon: any;
+  }>({
+    hh: "12",
+    mm: "00",
+    icon: Sun,
+  });
+
+  useEffect(() => {
+    const updateTime = () => {
+      const msSinceStart = performance.now();
+      const progress =
+        (msSinceStart % DAY_NIGHT_CYCLE_DURATION) / DAY_NIGHT_CYCLE_DURATION;
+      const totalMinutes = (progress * 24 * 60 + 6 * 60) % (24 * 60);
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = Math.floor(totalMinutes % 60);
+
+      let Icon = Sun;
+      if (hours >= 5 && hours < 8) Icon = Sunrise;
+      else if (hours >= 8 && hours < 17) Icon = Sun;
+      else if (hours >= 17 && hours < 20) Icon = Sunset;
+      else Icon = Moon;
+
+      setGameTime({
+        hh: hours.toString().padStart(2, "0"),
+        mm: minutes.toString().padStart(2, "0"),
+        icon: Icon,
+      });
+    };
+
+    const timer = setInterval(updateTime, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  return (
+    <div className="glass-blur px-2 py-1 rounded-sm flex items-center gap-2 ">
+      <div className="p-1.5 bg-gray-800/80 rounded-lg text-amber-400">
+        <gameTime.icon size={18} />
+      </div>
+      <div className="flex flex-col">
+        <span className="font-mono font-bold text-lg text-gray-100 leading-none">
+          {gameTime.hh}:{gameTime.mm}
+        </span>
+      </div>
+    </div>
+  );
+};
+
+const WeaponSelectModal = ({
+  show,
+  onClose,
+  currentTank,
+  game,
+  ts,
+}: {
+  show: boolean;
+  onClose: () => void;
+  currentTank: any;
+  game: GunnyWars;
+  ts: (m: { en: string; vi: string }) => string;
+}) => {
+  if (!show) return null;
+
+  return (
+    <Portal>
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+        <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col shadow-2xl animate-in fade-in zoom-in duration-200">
+          <div className="p-4 border-b border-gray-800 flex justify-between items-center bg-gray-800/50">
+            <h2 className="text-xl font-bold flex items-center gap-2">
+              <Sword size={20} className="text-blue-400" />
+              {ts({ en: "Select Weapon", vi: "Chọn vũ khí" })}
+            </h2>
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-gray-700 rounded-full transition-colors"
+            >
+              <X size={20} />
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-4 grid grid-cols-1 @md:grid-cols-2 gap-3 no-scrollbar">
+            {SELECTABLE_WEAPONS.map((w) => (
+              <button
+                key={w.type}
+                onClick={() => {
+                  game.selectWeapon(w.type);
+                  onClose();
+                }}
+                className={`flex flex-col gap-2 p-4 rounded-xl border-2 text-left transition-all hover:scale-[1.02] active:scale-95 ${
+                  currentTank?.weapon === w.type
+                    ? "bg-blue-600/20 border-blue-500"
+                    : "bg-gray-800/50 border-gray-700 hover:border-gray-600"
+                }`}
+              >
+                <div className="flex justify-between items-center">
+                  <span
+                    className="font-bold text-lg"
+                    style={{ color: w.color }}
+                  >
+                    {w.name}
+                  </span>
+                  {currentTank?.weapon === w.type && (
+                    <div className="bg-blue-500 text-white text-[10px] px-2 py-0.5 rounded-full uppercase tracking-tighter">
+                      {ts({ en: "Selected", vi: "Đã chọn" })}
+                    </div>
+                  )}
+                </div>
+                <p className="text-sm text-gray-400 leading-tight">
+                  {ts({ en: w.description, vi: w.descriptionVi })}
+                </p>
+                <div className="flex gap-4 mt-1 text-[10px] font-mono text-gray-500 uppercase">
+                  <span>
+                    {ts({ en: "Dmg", vi: "St" })}:{" "}
+                    <b className="text-gray-300">
+                      {w.type === "HEAL" ? `+${w.damage}` : w.damage}
+                    </b>
+                  </span>
+                  <span>
+                    {ts({ en: "Rad", vi: "Bk" })}:{" "}
+                    <b className="text-gray-300">{w.radius}</b>
+                  </span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </Portal>
+  );
+};
+
 export default function GunnyWarsUI({ game: baseGame }: GameUIProps) {
   const game = baseGame as unknown as GunnyWars;
-  const { ts, ti } = useLanguage();
+  const { ts } = useLanguage();
   const { confirm: showConfirm } = useAlertStore();
 
   // UI state
@@ -81,7 +224,8 @@ export default function GunnyWarsUI({ game: baseGame }: GameUIProps) {
   const isMyTurn = game.isMyTurn();
 
   // Local angle/power/position for live UI updates (sync on release/stop move)
-  const [localAngle, setLocalAngle] = useState<number | null>(45);
+  const [showWeaponModal, setShowWeaponModal] = useState(false);
+  const [localAngle, setLocalAngle] = useState<number | null>(null);
   const [localPower, setLocalPower] = useState<number | null>(50);
   const localAngleRef = useRef<number | null>(null);
   const localPowerRef = useRef<number | null>(null);
@@ -137,6 +281,21 @@ export default function GunnyWarsUI({ game: baseGame }: GameUIProps) {
   const indicatorHitAreasRef = useRef<
     Map<string, { x: number; y: number; radius: number }>
   >(new Map());
+  // Persistence for Point Lights to avoid GC on mobile
+  const MAX_LIGHTS = 10;
+  const lightPosRef = useRef(new Float32Array(MAX_LIGHTS * 2));
+  const lightColRef = useRef(new Float32Array(MAX_LIGHTS * 3));
+  const lightRadRef = useRef(new Float32Array(MAX_LIGHTS));
+  const lingeringLightsRef = useRef<
+    Array<{
+      id: string;
+      x: number;
+      y: number;
+      color: [number, number, number];
+      radius: number;
+      life: number;
+    }>
+  >([]);
   // Track which tank camera is focused on (for indicator click)
   const focusedTankIdRef = useRef<string | null>(null);
 
@@ -431,6 +590,104 @@ export default function GunnyWarsUI({ game: baseGame }: GameUIProps) {
             lastRenderedSizeRef.current = { width: vpW, height: vpH };
             shaderRenderer.resize(vpW, vpH);
           }
+          // 1. Update lingering lights (decay)
+          const lingering = lingeringLightsRef.current;
+          for (let i = lingering.length - 1; i >= 0; i--) {
+            lingering[i].life -= 0.05; // Fade over ~20 frames
+            if (lingering[i].life <= 0) lingering.splice(i, 1);
+          }
+
+          // 2. Collect current "real" light sources
+          // Projectiles
+          for (const p of game.projectiles) {
+            const existing = lingering.find((l) => l.id === p.id);
+            if (existing) {
+              existing.x = p.x;
+              existing.y = p.y;
+              existing.life = 1.0;
+            } else {
+              let col: [number, number, number] = [1.0, 0.9, 0.7];
+              if (p.weapon === "NUKE") col = [0.8, 0.3, 1.0];
+              else if (p.weapon === "HEAL") col = [0.3, 1.0, 0.5];
+              lingering.push({
+                id: p.id,
+                x: p.x,
+                y: p.y,
+                color: col,
+                radius: 200.0,
+                life: 1.0,
+              });
+            }
+          }
+
+          // Fire particles (just a few samples to avoid bloat)
+          if (game.particleCount > 0) {
+            const data = game.particleData;
+            for (
+              let i = game.particleCount - 1;
+              i >= Math.max(0, game.particleCount - 20);
+              i--
+            ) {
+              const idx = i * PARTICLE_STRIDE;
+              if (data[idx + 11] > 0.5) {
+                // Additive
+                const pId = `part-${i}`;
+                const existing = lingering.find((l) => l.id === pId);
+                if (existing) {
+                  existing.life = 1.0;
+                  existing.x = data[idx + 0];
+                  existing.y = data[idx + 1];
+                } else if (lingering.length < 20) {
+                  // Limit total tracked lights
+                  lingering.push({
+                    id: pId,
+                    x: data[idx + 0],
+                    y: data[idx + 1],
+                    color: [
+                      data[idx + 8] * 1.5,
+                      data[idx + 9] * 1.5,
+                      data[idx + 10] * 1.5,
+                    ],
+                    radius: data[idx + 6] * 15.0,
+                    life: 1.0,
+                  });
+                }
+              }
+            }
+          }
+
+          // 3. Fill the Float32Arrays for the shader (Top 10 by brightness)
+          lingering.sort((a, b) => b.radius * b.life - a.radius * a.life);
+
+          const lightPos = lightPosRef.current;
+          const lightCol = lightColRef.current;
+          const lightRad = lightRadRef.current;
+          let lightCount = 0;
+          for (const l of lingering) {
+            if (lightCount >= MAX_LIGHTS) break;
+            const idx2 = lightCount * 2;
+            const idx3 = lightCount * 3;
+            lightPos[idx2] = l.x;
+            lightPos[idx2 + 1] = l.y;
+            lightCol[idx3] = l.color[0] * l.life;
+            lightCol[idx3 + 1] = l.color[1] * l.life;
+            lightCol[idx3 + 2] = l.color[2] * l.life;
+            lightRad[lightCount] = l.radius * (0.5 + 0.5 * l.life);
+            lightCount++;
+          }
+
+          shaderRenderer.setLights(lightPos, lightCol, lightRad, lightCount);
+
+          // Narrow down modifications to current viewport for GPU performance
+          shaderRenderer.uploadModifications(
+            game.state.terrainMods,
+            camX,
+            camY,
+            vpW,
+            vpH,
+            zoom,
+          );
+
           // Render terrain with GPU (includes background + stars + terrain)
           shaderRenderer.render(
             game.state.terrainSeed,
@@ -1291,17 +1548,24 @@ export default function GunnyWarsUI({ game: baseGame }: GameUIProps) {
           style={{ width: viewportSize.width, height: viewportSize.height }}
         />
 
-        {/* Wind Indicator */}
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-black/50 glass-blur px-6 py-2 rounded-full border border-gray-700 flex items-center gap-3 shadow-lg pointer-events-none">
-          <span className="text-xs font-bold text-gray-400 tracking-wider">
-            {ti({ en: "WIND", vi: "GIÓ" })}
-          </span>
-          <span
-            className={`font-mono font-bold text-lg ${state.wind > 0 ? "text-green-400" : "text-red-400"}`}
-          >
-            {Math.abs(Math.round(state.wind * 100))}{" "}
-            {state.wind > 0 ? "→" : "←"}
-          </span>
+        <div className="absolute top-0 left-0 pointer-events-none z-20">
+          {/* Time of Day Indicator */}
+          <GameTimeClock />
+
+          {/* Wind Indicator */}
+          <div className="glass-blur px-2 py-1 rounded-sm flex items-center gap-2 ">
+            <div className="p-1.5 bg-gray-800/80 rounded-lg">
+              <Wind size={18} />
+            </div>
+            <div className="flex flex-col">
+              <span
+                className={`font-mono font-bold text-lg leading-none ${state.wind >= 0 ? "text-green-400" : "text-red-400"}`}
+              >
+                {Math.abs(Math.round(state.wind * 100))}{" "}
+                {state.wind >= 0 ? "→" : "←"}
+              </span>
+            </div>
+          </div>
         </div>
 
         {/* Zoom Controls & Fullscreen */}
@@ -1415,14 +1679,15 @@ export default function GunnyWarsUI({ game: baseGame }: GameUIProps) {
       </div>
 
       {/* HUD Controls */}
-      <div className="bg-gray-900 border-t border-gray-800 p-2 @md:p-4 shadow-[0_-10px_40px_rgba(0,0,0,0.5)] z-10 shrink-0">
-        <div className="max-w-7xl mx-auto flex flex-col gap-3">
-          {/* Row 1: Turn/Fuel + Movement + Fire */}
-          <div className="grid grid-cols-12 gap-2 @md:gap-4 items-stretch">
-            {/* Status Panel */}
-            {!state.isExploration && (
+      <div className="bg-gray-900 border-t border-gray-800 p-2 @md:p-3 shadow-[0_-10px_40px_rgba(0,0,0,0.5)] z-10 shrink-0 select-none">
+        <div className="max-w-7xl mx-auto flex flex-col gap-2">
+          {/* Row 1: Angle + Power + Weapon Button + Fire */}
+          <div className="flex flex-wrap items-stretch gap-2">
+            {/* Status & Movement Group */}
+            <div className="flex-1 flex gap-2 min-w-[280px]">
+              {/* Turn/Status */}
               <div
-                className="col-span-12 @md:col-span-3 bg-gray-800/50 rounded-lg p-2 border border-gray-700 flex items-center justify-center gap-2 cursor-pointer hover:bg-gray-700/50 transition-colors"
+                className={`flex-1 min-w-[120px] glass-blur rounded-lg p-2 border border-gray-700 flex flex-col justify-center items-center gap-0.5 cursor-pointer hover:bg-gray-700/50 transition-colors ${!isMyTurn ? "opacity-60" : ""}`}
                 onClick={() => {
                   if (currentTank) {
                     focusedTankIdRef.current = currentTank.id;
@@ -1430,17 +1695,15 @@ export default function GunnyWarsUI({ game: baseGame }: GameUIProps) {
                   }
                 }}
               >
-                {/* Turn */}
-
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 overflow-hidden w-full justify-center">
                   {currentTank?.isBot ? (
                     <Bot
-                      size={18}
+                      size={14}
                       style={{ color: currentTank?.color || "#f87171" }}
                     />
                   ) : (
                     <User
-                      size={18}
+                      size={14}
                       style={{
                         color:
                           currentTank?.color ||
@@ -1449,7 +1712,7 @@ export default function GunnyWarsUI({ game: baseGame }: GameUIProps) {
                     />
                   )}
                   <span
-                    className="font-bold uppercase tracking-wider text-xs @md:text-sm"
+                    className="font-black uppercase tracking-tighter text-[10px] @md:text-xs truncate"
                     style={{
                       color:
                         currentTank?.color ||
@@ -1457,103 +1720,80 @@ export default function GunnyWarsUI({ game: baseGame }: GameUIProps) {
                     }}
                   >
                     {state.isExploration
-                      ? ts({ en: "Exploration", vi: "Khám phá" })
+                      ? ts({ en: "Explorer", vi: "Người khám phá" })
                       : state.players.find((p) => p.tankId === currentTank?.id)
                           ?.username ||
                         (currentTank?.isBot
                           ? "Bot"
-                          : ts({ en: "Turn", vi: "Lượt" }))}
+                          : ts({ en: "Guest", vi: "Khách" }))}
                   </span>
                 </div>
+                {!state.isExploration && (
+                  <div className="flex items-center gap-1">
+                    <div className="w-2 h-2 rounded-full animate-pulse bg-blue-500" />
+                    <span className="text-[9px] font-bold text-blue-400 uppercase tracking-widest leading-none">
+                      {ts({ en: "Your Turn", vi: "Lượt bạn" })}
+                    </span>
+                  </div>
+                )}
               </div>
-            )}
 
-            {/* Movement */}
-            <div
-              className={`col-span-6 @md:col-span-3 flex gap-1 ${
-                !isMyTurn || state.phase !== GamePhase.AIMING
-                  ? "opacity-40 pointer-events-none grayscale"
-                  : ""
-              }`}
-            >
-              <button
-                className="flex-1 bg-gray-800 hover:bg-gray-700 active:bg-blue-600 active:text-white rounded border border-gray-700 flex items-center justify-center transition-colors"
-                onMouseDown={() => handleMoveStart(-1)}
-                onMouseUp={() => handleMoveEnd(-1)}
-                onMouseLeave={() => handleMoveEnd(-1)}
-                onTouchStart={(e) => {
-                  e.preventDefault();
-                  handleMoveStart(-1);
-                }}
-                onTouchEnd={(e) => {
-                  e.preventDefault();
-                  handleMoveEnd(-1);
-                }}
+              {/* Movement Controls */}
+              <div
+                className={`flex items-stretch gap-1 ${!isMyTurn || state.phase !== GamePhase.AIMING ? "opacity-30 pointer-events-none grayscale" : ""}`}
               >
-                <ArrowLeft size={20} />
-              </button>
-              <button
-                className="flex-1 bg-gray-800 hover:bg-gray-700 active:bg-blue-600 active:text-white rounded border border-gray-700 flex items-center justify-center transition-colors"
-                onMouseDown={() => handleMoveStart(1)}
-                onMouseUp={() => handleMoveEnd(1)}
-                onMouseLeave={() => handleMoveEnd(1)}
-                onTouchStart={(e) => {
-                  e.preventDefault();
-                  handleMoveStart(1);
-                }}
-                onTouchEnd={(e) => {
-                  e.preventDefault();
-                  handleMoveEnd(1);
-                }}
-              >
-                <ArrowRight size={20} />
-              </button>
+                <button
+                  className="w-12 bg-gray-800 hover:bg-gray-700 active:bg-blue-600 active:text-white rounded-lg border border-gray-700 flex items-center justify-center transition-all"
+                  onMouseDown={() => handleMoveStart(-1)}
+                  onMouseUp={() => handleMoveEnd(-1)}
+                  onMouseLeave={() => handleMoveEnd(-1)}
+                  onTouchStart={(e) => {
+                    e.preventDefault();
+                    handleMoveStart(-1);
+                  }}
+                  onTouchEnd={(e) => {
+                    e.preventDefault();
+                    handleMoveEnd(-1);
+                  }}
+                >
+                  <ArrowLeft size={20} />
+                </button>
+                <button
+                  className="w-12 bg-gray-800 hover:bg-gray-700 active:bg-blue-600 active:text-white rounded-lg border border-gray-700 flex items-center justify-center transition-all"
+                  onMouseDown={() => handleMoveStart(1)}
+                  onMouseUp={() => handleMoveEnd(1)}
+                  onMouseLeave={() => handleMoveEnd(1)}
+                  onTouchStart={(e) => {
+                    e.preventDefault();
+                    handleMoveStart(1);
+                  }}
+                  onTouchEnd={(e) => {
+                    e.preventDefault();
+                    handleMoveEnd(1);
+                  }}
+                >
+                  <ArrowRight size={20} />
+                </button>
+              </div>
             </div>
 
-            {/* Fire Button */}
+            {/* Precision Controls Group */}
             <div
-              className={`col-span-6 @md:col-span-6 ${
-                !isMyTurn || state.phase !== GamePhase.AIMING
-                  ? "opacity-40 pointer-events-none grayscale"
-                  : ""
-              }`}
+              className={`flex-[1.5] flex flex-col justify-center gap-1.5 min-w-[300px] ${!isMyTurn || state.phase !== GamePhase.AIMING ? "opacity-30 pointer-events-none grayscale" : ""}`}
             >
-              <button
-                onClick={() => game.fire()}
-                className="w-full h-full min-h-[44px] bg-linear-to-b from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white font-black text-lg tracking-widest rounded-lg shadow-lg active:scale-95 transition-transform border-t border-red-400 flex items-center justify-center"
-              >
-                {ts({ en: "FIRE", vi: "BẮN" })}
-              </button>
-            </div>
-          </div>
-
-          {/* Row 2: Angle + Power + Weapon */}
-          <div
-            className={`grid grid-cols-12 gap-2 @md:gap-4 items-center ${
-              !isMyTurn || state.phase !== GamePhase.AIMING
-                ? "opacity-40 pointer-events-none grayscale"
-                : ""
-            }`}
-          >
-            {/* Angle & Power */}
-            <div className="col-span-12 @md:col-span-7 grid grid-cols-2 gap-4">
               {/* Angle */}
-              <div className="flex-1 space-y-1">
-                <div className="flex justify-between text-[10px] font-bold text-gray-400">
-                  <span>{ts({ en: "ANG", vi: "GÓC" })}</span>
-                  <span className="text-blue-400">
-                    {Math.round(localAngle ?? currentTank?.angle ?? 0)}°
-                  </span>
-                </div>
+              <div className="flex items-center gap-3">
+                <span className="text-[9px] font-black text-gray-500 w-8 tracking-tighter uppercase">
+                  {ts({ en: "Angle", vi: "Góc" })}
+                </span>
                 <input
                   type="range"
                   min="0"
                   max="180"
                   value={180 - (localAngle ?? currentTank?.angle ?? 0)}
-                  onChange={(e) => {
-                    const val = 180 - parseInt(e.target.value);
-                    setLocalAngle(val);
-                  }}
+                  onChange={(e) =>
+                    setLocalAngle(180 - parseInt(e.target.value))
+                  }
                   onMouseUp={() => {
                     if (localAngle !== null) {
                       game.commitAngle(localAngle);
@@ -1566,26 +1806,23 @@ export default function GunnyWarsUI({ game: baseGame }: GameUIProps) {
                       setLocalAngle(null);
                     }
                   }}
-                  className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                  className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
                 />
+                <span className="text-xs font-mono font-bold text-blue-400 w-10 text-right">
+                  {Math.round(localAngle ?? currentTank?.angle ?? 0)}°
+                </span>
               </div>
               {/* Power */}
-              <div className="flex-1 space-y-1">
-                <div className="flex justify-between text-[10px] font-bold text-gray-400">
-                  <span>{ts({ en: "PWR", vi: "LỰC" })}</span>
-                  <span className="text-red-400">
-                    {Math.round(localPower ?? currentTank?.power ?? 0)}
-                  </span>
-                </div>
+              <div className="flex items-center gap-3">
+                <span className="text-[9px] font-black text-gray-500 w-8 tracking-tighter uppercase">
+                  {ts({ en: "Power", vi: "Lực" })}
+                </span>
                 <input
                   type="range"
                   min="0"
                   max="100"
                   value={localPower ?? currentTank?.power ?? 0}
-                  onChange={(e) => {
-                    const val = parseInt(e.target.value);
-                    setLocalPower(val);
-                  }}
+                  onChange={(e) => setLocalPower(parseInt(e.target.value))}
                   onMouseUp={() => {
                     if (localPower !== null) {
                       game.commitPower(localPower);
@@ -1598,33 +1835,65 @@ export default function GunnyWarsUI({ game: baseGame }: GameUIProps) {
                       setLocalPower(null);
                     }
                   }}
-                  className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-red-500"
+                  className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-red-500"
                 />
+                <span className="text-xs font-mono font-bold text-red-400 w-10 text-right">
+                  {Math.round(localPower ?? currentTank?.power ?? 0)}
+                </span>
               </div>
             </div>
 
-            {/* Weapon Selection */}
-            <div className="col-span-12 @md:col-span-5 flex gap-1 overflow-x-auto pb-1 no-scrollbar">
-              {SELECTABLE_WEAPONS.map((w) => (
-                <button
-                  key={w.type}
-                  onClick={() => game.selectWeapon(w.type)}
-                  className="flex-1 min-w-[60px] py-1.5 text-[10px] font-bold border rounded transition-all whitespace-nowrap cursor-pointer hover:bg-slate-600"
+            {/* Fire & Weapon Group */}
+            <div className="flex flex-1 gap-2 min-w-[180px]">
+              {/* Weapon Toggle */}
+              <button
+                onClick={() => setShowWeaponModal(true)}
+                className={`flex-1 @md:flex-none @md:w-32 flex flex-col items-center justify-center rounded-lg border-2 transition-all p-1.5 hover:scale-105 active:scale-95 ${!isMyTurn || state.phase !== GamePhase.AIMING ? "opacity-30 pointer-events-none grayscale" : ""}`}
+                style={{
+                  backgroundColor: `${WEAPONS[currentTank?.weapon || "BASIC"].color}15`,
+                  borderColor: WEAPONS[currentTank?.weapon || "BASIC"].color,
+                }}
+              >
+                <Sword
+                  size={14}
                   style={{
-                    backgroundColor:
-                      currentTank?.weapon === w.type ? w.color : undefined,
-                    borderColor:
-                      currentTank?.weapon === w.type ? w.color : undefined,
-                    color: currentTank?.weapon === w.type ? "white" : "#9ca3af",
+                    color: WEAPONS[currentTank?.weapon || "BASIC"].color,
+                  }}
+                  className="mb-0.5"
+                />
+                <span
+                  className="text-[10px] font-black uppercase truncate w-full text-center"
+                  style={{
+                    color: WEAPONS[currentTank?.weapon || "BASIC"].color,
                   }}
                 >
-                  {w.name}
-                </button>
-              ))}
+                  {WEAPONS[currentTank?.weapon || "BASIC"].name}
+                </span>
+              </button>
+
+              {/* Fire Button (Compact yet prominent) */}
+              <button
+                onClick={() => game.fire()}
+                disabled={!isMyTurn || state.phase !== GamePhase.AIMING}
+                className="flex-[1.5] @md:flex-none @md:w-28 bg-linear-to-b from-red-500 to-red-700 hover:from-red-400 hover:to-red-600 disabled:from-gray-700 disabled:to-gray-800 text-white font-black text-xs tracking-widest rounded-lg shadow-lg active:scale-90 transition-all border-t border-red-300/30 flex flex-col items-center justify-center gap-0.5 group"
+              >
+                <div className="w-5 h-5 rounded-full border-2 border-white/20 flex items-center justify-center group-active:scale-110 transition-transform">
+                  <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
+                </div>
+                <span>{ts({ en: "FIRE", vi: "BẮN" })}</span>
+              </button>
             </div>
           </div>
         </div>
       </div>
+
+      <WeaponSelectModal
+        show={showWeaponModal}
+        onClose={() => setShowWeaponModal(false)}
+        currentTank={currentTank}
+        game={game}
+        ts={ts}
+      />
     </div>
   );
 }

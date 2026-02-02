@@ -37,6 +37,9 @@ void main() {
 const FRAGMENT_SHADER = `#version 300 es
 precision highp float;
 
+uniform int u_pass; // 0 = Alpha Pass (Smoke/Debris), 1 = Additive Pass (Fire/Sparks)
+uniform float u_time; // For flicker
+
 in float v_life;
 in float v_type;
 in vec3 v_color;
@@ -47,18 +50,32 @@ void main() {
   float dist = length(gl_PointCoord - 0.5);
   if (dist > 0.5) discard;
 
-  // Smooth edges
-  float alpha = 1.0 - smoothstep(0.4, 0.5, dist);
-  alpha *= v_life;
+  bool isFire = v_type > 0.5;
 
-  // Different styles based on type
-  if (v_type > 0.5) { // fire, spark, glow
-    // Brighter center
-    float center = 1.0 - smoothstep(0.0, 0.3, dist);
-    vec3 col = mix(v_color, vec3(1.0), center * 0.5);
-    fragColor = vec4(col, alpha);
+  // Filter based on pass
+  if (u_pass == 0 && isFire) discard;
+  if (u_pass == 1 && !isFire) discard;
+
+  if (isFire) { // fire, spark, glow
+    // High intensity center + LARGE soft outer glow for shining effect
+    float core = 1.0 - smoothstep(0.0, 0.2, dist);
+    float glow = 1.0 - smoothstep(0.0, 0.5, dist);
+    float aura = 1.0 - smoothstep(0.2, 0.5, dist); // Extra layer for volume
+
+    // Flicker effect
+    float flicker = 0.8 + 0.2 * sin(u_time * 0.05 + v_life * 100.0);
+
+    // Boost brightness significantly
+    vec3 col = v_color * 1.8 * flicker;
+    col = mix(col, vec3(1.0, 1.0, 0.95), core * 0.8); // Very hot white-yellow core
+
+    // Output with high alpha for additive pass
+    // Multiply by v_life for fade out
+    fragColor = vec4(col * (glow * 0.6 + aura * 0.4) * v_life, 1.0);
   } else { // smoke
-    fragColor = vec4(v_color, alpha * 0.8);
+    // Softer smoke edges
+    float smokeAlpha = 1.0 - smoothstep(0.2, 0.5, dist);
+    fragColor = vec4(v_color, smokeAlpha * v_life * 0.6);
   }
 }
 `;
@@ -75,11 +92,15 @@ export class ParticleShaderRenderer {
     viewSize: WebGLUniformLocation | null;
     zoom: WebGLUniformLocation | null;
     worldSize: WebGLUniformLocation | null;
+    pass: WebGLUniformLocation | null;
+    time: WebGLUniformLocation | null;
   } = {
     cameraPos: null,
     viewSize: null,
     zoom: null,
     worldSize: null,
+    pass: null,
+    time: null,
   };
 
   init(gl: WebGL2RenderingContext): boolean {
@@ -115,6 +136,8 @@ export class ParticleShaderRenderer {
       viewSize: gl.getUniformLocation(program, "u_viewSize"),
       zoom: gl.getUniformLocation(program, "u_zoom"),
       worldSize: gl.getUniformLocation(program, "u_worldSize"),
+      pass: gl.getUniformLocation(program, "u_pass"),
+      time: gl.getUniformLocation(program, "u_time"),
     };
 
     this.vao = gl.createVertexArray();
@@ -171,6 +194,7 @@ export class ParticleShaderRenderer {
     gl.uniform2f(this.uniforms.viewSize, viewW, viewH);
     gl.uniform1f(this.uniforms.zoom, zoom);
     gl.uniform2f(this.uniforms.worldSize, WORLD_WIDTH, WORLD_HEIGHT);
+    gl.uniform1f(this.uniforms.time, performance.now());
 
     // Upload buffer data (dynamic)
     gl.bindBuffer(gl.ARRAY_BUFFER, this.vbo);
@@ -180,14 +204,18 @@ export class ParticleShaderRenderer {
       gl.DYNAMIC_DRAW,
     );
 
-    // Support for multiple blending passes if needed, but for now we'll do one draw call
-    // with premultiplied alpha or similar. However, for "lighter" we need a separate pass.
+    // Sorting is complex, so we use two-pass filtering in the shader.
 
-    // Sort logic or dual-pass can be added here.
-    // For simplicity, we'll draw all together with normal blending first
+    // Pass 1: Alpha Blending for Smoke/Debris
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.uniform1i(this.uniforms.pass, 0);
+    gl.drawArrays(gl.POINTS, 0, count);
 
+    // Pass 2: Additive Blending for Fire/Sparks/Glow
+    // This makes the explosions "glow" and look much more vibrant
+    gl.blendFunc(gl.ONE, gl.ONE);
+    gl.uniform1i(this.uniforms.pass, 1);
     gl.drawArrays(gl.POINTS, 0, count);
   }
 

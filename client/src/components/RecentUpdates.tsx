@@ -24,7 +24,7 @@ const updates: {
     en: "New game: Gunny Wars",
     vi: "Game mới: Gunny Wars",
     gameId: "gunny",
-    timestamp: 1769989670074,
+    timestamp: 1770031919574,
   },
   {
     type: "fix",
