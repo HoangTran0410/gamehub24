@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import GunnyWars from "./GunnyWars";
 import type { Tank, Projectile, MoveDirection } from "./types";
-import { GamePhase } from "./types";
+import { GamePhase, GameMode, type GunnyWarsState } from "./types";
 import {
   WORLD_WIDTH,
   WORLD_HEIGHT,
@@ -12,6 +12,7 @@ import {
   WEAPONS,
   PARTICLE_STRIDE,
   DAY_NIGHT_CYCLE_DURATION,
+  FIRE_COOLDOWN,
 } from "./constants";
 import {
   ArrowLeft,
@@ -27,7 +28,6 @@ import {
   UserMinus,
   Maximize,
   Minimize,
-  Compass,
   LogOut,
   Sun,
   Moon,
@@ -35,6 +35,8 @@ import {
   Sunset,
   Wind,
   Sword,
+  Swords,
+  Flame,
   X,
 } from "lucide-react";
 import type { GameUIProps } from "../types";
@@ -43,6 +45,53 @@ import { formatNumber } from "../../utils";
 import useGameState from "../../hooks/useGameState";
 import { useAlertStore } from "../../stores/alertStore";
 import Portal from "../../components/Portal";
+
+const FireButton = ({
+  game,
+  state,
+  myTankInState,
+  ts,
+}: {
+  game: GunnyWars;
+  state: GunnyWarsState;
+  myTankInState: Tank | undefined;
+  ts: (m: { en: string; vi: string }) => string;
+}) => {
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    // Only need internal timer in Chaos mode to re-enable button
+    if (state.selectedMode !== GameMode.CHAOS) return;
+
+    const interval = setInterval(() => {
+      setNow(Date.now());
+    }, 100);
+
+    return () => clearInterval(interval);
+  }, [state.selectedMode]);
+
+  const lastFireTime = myTankInState?.lastFireTime || 0;
+  const isCoolingDown =
+    state.selectedMode === GameMode.CHAOS && now - lastFireTime < FIRE_COOLDOWN;
+
+  const isDisabled =
+    (state.phase !== GamePhase.AIMING &&
+      state.selectedMode !== GameMode.CHAOS) ||
+    isCoolingDown;
+
+  return (
+    <button
+      onClick={() => game.fire()}
+      disabled={isDisabled}
+      className="flex-[1.5] @md:flex-none @md:w-28 bg-linear-to-b from-red-500 to-red-700 hover:from-red-400 hover:to-red-600 disabled:from-gray-700 disabled:to-gray-800 text-white font-black text-xs tracking-widest rounded-lg shadow-lg active:scale-90 transition-all border-t border-red-300/30 flex flex-col items-center justify-center gap-0.5 group"
+    >
+      <div className="w-5 h-5 rounded-full border-2 border-white/20 flex items-center justify-center group-active:scale-110 transition-transform">
+        <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
+      </div>
+      <span>{ts({ en: "FIRE", vi: "BẮN" })}</span>
+    </button>
+  );
+};
 
 // Star type for background
 interface Star {
@@ -71,7 +120,7 @@ let lastFrameTime = performance.now();
 let fps = 0;
 let fpsTimer = 0;
 
-const GameTimeClock = () => {
+const GameTimeClock = ({ game }: { game: GunnyWars }) => {
   const [gameTime, setGameTime] = useState<{
     hh: string;
     mm: string;
@@ -84,7 +133,8 @@ const GameTimeClock = () => {
 
   useEffect(() => {
     const updateTime = () => {
-      const msSinceStart = performance.now();
+      // Use synchronized game start time
+      const msSinceStart = Date.now() - game.state.gameStartTime;
       const progress =
         (msSinceStart % DAY_NIGHT_CYCLE_DURATION) / DAY_NIGHT_CYCLE_DURATION;
       const totalMinutes = (progress * 24 * 60 + 6 * 60) % (24 * 60);
@@ -217,11 +267,16 @@ export default function GunnyWarsUI({ game: baseGame }: GameUIProps) {
   const [forceGpuRender, setForceGpuRender] = useState(true); // Toggle for GPU/CPU rendering
 
   // Current player info
-  const currentTankInState = state.tanks[state.currentTurnIndex];
+  const myTankInState = state.tanks.find((t) => t.playerId === game.userId);
+  const currentTankInState =
+    state.selectedMode === GameMode.CHAOS
+      ? state.tanks.find((t) => t.playerId === game.userId)
+      : state.tanks[state.currentTurnIndex];
   const currentTank = currentTankInState
     ? game.getVisualTank(currentTankInState)
     : undefined;
-  const isMyTurn = game.isMyTurn();
+  const isMyTurn =
+    state.selectedMode === GameMode.CHAOS ? !!myTankInState : game.isMyTurn();
 
   // Local angle/power/position for live UI updates (sync on release/stop move)
   const [showWeaponModal, setShowWeaponModal] = useState(false);
@@ -277,6 +332,7 @@ export default function GunnyWarsUI({ game: baseGame }: GameUIProps) {
     left: false,
     right: false,
   });
+  const lastSentMoveDirRef = useRef<number | null>(null);
   // Store indicator hit areas for click detection
   const indicatorHitAreasRef = useRef<
     Map<string, { x: number; y: number; radius: number }>
@@ -471,7 +527,10 @@ export default function GunnyWarsUI({ game: baseGame }: GameUIProps) {
             }
           }
         } else if (cameraRef.current.mode === "FOLLOW_PLAYER") {
-          const activeTankBase = game.state.tanks[game.state.currentTurnIndex];
+          const activeTankBase =
+            game.state.selectedMode === GameMode.CHAOS
+              ? game.state.tanks.find((t) => t.playerId === game.userId)
+              : game.state.tanks[game.state.currentTurnIndex];
           if (activeTankBase) {
             const activeTank = game.getVisualTank(activeTankBase);
             targetX = activeTank.x - centerOffsetX;
@@ -696,6 +755,7 @@ export default function GunnyWarsUI({ game: baseGame }: GameUIProps) {
             vpW,
             vpH,
             zoom,
+            Date.now() - game.state.gameStartTime,
           );
         }
       } else {
@@ -845,7 +905,10 @@ export default function GunnyWarsUI({ game: baseGame }: GameUIProps) {
       }
 
       // Draw trajectory preview
-      const currentTankBase = game.state.tanks[game.state.currentTurnIndex];
+      const currentTankBase =
+        game.state.selectedMode === GameMode.CHAOS
+          ? game.state.tanks.find((t) => t.playerId === game.userId)
+          : game.state.tanks[game.state.currentTurnIndex];
       if (
         currentTankBase &&
         // game.isMyTurn() &&
@@ -928,37 +991,44 @@ export default function GunnyWarsUI({ game: baseGame }: GameUIProps) {
       ctx.fillStyle = tank.health > 30 ? "#4ade80" : "#ef4444";
       ctx.fillRect(-19, 1, 38 * (tank.health / tank.maxHealth), 4);
 
-      // Fuel bar
+      // Fuel/Energy bar
       ctx.translate(0, 8);
       ctx.fillStyle = "#334155";
       ctx.fillRect(-20, 0, 40, 4);
-      ctx.fillStyle = game.state.isExploration ? "#60a5fa" : "#f59e0b";
-      ctx.fillRect(
-        -19,
-        1,
-        38 * (game.state.isExploration ? 1 : tank.fuel / MAX_FUEL),
-        2,
-      );
 
-      // Indicators and Labels
-      if (game.state.tanks[game.state.currentTurnIndex]?.id === tank.id) {
-        // Current turn indicator
-        ctx.beginPath();
-        ctx.moveTo(0, -15);
-        ctx.lineTo(-6, -23);
-        ctx.lineTo(6, -23);
-        ctx.fillStyle = "#facc15";
-        ctx.fill();
+      if (game.state.selectedMode === GameMode.CHAOS) {
+        // Show Cooldown bar in Chaos
+        const now = Date.now();
+        const timePassed = now - tank.lastFireTime;
+        const progress = Math.min(1, timePassed / FIRE_COOLDOWN);
+        ctx.fillStyle = progress >= 1 ? "#facc15" : "#64748b"; // Yellow when ready, slate when cooling down
+        ctx.fillRect(-19, 1, 38 * progress, 2);
+      } else {
+        // Show Fuel bar in Normal mode
+        ctx.fillStyle = "#f59e0b"; // Orange for Fuel
+        ctx.fillRect(-19, 1, 38 * (tank.fuel / MAX_FUEL), 2);
 
-        // Weapon name
-        const weapon = WEAPONS[tank.weapon];
-        if (weapon) {
-          ctx.fillStyle = weapon.color;
-          ctx.font = "bold 12px Arial";
-          ctx.textAlign = "center";
-          ctx.fillText(weapon.name, 0, -35);
+        // Indicators and Labels
+        if (game.state.tanks[game.state.currentTurnIndex]?.id === tank.id) {
+          // Current turn indicator
+          ctx.beginPath();
+          ctx.moveTo(0, -15);
+          ctx.lineTo(-6, -23);
+          ctx.lineTo(6, -23);
+          ctx.fillStyle = "#facc15";
+          ctx.fill();
+
+          // Weapon name
+          const weapon = WEAPONS[tank.weapon];
+          if (weapon) {
+            ctx.fillStyle = weapon.color;
+            ctx.font = "bold 12px Arial";
+            ctx.textAlign = "center";
+            ctx.fillText(weapon.name, 0, -35);
+          }
         }
       }
+
       ctx.restore();
 
       ctx.restore();
@@ -1116,6 +1186,34 @@ export default function GunnyWarsUI({ game: baseGame }: GameUIProps) {
       // Update game logic (movement, etc)
       game.update();
 
+      // Keyboard/UI movement processing for exploration (Real-time polling)
+      if (game.state.selectedMode === GameMode.CHAOS) {
+        const left = inputRef.current.left;
+        const right = inputRef.current.right;
+        const myTank = game.state.tanks.find((t) => t.playerId === game.userId);
+
+        if (myTank) {
+          if (left && lastSentMoveDirRef.current !== -1) {
+            lastSentMoveDirRef.current = -1;
+            myTank.isMoving = true;
+            myTank.moveDir = -1;
+            game.moveStart(-1);
+            cameraRef.current.mode = "FOLLOW_PLAYER";
+          } else if (right && lastSentMoveDirRef.current !== 1) {
+            lastSentMoveDirRef.current = 1;
+            myTank.isMoving = true;
+            myTank.moveDir = 1;
+            game.moveStart(1);
+            cameraRef.current.mode = "FOLLOW_PLAYER";
+          } else if (!left && !right && lastSentMoveDirRef.current !== null) {
+            lastSentMoveDirRef.current = null;
+            myTank.isMoving = false;
+            myTank.moveDir = undefined;
+            game.moveStop();
+          }
+        }
+      }
+
       let _fps = 1000 / delta;
       // lerp fps
       fps = fps + (_fps - fps) * 0.1;
@@ -1139,11 +1237,17 @@ export default function GunnyWarsUI({ game: baseGame }: GameUIProps) {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "ArrowLeft") inputRef.current.left = true;
       if (e.key === "ArrowRight") inputRef.current.right = true;
-      if (
-        e.key === " " &&
-        game.isMyTurn() &&
-        game.state.phase === GamePhase.AIMING
-      ) {
+      const myTank = game.state.tanks.find((t) => t.playerId === game.userId);
+      const isMyTurnInState =
+        game.state.selectedMode === GameMode.CHAOS ? !!myTank : game.isMyTurn();
+
+      const canAct =
+        (game.state.phase === GamePhase.AIMING ||
+          game.state.selectedMode === GameMode.CHAOS) &&
+        (!(game.state.selectedMode === GameMode.CHAOS) ||
+          Date.now() - (myTank?.lastFireTime || 0) >= FIRE_COOLDOWN);
+
+      if (e.key === " " && isMyTurnInState && canAct) {
         e.preventDefault();
         game.fire();
       }
@@ -1166,29 +1270,31 @@ export default function GunnyWarsUI({ game: baseGame }: GameUIProps) {
   // Movement helpers
   const handleMoveStart = useCallback(
     (dir: MoveDirection) => {
-      console.log("move start");
-      if (game.state.phase !== GamePhase.AIMING || !game.isMyTurn()) return;
-      const myTank = game.getMyTank();
-      if (!myTank) return;
+      if (dir === -1) inputRef.current.left = true;
+      if (dir === 1) inputRef.current.right = true;
 
-      if (!myTank.isMoving || myTank.moveDir !== dir) {
-        console.log("inside move start");
-        myTank.isMoving = true;
-        myTank.moveDir = dir;
-        game.moveStart(dir);
-        cameraRef.current.mode = "FOLLOW_PLAYER";
+      if (game.state.selectedMode !== GameMode.CHAOS) {
+        const myTank = game.getMyTank();
+        if (myTank && (!myTank.isMoving || myTank.moveDir !== dir)) {
+          game.moveStart(dir);
+        }
       }
+
+      cameraRef.current.mode = "FOLLOW_PLAYER";
     },
     [game],
   );
 
   const handleMoveEnd = useCallback(
     (dir: MoveDirection) => {
-      const myTank = game.getMyTank();
-      if (!myTank) return;
+      if (dir === -1) inputRef.current.left = false;
+      if (dir === 1) inputRef.current.right = false;
 
-      if (myTank.isMoving && myTank.moveDir === dir) {
-        game.moveStop();
+      if (game.state.selectedMode !== GameMode.CHAOS) {
+        const myTank = game.getMyTank();
+        if (myTank && myTank.isMoving && myTank.moveDir === dir) {
+          game.moveStop();
+        }
       }
     },
     [game],
@@ -1463,10 +1569,10 @@ export default function GunnyWarsUI({ game: baseGame }: GameUIProps) {
               </div>
             ))}
 
-            {game.isHost && (
+            {game.isHost && state.players.length < 3 && (
               <button
                 onClick={() => game.requestAddBot()}
-                className="w-full p-3 border border-dashed border-gray-700 rounded-lg text-gray-400 hover:text-white hover:border-gray-500 transition-all flex items-center justify-center gap-2"
+                className="w-full p-3 border border-dashed border-white/10 rounded-xl text-gray-400 hover:text-white hover:border-white/20 hover:bg-white/5 transition-all flex items-center justify-center gap-2"
               >
                 <UserPlus size={18} />
                 {ts({ en: "Add Bot", vi: "Thêm Bot" })}
@@ -1474,36 +1580,95 @@ export default function GunnyWarsUI({ game: baseGame }: GameUIProps) {
             )}
           </div>
 
+          <div className="mt-6 space-y-4">
+            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-widest px-1">
+              {ts({ en: "Game Mode", vi: "Chế độ chơi" })}
+            </h3>
+
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() =>
+                  game.isHost && game.selectMode(GameMode.TURN_BASED)
+                }
+                disabled={!game.isHost}
+                className={`flex flex-col items-center gap-3 p-4 rounded-2xl border transition-all ${
+                  state.selectedMode === GameMode.TURN_BASED ||
+                  !state.selectedMode
+                    ? "bg-green-500/10 border-green-500/50 text-green-400 shadow-[0_0_20px_rgba(34,197,94,0.1)]"
+                    : "bg-white/5 border-white/5 text-gray-500 hover:border-white/10"
+                } ${!game.isHost ? "cursor-default" : "cursor-pointer active:scale-95"}`}
+              >
+                <div
+                  className={`p-2 rounded-xl ${state.selectedMode === GameMode.TURN_BASED || !state.selectedMode ? "bg-green-500/20" : "bg-white/5"}`}
+                >
+                  <Swords size={20} />
+                </div>
+                <div className="text-center">
+                  <div className="font-bold text-sm">
+                    {ts({ en: "Turn-based", vi: "Theo lượt" })}
+                  </div>
+                  <div className="text-[10px] opacity-60 font-medium">
+                    {ts({ en: "Strategy", vi: "Chiến thuật" })}
+                  </div>
+                </div>
+              </button>
+
+              <button
+                onClick={() => game.isHost && game.selectMode(GameMode.CHAOS)}
+                disabled={!game.isHost}
+                className={`flex flex-col items-center gap-3 p-4 rounded-2xl border transition-all ${
+                  state.selectedMode === GameMode.CHAOS
+                    ? "bg-orange-500/10 border-orange-500/50 text-orange-400 shadow-[0_0_20px_rgba(249,115,22,0.1)]"
+                    : "bg-white/5 border-white/5 text-gray-500 hover:border-white/10"
+                } ${!game.isHost ? "cursor-default" : "cursor-pointer active:scale-95"}`}
+              >
+                <div
+                  className={`p-2 rounded-xl ${state.selectedMode === GameMode.CHAOS ? "bg-orange-500/20" : "bg-white/5"}`}
+                >
+                  <Flame size={20} />
+                </div>
+                <div className="text-center">
+                  <div className="font-bold text-sm">
+                    {ts({ en: "Chaos Mode", vi: "Tự do" })}
+                  </div>
+                  <div className="text-[10px] opacity-60 font-medium">
+                    {ts({ en: "Real-time", vi: "Hỗn loạn" })}
+                  </div>
+                </div>
+              </button>
+            </div>
+          </div>
+
           {game.isHost && (
-            <div className="flex flex-col gap-2 mt-6">
+            <div className="mt-8">
               <button
                 onClick={() => game.startGame()}
                 disabled={!game.canStartGame()}
-                className="w-full py-3 bg-linear-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg font-bold flex items-center justify-center gap-2 transition-all active:scale-95"
+                className={`w-full py-4 rounded-2xl font-black text-lg flex items-center justify-center gap-3 transition-all active:scale-[0.98] shadow-lg ${
+                  state.selectedMode === GameMode.CHAOS
+                    ? "bg-linear-to-r from-orange-500 to-red-600 hover:from-orange-400 hover:to-red-500 shadow-orange-500/20"
+                    : "bg-linear-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 shadow-green-500/20"
+                } disabled:opacity-30 disabled:grayscale disabled:cursor-not-allowed text-white`}
               >
-                <div className="flex items-center gap-2">
-                  <Play size={20} />
+                <Play size={24} fill="currentColor" />
+                <span className="uppercase tracking-widest">
                   {ts({ en: "Start Game", vi: "Bắt đầu" })}
-                </div>
-
-                <span className="text-[10px] opacity-70 font-normal">
-                  {ts({ en: "(2+ players)", vi: "(2+ người chơi)" })}
                 </span>
               </button>
-              <button
-                onClick={() => game.requestStartExploration()}
-                disabled={state.players.length > 1}
-                className="w-full py-3 bg-linear-to-r from-blue-500 to-cyan-600 hover:from-blue-400 hover:to-cyan-500 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed rounded-lg font-bold flex items-center justify-center gap-2 transition-all active:scale-95"
-              >
-                <div className="flex items-center gap-2">
-                  <Compass size={20} />
-                  {ts({ en: "Exploration Mode", vi: "Chế độ khám phá" })}
-                </div>
 
-                <span className="text-[10px] opacity-70 font-normal">
-                  {ts({ en: "(1 player)", vi: "(1 người chơi)" })}
-                </span>
-              </button>
+              {!game.canStartGame() && (
+                <p className="text-center text-[10px] text-gray-500 mt-3 font-medium uppercase tracking-tighter">
+                  {state.selectedMode === GameMode.CHAOS
+                    ? ts({
+                        en: "Press start to explore",
+                        vi: "Nhấn bắt đầu để khám phá",
+                      })
+                    : ts({
+                        en: "Requires 2+ players or bots to start",
+                        vi: "Cần tối thiểu 2 người hoặc bot để bắt đầu",
+                      })}
+                </p>
+              )}
             </div>
           )}
         </div>
@@ -1550,7 +1715,7 @@ export default function GunnyWarsUI({ game: baseGame }: GameUIProps) {
 
         <div className="absolute top-0 left-0 pointer-events-none z-20">
           {/* Time of Day Indicator */}
-          <GameTimeClock />
+          <GameTimeClock game={game} />
 
           {/* Wind Indicator */}
           <div className="glass-blur px-2 py-1 rounded-sm flex items-center gap-2 ">
@@ -1719,16 +1884,13 @@ export default function GunnyWarsUI({ game: baseGame }: GameUIProps) {
                         (isMyTurn ? "#60a5fa" : "#f87171"),
                     }}
                   >
-                    {state.isExploration
-                      ? ts({ en: "Explorer", vi: "Người khám phá" })
-                      : state.players.find((p) => p.tankId === currentTank?.id)
-                          ?.username ||
-                        (currentTank?.isBot
-                          ? "Bot"
-                          : ts({ en: "Guest", vi: "Khách" }))}
+                    {currentTankInState?.name ||
+                      (currentTank?.isBot
+                        ? "Bot"
+                        : ts({ en: "Guest", vi: "Khách" }))}
                   </span>
                 </div>
-                {!state.isExploration && (
+                {state.selectedMode !== GameMode.CHAOS && (
                   <div className="flex items-center gap-1">
                     <div className="w-2 h-2 rounded-full animate-pulse bg-blue-500" />
                     <span className="text-[9px] font-bold text-blue-400 uppercase tracking-widest leading-none">
@@ -1740,7 +1902,7 @@ export default function GunnyWarsUI({ game: baseGame }: GameUIProps) {
 
               {/* Movement Controls */}
               <div
-                className={`flex items-stretch gap-1 ${!isMyTurn || state.phase !== GamePhase.AIMING ? "opacity-30 pointer-events-none grayscale" : ""}`}
+                className={`flex items-stretch gap-1 ${!isMyTurn || (state.phase !== GamePhase.AIMING && state.selectedMode !== GameMode.CHAOS) ? "opacity-30 pointer-events-none grayscale" : ""}`}
               >
                 <button
                   className="w-12 bg-gray-800 hover:bg-gray-700 active:bg-blue-600 active:text-white rounded-lg border border-gray-700 flex items-center justify-center transition-all"
@@ -1779,7 +1941,7 @@ export default function GunnyWarsUI({ game: baseGame }: GameUIProps) {
 
             {/* Precision Controls Group */}
             <div
-              className={`flex-[1.5] flex flex-col justify-center gap-1.5 min-w-[300px] ${!isMyTurn || state.phase !== GamePhase.AIMING ? "opacity-30 pointer-events-none grayscale" : ""}`}
+              className={`flex-[1.5] flex flex-col justify-center gap-1.5 min-w-[300px] ${!isMyTurn || (state.phase !== GamePhase.AIMING && state.selectedMode !== GameMode.CHAOS) ? "opacity-30 pointer-events-none grayscale" : ""}`}
             >
               {/* Angle */}
               <div className="flex items-center gap-3">
@@ -1848,7 +2010,7 @@ export default function GunnyWarsUI({ game: baseGame }: GameUIProps) {
               {/* Weapon Toggle */}
               <button
                 onClick={() => setShowWeaponModal(true)}
-                className={`flex-1 @md:flex-none @md:w-32 flex flex-col items-center justify-center rounded-lg border-2 transition-all p-1.5 hover:scale-105 active:scale-95 ${!isMyTurn || state.phase !== GamePhase.AIMING ? "opacity-30 pointer-events-none grayscale" : ""}`}
+                className={`flex-1 @md:flex-none @md:w-32 flex flex-col items-center justify-center rounded-lg border-2 transition-all p-1.5 hover:scale-105 active:scale-95 ${!isMyTurn || (state.phase !== GamePhase.AIMING && state.selectedMode !== GameMode.CHAOS) ? "opacity-30 pointer-events-none grayscale" : ""}`}
                 style={{
                   backgroundColor: `${WEAPONS[currentTank?.weapon || "BASIC"].color}15`,
                   borderColor: WEAPONS[currentTank?.weapon || "BASIC"].color,
@@ -1871,17 +2033,13 @@ export default function GunnyWarsUI({ game: baseGame }: GameUIProps) {
                 </span>
               </button>
 
-              {/* Fire Button (Compact yet prominent) */}
-              <button
-                onClick={() => game.fire()}
-                disabled={!isMyTurn || state.phase !== GamePhase.AIMING}
-                className="flex-[1.5] @md:flex-none @md:w-28 bg-linear-to-b from-red-500 to-red-700 hover:from-red-400 hover:to-red-600 disabled:from-gray-700 disabled:to-gray-800 text-white font-black text-xs tracking-widest rounded-lg shadow-lg active:scale-90 transition-all border-t border-red-300/30 flex flex-col items-center justify-center gap-0.5 group"
-              >
-                <div className="w-5 h-5 rounded-full border-2 border-white/20 flex items-center justify-center group-active:scale-110 transition-transform">
-                  <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
-                </div>
-                <span>{ts({ en: "FIRE", vi: "BẮN" })}</span>
-              </button>
+              {/* Fire Button (Reactive) */}
+              <FireButton
+                game={game}
+                state={state}
+                myTankInState={myTankInState}
+                ts={ts}
+              />
             </div>
           </div>
         </div>

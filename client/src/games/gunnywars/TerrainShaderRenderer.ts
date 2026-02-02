@@ -1098,6 +1098,7 @@ export class TerrainShaderRenderer {
     viewW: number,
     viewH: number,
     zoom: number,
+    time: number,
   ): void {
     const gl = this.gl;
     if (!gl || !this.program || !this.vao) return;
@@ -1120,7 +1121,7 @@ export class TerrainShaderRenderer {
     // CRITICAL: Use modulo on CPU to preserve precision for 32-bit float in shader.
     // Use a multiple of cycle duration to avoid jumps in day/night transitions.
     const timeModulo = DAY_NIGHT_CYCLE_DURATION * 10;
-    gl.uniform1f(this.uniforms.time, performance.now() % timeModulo);
+    gl.uniform1f(this.uniforms.time, time % timeModulo);
 
     // Bind modification texture
     gl.activeTexture(gl.TEXTURE0);

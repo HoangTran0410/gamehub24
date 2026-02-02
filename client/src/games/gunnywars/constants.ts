@@ -30,6 +30,7 @@ export const MAX_POWER = 25;
 export const MOVEMENT_SPEED = 2;
 export const FUEL_CONSUMPTION = 1;
 export const MAX_FUEL = 300;
+export const FIRE_COOLDOWN = 3000; // 3 seconds cooldown
 
 // Tank Constants
 export const INITIAL_HEALTH = 100;

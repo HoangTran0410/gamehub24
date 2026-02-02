@@ -5,6 +5,7 @@ import {
   type Tank,
   type Projectile,
   GamePhase,
+  GameMode,
   WeaponType,
   type MoveDirection,
   type FireShotData,
@@ -22,6 +23,7 @@ import {
   WEAPONS,
   TANK_COLORS,
   type ParticleType,
+  FIRE_COOLDOWN,
 } from "./constants";
 import { TerrainMap, TerrainRenderer } from "./TerrainMap";
 import { TerrainShaderRenderer } from "./TerrainShaderRenderer";
@@ -57,7 +59,7 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
     return this._particleCount;
   }
 
-  // Bot state
+  // Bot state (Turn-based)
   private botState = {
     planned: false,
     moveTimer: 0,
@@ -67,6 +69,23 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
     targetAngle: 0,
     targetPower: 0,
   };
+
+  // Bot brains (Chaos/Real-time)
+  private _botBrains = new Map<
+    string,
+    {
+      targetId: string | null;
+      targetAngle: number;
+      targetPower: number;
+      targetWeapon: WeaponType;
+      actionTimer: number; // For decisions
+      moveTimer: number;
+      moveDir: MoveDirection;
+      // Local interpolation state to avoid flooding proxy
+      currentAngle: number;
+      currentPower: number;
+    }
+  >();
 
   getInitState(): GunnyWarsState {
     return {
@@ -84,7 +103,8 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
       terrainSeed: Math.round(Math.random() * 10000),
       terrainMods: [],
       isSimulating: false,
-      isExploration: false,
+      selectedMode: GameMode.TURN_BASED,
+      gameStartTime: Date.now(),
     };
   }
 
@@ -283,10 +303,10 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
 
         switch (action.type) {
           case "FIRE":
-            this.handleFire(action.playerId);
+            this.handleFire(action.playerId, action.x, action.y);
             break;
           case "START_GAME":
-            this.handleStartGame();
+            this.startGame();
             break;
           case "RESET_GAME":
             this.reset();
@@ -297,8 +317,8 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
           case "REMOVE_BOT":
             this.removeBot();
             break;
-          case "START_EXPLORATION":
-            this.handleStartExploration();
+          case "SELECT_MODE":
+            this.handleSelectMode(action.mode);
             break;
         }
     }
@@ -310,8 +330,16 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
   private handleCommitAngle(angle: number, playerId: string): void {
     const tank = this.getTankByPlayerId(playerId);
     if (!tank) return;
-    if (!this.isPlayerTurn(playerId)) return;
-    if (this.state.phase !== GamePhase.AIMING) return;
+    if (
+      !this.isPlayerTurn(playerId) &&
+      this.state.selectedMode !== GameMode.CHAOS
+    )
+      return;
+    if (
+      this.state.phase !== GamePhase.AIMING &&
+      this.state.selectedMode !== GameMode.CHAOS
+    )
+      return;
 
     tank.angle = Math.max(0, Math.min(180, angle));
 
@@ -324,8 +352,16 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
   private handleCommitPower(power: number, playerId: string): void {
     const tank = this.getTankByPlayerId(playerId);
     if (!tank) return;
-    if (!this.isPlayerTurn(playerId)) return;
-    if (this.state.phase !== GamePhase.AIMING) return;
+    if (
+      !this.isPlayerTurn(playerId) &&
+      this.state.selectedMode !== GameMode.CHAOS
+    )
+      return;
+    if (
+      this.state.phase !== GamePhase.AIMING &&
+      this.state.selectedMode !== GameMode.CHAOS
+    )
+      return;
 
     tank.power = Math.max(0, Math.min(100, power));
   }
@@ -333,8 +369,16 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
   private handleSelectWeapon(weapon: WeaponType, playerId: string): void {
     const tank = this.getTankByPlayerId(playerId);
     if (!tank) return;
-    if (!this.isPlayerTurn(playerId)) return;
-    if (this.state.phase !== GamePhase.AIMING) return;
+    if (
+      !this.isPlayerTurn(playerId) &&
+      this.state.selectedMode !== GameMode.CHAOS
+    )
+      return;
+    if (
+      this.state.phase !== GamePhase.AIMING &&
+      this.state.selectedMode !== GameMode.CHAOS
+    )
+      return;
 
     tank.weapon = weapon;
   }
@@ -347,8 +391,16 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
   ): void {
     const tank = this.getTankByPlayerId(playerId);
     if (!tank) return;
-    if (!this.isPlayerTurn(playerId)) return;
-    if (this.state.phase !== GamePhase.AIMING) return;
+    if (
+      !this.isPlayerTurn(playerId) &&
+      this.state.selectedMode !== GameMode.CHAOS
+    )
+      return;
+    if (
+      this.state.phase !== GamePhase.AIMING &&
+      this.state.selectedMode !== GameMode.CHAOS
+    )
+      return;
 
     // Set movement flags - all clients will simulate locally
     tank.isMoving = true;
@@ -364,8 +416,16 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
   ): void {
     const tank = this.getTankByPlayerId(playerId);
     if (!tank) return;
-    if (!this.isPlayerTurn(playerId)) return;
-    if (this.state.phase !== GamePhase.AIMING) return;
+    if (
+      !this.isPlayerTurn(playerId) &&
+      this.state.selectedMode !== GameMode.CHAOS
+    )
+      return;
+    if (
+      this.state.phase !== GamePhase.AIMING &&
+      this.state.selectedMode !== GameMode.CHAOS
+    )
+      return;
 
     // Clear movement flags and sync final position
     tank.isMoving = false;
@@ -374,23 +434,44 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
     tank.y = y;
     tank.fuel = fuel;
 
-    // Clear simulation
-    this._tankSimulations.delete(tank.id);
+    // Clear simulation if not in Chaos (where we need it for energy)
+    if (this.state.selectedMode !== GameMode.CHAOS) {
+      this._tankSimulations.delete(tank.id);
+    }
   }
 
-  private handleFire(playerId: string): void {
+  private handleSelectMode(mode: GameMode): void {
     if (!this.isHost) return;
-    if (this.state.phase !== GamePhase.AIMING) return;
-    if (!this.isPlayerTurn(playerId)) return;
+    this.state.selectedMode = mode;
+  }
 
+  private handleFire(playerId: string, x?: number, y?: number): void {
+    if (!this.isHost) return;
+    if (
+      this.state.phase !== GamePhase.AIMING &&
+      this.state.selectedMode !== GameMode.CHAOS
+    )
+      return;
+    if (
+      !this.isPlayerTurn(playerId) &&
+      this.state.selectedMode !== GameMode.CHAOS
+    )
+      return;
     const tank = this.getTankByPlayerId(playerId);
     if (!tank) return;
+
+    // Cooldown check in Chaos mode
+    if (this.state.selectedMode === GameMode.CHAOS) {
+      const now = Date.now();
+      if (now - tank.lastFireTime < FIRE_COOLDOWN) return;
+      tank.lastFireTime = now;
+    }
 
     // Create deterministic shot data
     const shotData: FireShotData = {
       tankId: tank.id,
-      x: tank.x,
-      y: tank.y,
+      x: x ?? tank.x,
+      y: y ?? tank.y,
       angle: tank.angle,
       power: tank.power,
       weapon: tank.weapon,
@@ -405,6 +486,7 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
   // --- Game Logic ---
 
   // Track local position for smooth movement without state updates
+  // Track local position for smooth movement without state updates
   private _tankSimulations = new Map<
     string,
     {
@@ -414,6 +496,8 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
       angle: number;
       health: number;
       falling: boolean;
+      lastAuthX: number;
+      lastAuthY: number;
     }
   >();
 
@@ -421,10 +505,32 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
     // Keep terrain in sync
     this.syncTerrain();
 
+    // Update bots (Host only)
+    if (this.isHost) {
+      this.updateBots();
+    }
+
     if (!this.terrainMap) return;
 
     if (this.state.phase === GamePhase.AIMING) {
       this.state.tanks.forEach((tank) => {
+        if (this.state.selectedMode === GameMode.CHAOS) {
+          let simState = this._tankSimulations.get(tank.id);
+          if (!simState) {
+            simState = {
+              x: tank.x,
+              y: tank.y,
+              fuel: tank.fuel,
+              angle: tank.angle,
+              health: tank.health,
+              falling: false,
+              lastAuthX: tank.x,
+              lastAuthY: tank.y,
+            };
+            this._tankSimulations.set(tank.id, simState);
+          }
+        }
+
         // If tank is moving (flag from server/local action), simulate it
         if (tank.isMoving && tank.moveDir) {
           // Get current sim state or init from tank
@@ -437,6 +543,8 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
               angle: tank.angle,
               health: tank.health,
               falling: false,
+              lastAuthX: tank.x,
+              lastAuthY: tank.y,
             };
             this._tankSimulations.set(tank.id, simState);
           }
@@ -445,7 +553,7 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
           const simTank = { ...tank, ...simState };
           const moveResult = this.calculateTankMovement(simTank, tank.moveDir);
 
-          if (moveResult) {
+          if (moveResult && simState) {
             // Update SIMULATION state only
             simState.x = moveResult.x;
             simState.y = moveResult.y;
@@ -462,8 +570,11 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
             this._tankSimulations.delete(tank.id);
           }
         } else {
-          // Not moving, clear sim if exists
-          if (this._tankSimulations.has(tank.id)) {
+          // Not moving, clear sim if exists (UNLESS in Chaos Mode where we need it for energy)
+          if (
+            this.state.selectedMode !== GameMode.CHAOS &&
+            this._tankSimulations.has(tank.id)
+          ) {
             this._tankSimulations.delete(tank.id);
           }
         }
@@ -490,7 +601,13 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
   public getVisualTank(tank: Tank): Tank {
     const sim = this._tankSimulations.get(tank.id);
     if (sim) {
-      return { ...tank, ...sim };
+      return {
+        ...tank,
+        x: sim.x,
+        y: sim.y,
+        fuel: sim.fuel,
+        angle: sim.angle,
+      };
     }
     return tank;
   }
@@ -529,7 +646,8 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
     angle: number;
   } | null {
     // Distance limit based on fuel
-    if (!this.state.isExploration && tank.fuel <= 0) return null;
+    if (this.state.selectedMode !== GameMode.CHAOS && tank.fuel <= 0)
+      return null;
     if (!this.terrainMap) return null;
 
     let { x, y, fuel, angle } = tank;
@@ -558,11 +676,12 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
         }
       }
       if (climbed) {
-        if (!this.state.isExploration) fuel -= FUEL_CONSUMPTION;
+        if (this.state.selectedMode !== GameMode.CHAOS)
+          fuel -= FUEL_CONSUMPTION;
       }
     } else {
       x = nextX;
-      if (!this.state.isExploration) fuel -= FUEL_CONSUMPTION;
+      if (this.state.selectedMode !== "CHAOS") fuel -= FUEL_CONSUMPTION;
 
       // Downward Slope
       for (let i = 1; i <= 5; i++) {
@@ -577,7 +696,9 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
   }
 
   private fireTank(shot: FireShotData): void {
-    this.state.phase = GamePhase.FIRING;
+    if (this.state.selectedMode !== GameMode.CHAOS) {
+      this.state.phase = GamePhase.FIRING;
+    }
     this.state.isSimulating = true;
 
     const rad = (shot.angle * Math.PI) / 180;
@@ -621,7 +742,9 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
     }
 
     // Set phase after projectiles are created
-    this.state.phase = GamePhase.PROJECTILE_MOVING;
+    if (this.state.selectedMode !== GameMode.CHAOS) {
+      this.state.phase = GamePhase.PROJECTILE_MOVING;
+    }
   }
 
   private updateTankPhysics(): boolean {
@@ -644,16 +767,29 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
           angle: tank.angle,
           health: tank.health,
           falling: false,
+          lastAuthX: tank.x,
+          lastAuthY: tank.y,
         };
         this._tankSimulations.set(tank.id, sim);
       }
 
-      // If sim is not falling, sync position from state (in case state was updated externally)
-      if (!sim.falling && !tank.isMoving) {
+      // Auth-Change Detection:
+      // Only snap if the authoritative position has Actually changed since we last checked.
+      // This allows local simulation to diverge as far as it wants during movement,
+      // but still catches teleports or explosions that move the tank on the server.
+      const authChanged =
+        Math.abs(tank.x - sim.lastAuthX) > 1 ||
+        Math.abs(tank.y - sim.lastAuthY) > 1;
+
+      if ((!sim.falling && !tank.isMoving) || authChanged) {
         sim.x = tank.x;
         sim.y = tank.y;
-        sim.health = tank.health;
+        sim.lastAuthX = tank.x;
+        sim.lastAuthY = tank.y;
       }
+
+      // Always sync health from authoritative state
+      sim.health = tank.health;
 
       // Apply gravity to LOCAL simulation
       const { x, y, health, moving } = this.gravityTank(
@@ -1228,7 +1364,7 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
     this.state.isSimulating = false;
 
     // Check winner
-    if (!this.state.isExploration) {
+    if (this.state.selectedMode !== GameMode.CHAOS) {
       const aliveTanks = this.state.tanks.filter((t) => t.health > 0);
       if (aliveTanks.length <= 1) {
         this.state.phase = GamePhase.GAME_OVER;
@@ -1255,7 +1391,7 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
 
   private nextTurn(): void {
     const state = this.state;
-    if (state.isExploration) {
+    if (state.selectedMode === GameMode.CHAOS) {
       state.phase = GamePhase.AIMING;
       state.turnTimeEnd = 0;
       return;
@@ -1280,8 +1416,151 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
 
   // --- Bot AI ---
 
+  private updateBots(): void {
+    if (this.state.phase === GamePhase.WAITING) return;
+
+    // Real-time mode (Chaos) logic
+    if (this.state.selectedMode === GameMode.CHAOS) {
+      this.state.tanks.forEach((bot) => {
+        if (!bot.isBot || bot.health <= 0) return;
+
+        let brain = this._botBrains.get(bot.id);
+        if (!brain) {
+          brain = {
+            targetId: null,
+            targetAngle: bot.angle,
+            targetPower: bot.power,
+            targetWeapon: WeaponType.BASIC,
+            actionTimer: 0,
+            moveTimer: 0,
+            moveDir: 0 as MoveDirection,
+            currentAngle: bot.angle,
+            currentPower: bot.power,
+          };
+          this._botBrains.set(bot.id, brain);
+        }
+
+        // 1. Decision Making
+        if (brain.actionTimer <= 0) {
+          const potentialTargets = this.state.tanks.filter(
+            (t) => t.id !== bot.id && t.health > 0,
+          );
+          if (potentialTargets.length > 0) {
+            brain.targetId =
+              potentialTargets[
+                Math.floor(Math.random() * potentialTargets.length)
+              ].id;
+          }
+
+          if (brain.targetId) {
+            const target = this.state.tanks.find(
+              (t) => t.id === brain.targetId,
+            );
+            if (target) {
+              const dx = target.x - bot.x;
+              const dist = Math.abs(dx);
+              const direction = dx > 0 ? 1 : -1;
+
+              if (dist < 300) {
+                brain.targetWeapon = WeaponType.SCATTER;
+              } else if (dist > 800) {
+                brain.targetWeapon = WeaponType.BASIC;
+              } else {
+                brain.targetWeapon = WeaponType.BARRAGE;
+              }
+
+              const baseAngle = direction > 0 ? 45 : 135;
+              brain.targetAngle = baseAngle + (Math.random() * 20 - 10);
+
+              const idealVel = Math.sqrt(dist * GRAVITY);
+              const idealPower = (idealVel / MAX_POWER) * 100;
+              brain.targetPower = Math.max(
+                20,
+                Math.min(90, idealPower + (Math.random() * 10 - 5)),
+              );
+
+              if (dist < 200) {
+                brain.moveDir = -direction as MoveDirection;
+                brain.moveTimer = 60;
+              } else if (dist > 500) {
+                brain.moveDir = direction as MoveDirection;
+                brain.moveTimer = 60;
+              } else {
+                brain.moveDir = 0 as MoveDirection;
+                brain.moveTimer = 0;
+              }
+            }
+          }
+          brain.actionTimer = 120 + Math.random() * 120;
+        } else {
+          brain.actionTimer--;
+        }
+
+        // 2. Incremental Aiming (Local - 60fps)
+        const angDiff = brain.targetAngle - brain.currentAngle;
+        if (Math.abs(angDiff) > 0.1) brain.currentAngle += angDiff * 0.05;
+
+        const pwrDiff = brain.targetPower - brain.currentPower;
+        if (Math.abs(pwrDiff) > 0.1) brain.currentPower += pwrDiff * 0.05;
+
+        // 3. Movement (Local)
+        if (brain.moveTimer > 0) {
+          brain.moveTimer--;
+        } else {
+          brain.moveDir = 0 as MoveDirection;
+        }
+
+        // 4. Event-Driven Synchronization
+        const isMovingStateChanged = brain.moveTimer > 0 !== bot.isMoving;
+        const isWeaponChanged = bot.weapon !== brain.targetWeapon;
+
+        // Sync movement start/stop
+        if (isMovingStateChanged) {
+          bot.isMoving = brain.moveTimer > 0;
+          bot.moveDir = brain.moveDir || undefined;
+
+          // Sync position from simulation to authoritative state on STOP
+          // to correct any accumulation drift
+          if (!bot.isMoving) {
+            const sim = this._tankSimulations.get(bot.id);
+            if (sim) {
+              bot.x = sim.x;
+              bot.y = sim.y;
+              bot.fuel = sim.fuel;
+            }
+          }
+        }
+
+        // Sync weapon change
+        if (isWeaponChanged) {
+          bot.weapon = brain.targetWeapon;
+        }
+
+        // 5. Firing (Includes angle/power sync)
+        const now = Date.now();
+        if (now - bot.lastFireTime >= FIRE_COOLDOWN + Math.random() * 2000) {
+          if (
+            Math.abs(brain.targetAngle - brain.currentAngle) < 5 &&
+            brain.targetId
+          ) {
+            // Force sync before firing so the projectile uses correct values
+            bot.angle = brain.currentAngle;
+            bot.power = brain.currentPower;
+            bot.weapon = brain.targetWeapon;
+            this.handleFire(bot.playerId || "BOT");
+          }
+        }
+      });
+    } else {
+      const currentTank = this.state.tanks[this.state.currentTurnIndex];
+      if (currentTank && currentTank.isBot) {
+        this.checkBotTurn();
+      }
+    }
+  }
+
   private checkBotTurn(): void {
-    if (!this.isHost || this.state.isExploration) return;
+    if (!this.isHost || this.state.selectedMode === GameMode.CHAOS) return;
     if (this.state.phase !== GamePhase.AIMING) return;
     if (this.state.isSimulating) return;
 
@@ -1445,49 +1724,8 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
   // --- Public API ---
 
   startGame(): void {
-    this.handleStartGame();
-  }
-
-  handleStartExploration(): void {
     if (this.state.phase !== GamePhase.WAITING) return;
-
-    // Initialize terrain
-    this.initTerrain();
-
-    // Create ONLY ONE tank for the host
-    const myPlayer = this.state.players[0] || {
-      id: "ME",
-      username: "Explorer",
-    };
-
-    const tankId = `tank-explorer`;
-    const x = Math.floor(WORLD_WIDTH / 2);
-    const y = this.getTerrainHeight(x);
-
-    this.state.tanks = [
-      {
-        id: tankId,
-        name: myPlayer.username || "Explorer",
-        playerId: myPlayer.id,
-        isBot: false,
-        x,
-        y,
-        angle: 45,
-        power: 50,
-        health: INITIAL_HEALTH,
-        maxHealth: INITIAL_HEALTH,
-        color: TANK_COLORS[0],
-        weapon: WeaponType.BASIC,
-        fuel: MAX_FUEL,
-      },
-    ];
-
-    this.state.isExploration = true;
-    this.state.phase = GamePhase.AIMING;
-  }
-
-  private handleStartGame(): void {
-    if (this.state.phase !== GamePhase.WAITING) return;
+    if (!this.isHost) return;
 
     // Initialize terrain
     this.initTerrain();
@@ -1517,30 +1755,34 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
         color: TANK_COLORS[index % TANK_COLORS.length],
         weapon: WeaponType.BASIC,
         fuel: MAX_FUEL,
+        lastFireTime: 0,
       };
     });
 
     this.state.phase = GamePhase.AIMING;
     this.state.wind = Math.random() * 0.05 - 0.025;
     this.state.currentTurnIndex = 0;
+    this.state.turnTimeEnd =
+      Date.now() + (this.state.selectedMode === GameMode.CHAOS ? 60000 : 30000);
 
     this.checkBotTurn();
   }
 
   reset(): void {
+    if (!this.isHost) return;
     this.state.phase = GamePhase.WAITING;
     this.state.tanks = [];
     this.state.currentTurnIndex = 0;
     this.state.wind = 0;
     this.state.winner = null;
     this.state.turnTimeEnd = 0;
-    this.state.isExploration = false;
     this.state.players.forEach((p) => {
       p.tankId = null;
     });
     this.state.terrainSeed = Math.round(Math.random() * 10000);
     this.state.terrainMods = [];
     this.state.isSimulating = false;
+    this.state.gameStartTime = Date.now();
 
     this._tankSimulations.clear();
     this.initTerrain();
@@ -1575,8 +1817,8 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
     this.makeAction({ type: "ADD_BOT" });
   }
 
-  requestStartExploration(): void {
-    this.makeAction({ type: "START_EXPLORATION" });
+  selectMode(mode: GameMode): void {
+    this.makeAction({ type: "SELECT_MODE", mode });
   }
 
   requestRemoveBot(): void {
@@ -1593,8 +1835,6 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
   }
 
   private handleRegenerateMap(seed: number): void {
-    // if (this.state.phase !== GamePhase.WAITING) return;
-
     // Update terrain seed
     this.state.terrainSeed = seed;
     this.state.terrainMods = [];
@@ -1604,8 +1844,6 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
 
     // Re-initialize terrain with new seed
     this.initTerrain();
-
-    console.log("Map regenerated with seed:", seed);
   }
 
   // Player actions - syncs final values on release
@@ -1639,7 +1877,8 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
   // Movement - called when movement starts
   moveStart(direction: MoveDirection): void {
     const tank = this.getMyTank();
-    if (!tank || tank.fuel <= 0) return;
+    if (!tank || (tank.fuel <= 0 && this.state.selectedMode !== GameMode.CHAOS))
+      return;
     const action: GunnyWarsAction = {
       type: "MOVE_START",
       direction,
@@ -1665,9 +1904,18 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
   }
 
   fire(): void {
+    const myVisualTank = this.getVisualTank(this.getMyTank()!);
     const action: GunnyWarsAction = {
       type: "FIRE",
       playerId: this.userId,
+      x:
+        this.state.selectedMode === GameMode.CHAOS
+          ? myVisualTank?.x
+          : undefined,
+      y:
+        this.state.selectedMode === GameMode.CHAOS
+          ? myVisualTank?.y
+          : undefined,
     };
     this.makeAction(action);
   }
@@ -1679,6 +1927,7 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
   }
 
   private isPlayerTurn(playerId: string): boolean {
+    if (this.state.selectedMode === GameMode.CHAOS) return true;
     const currentTank = this.state.tanks[this.state.currentTurnIndex];
     return currentTank?.playerId === playerId;
   }
@@ -1696,8 +1945,10 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
   }
 
   canStartGame(): boolean {
+    const minPlayers = this.state.selectedMode === GameMode.CHAOS ? 1 : 2;
     return (
-      this.state.players.length > 1 && this.state.phase === GamePhase.WAITING
+      this.state.players.length >= minPlayers &&
+      this.state.phase === GamePhase.WAITING
     );
   }
 
@@ -1706,7 +1957,7 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
     if (!isHost) return;
 
     const currentPlayers = [...this.state.players];
-    const bots = currentPlayers.filter((p) => p.id === "BOT");
+    const bots = currentPlayers.filter((p) => p.isBot);
 
     // Rebuild players array: matched room players + existing bots
     const newPlayers: PlayerInfo[] = players.map((p) => {
@@ -1715,6 +1966,7 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
         id: p.id,
         username: p.username,
         tankId: existing?.tankId || null,
+        isBot: false,
       };
     });
 

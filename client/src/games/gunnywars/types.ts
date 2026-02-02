@@ -11,6 +11,12 @@ export const GamePhase = {
 } as const;
 export type GamePhase = (typeof GamePhase)[keyof typeof GamePhase];
 
+export const GameMode = {
+  TURN_BASED: "TURN_BASED",
+  CHAOS: "CHAOS",
+} as const;
+export type GameMode = (typeof GameMode)[keyof typeof GameMode];
+
 // Weapon Types
 export const WeaponType = {
   BASIC: "BASIC",
@@ -87,6 +93,7 @@ export interface Tank {
   fuel: number; // For movement
   isMoving?: boolean;
   moveDir?: MoveDirection;
+  lastFireTime: number;
 }
 
 // Projectile (LOCAL ONLY - not synced, simulated from fire event)
@@ -153,7 +160,8 @@ export interface GunnyWarsState {
   terrainSeed: number; // For synchronized terrain generation
   terrainMods: TerrainModification[];
   isSimulating: boolean;
-  isExploration?: boolean;
+  selectedMode?: GameMode;
+  gameStartTime: number;
 }
 
 // Socket Actions
@@ -163,11 +171,12 @@ export type GunnyWarsAction =
   | { type: "SELECT_WEAPON"; weapon: WeaponType; playerId: string }
   | { type: "MOVE_START"; direction: -1 | 1; x: number; playerId: string }
   | { type: "MOVE_STOP"; x: number; y: number; fuel: number; playerId: string }
-  | { type: "FIRE"; playerId: string }
+  | { type: "FIRE"; playerId: string; x?: number; y?: number }
   | { type: "FIRE_SHOT"; shot: FireShotData } // Synced fire event for local simulation
   | { type: "START_GAME" }
   | { type: "RESET_GAME" }
   | { type: "REGENERATE_MAP"; seed: number }
   | { type: "ADD_BOT" }
   | { type: "REMOVE_BOT" }
-  | { type: "START_EXPLORATION" };
+  | { type: "START_EXPLORATION" }
+  | { type: "SELECT_MODE"; mode: GameMode };
