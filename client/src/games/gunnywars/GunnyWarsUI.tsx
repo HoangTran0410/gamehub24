@@ -10,6 +10,7 @@ import {
   GRAVITY,
   MAX_POWER,
   WEAPONS,
+  PARTICLE_STRIDE,
 } from "./constants";
 import {
   ArrowLeft,
@@ -47,6 +48,8 @@ type CameraMode =
 interface CameraState {
   x: number;
   y: number;
+  vx: number;
+  vy: number;
   zoom: number;
   targetZoom: number;
   mode: CameraMode;
@@ -64,6 +67,7 @@ export default function GunnyWarsUI({ game: baseGame }: GameUIProps) {
   const [state] = useGameState(game);
   const [viewportSize, setViewportSize] = useState({ width: 800, height: 600 });
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [forceGpuRender, setForceGpuRender] = useState(true); // Toggle for GPU/CPU rendering
 
   // Current player info
   const currentTankInState = state.tanks[state.currentTurnIndex];
@@ -90,11 +94,19 @@ export default function GunnyWarsUI({ game: baseGame }: GameUIProps) {
   const webglCanvasRef = useRef<HTMLCanvasElement>(null); // WebGL terrain canvas
   const starsRef = useRef<Star[]>([]);
   const animationRef = useRef<number | null>(null);
-  const useGpuRef = useRef<boolean>(false); // Track if GPU rendering is active
+  const useGpuRef = useRef<boolean>(true); // Track if GPU rendering is active
+  const forceGpuRenderRef = useRef<boolean>(true); // Track toggle state for draw function
   const lastRenderedSizeRef = useRef({ width: 0, height: 0 });
+
+  // Sync forceGpuRender state with ref
+  useEffect(() => {
+    forceGpuRenderRef.current = forceGpuRender;
+  }, [forceGpuRender]);
   const cameraRef = useRef<CameraState>({
     x: 0,
     y: 0,
+    vx: 0,
+    vy: 0,
     zoom: 0.8,
     targetZoom: 0.8,
     mode: "FOLLOW_PLAYER",
@@ -105,6 +117,10 @@ export default function GunnyWarsUI({ game: baseGame }: GameUIProps) {
     startY: 0,
     startCamX: 0,
     startCamY: 0,
+    // Momentum tracking
+    lastX: 0,
+    lastY: 0,
+    lastTime: 0,
     // Pinch zoom
     startPinchDist: 0,
     startZoom: 1,
@@ -233,6 +249,28 @@ export default function GunnyWarsUI({ game: baseGame }: GameUIProps) {
       if (dragRef.current.isDragging) {
         cameraRef.current.mode = "MANUAL";
       } else if (cameraRef.current.mode === "MANUAL") {
+        // Apply momentum (Inertia)
+        cameraRef.current.x += cameraRef.current.vx;
+        cameraRef.current.y += cameraRef.current.vy;
+
+        // Friction (Damping) - User bumped this to 0.99 for longer slides
+        cameraRef.current.vx *= 0.95;
+        cameraRef.current.vy *= 0.95;
+
+        // Stop if too slow
+        if (Math.abs(cameraRef.current.vx) < 0.1) cameraRef.current.vx = 0;
+        if (Math.abs(cameraRef.current.vy) < 0.1) cameraRef.current.vy = 0;
+
+        // Reset velocity if too much time passed since last move (flick prevention if held still)
+        // const timeSinceLastMove = performance.now() - dragRef.current.lastTime;
+        // if (
+        //   timeSinceLastMove > 50 &&
+        //   (cameraRef.current.vx !== 0 || cameraRef.current.vy !== 0)
+        // ) {
+        //   cameraRef.current.vx *= 0.99;
+        //   cameraRef.current.vy *= 0.99;
+        // }
+
         if (Math.abs(zoom - oldZoom) > 0.0001) {
           const prevCenterX = cameraRef.current.x + vpW / 2 / oldZoom;
           const prevCenterY = cameraRef.current.y + vpH / 2 / oldZoom;
@@ -335,9 +373,12 @@ export default function GunnyWarsUI({ game: baseGame }: GameUIProps) {
       const camX = cameraRef.current.x;
       const camY = cameraRef.current.y;
 
-      // Check if GPU rendering is active
+      // Check if GPU rendering is active (respects toggle)
       const shaderRenderer = game.getTerrainShaderRenderer();
-      const gpuActive = useGpuRef.current && shaderRenderer?.isReady();
+      const gpuActive =
+        forceGpuRenderRef.current &&
+        useGpuRef.current &&
+        shaderRenderer?.isReady();
 
       // Clear canvas
       ctx.clearRect(0, 0, vpW, vpH);
@@ -413,32 +454,60 @@ export default function GunnyWarsUI({ game: baseGame }: GameUIProps) {
         }
       }
 
-      // Draw particles (optimized: only draw if in viewport)
-      const particleMargin = 50;
       const visibleW = vpW / zoom;
       const visibleH = vpH / zoom;
 
-      for (const p of game.particles) {
-        // Simple culling
-        if (
-          p.x < camX - particleMargin ||
-          p.x > camX + visibleW + particleMargin ||
-          p.y < camY - particleMargin ||
-          p.y > camY + visibleH + particleMargin
-        ) {
-          continue;
-        }
+      // Draw particles (GPU prioritized)
+      const particleRenderer = game.getParticleShaderRenderer();
+      if (particleRenderer && particleRenderer.isReady()) {
+        particleRenderer.render(
+          game.particleData,
+          game.particleCount,
+          camX,
+          camY,
+          vpW,
+          vpH,
+          zoom,
+        );
+      } else {
+        // 2D Fallback - Optimized to use the buffer directly
+        const particleMargin = 50;
+        const data = game.particleData;
+        const count = game.particleCount;
 
-        ctx.save();
-        ctx.globalAlpha = p.life;
-        if (p.type === "fire" || p.type === "spark" || p.type === "glow") {
-          ctx.globalCompositeOperation = "lighter";
+        for (let i = 0; i < count; i++) {
+          const idx = i * PARTICLE_STRIDE;
+          const px = data[idx + 0];
+          const py = data[idx + 1];
+
+          // Simple culling
+          if (
+            px < camX - particleMargin ||
+            px > camX + visibleW + particleMargin ||
+            py < camY - particleMargin ||
+            py > camY + visibleH + particleMargin
+          ) {
+            continue;
+          }
+
+          const plife = data[idx + 4];
+          const psize = data[idx + 6];
+          const padditive = data[idx + 11];
+          const r = Math.round(data[idx + 8] * 255);
+          const g = Math.round(data[idx + 9] * 255);
+          const b = Math.round(data[idx + 10] * 255);
+
+          ctx.save();
+          ctx.globalAlpha = plife;
+          if (padditive > 0.5) {
+            ctx.globalCompositeOperation = "lighter";
+          }
+          ctx.fillStyle = `rgb(${r},${g},${b})`;
+          ctx.beginPath();
+          ctx.arc(px, py, psize, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
         }
-        ctx.fillStyle = p.color;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
       }
 
       // Draw tanks (from live ref + local sim)
@@ -901,15 +970,39 @@ export default function GunnyWarsUI({ game: baseGame }: GameUIProps) {
     dragRef.current.startY = e.clientY;
     dragRef.current.startCamX = cameraRef.current.x;
     dragRef.current.startCamY = cameraRef.current.y;
+    // Momentum init
+    dragRef.current.lastX = e.clientX;
+    dragRef.current.lastY = e.clientY;
+    dragRef.current.lastTime = performance.now();
+    cameraRef.current.vx = 0;
+    cameraRef.current.vy = 0;
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
     if (dragRef.current.isDragging) {
+      const now = performance.now();
+      const dt = Math.max(1, now - dragRef.current.lastTime);
       const zoom = cameraRef.current.zoom;
+
       const dx = (e.clientX - dragRef.current.startX) / zoom;
       const dy = (e.clientY - dragRef.current.startY) / zoom;
+
+      // Track velocity (World pixels per frame equivalent, normalized to 16ms)
+      const instantVx =
+        ((dragRef.current.lastX - e.clientX) / zoom) * (16 / dt);
+      const instantVy =
+        ((dragRef.current.lastY - e.clientY) / zoom) * (16 / dt);
+
+      // Low pass filter for smoother velocity, but less aggressive damping
+      cameraRef.current.vx = cameraRef.current.vx * 0.4 + instantVx * 0.6;
+      cameraRef.current.vy = cameraRef.current.vy * 0.4 + instantVy * 0.6;
+
       cameraRef.current.x = dragRef.current.startCamX - dx;
       cameraRef.current.y = dragRef.current.startCamY - dy;
+
+      dragRef.current.lastX = e.clientX;
+      dragRef.current.lastY = e.clientY;
+      dragRef.current.lastTime = now;
     }
   };
 
@@ -926,17 +1019,40 @@ export default function GunnyWarsUI({ game: baseGame }: GameUIProps) {
     dragRef.current.startY = touch.clientY;
     dragRef.current.startCamX = cameraRef.current.x;
     dragRef.current.startCamY = cameraRef.current.y;
+    // Momentum init
+    dragRef.current.lastX = touch.clientX;
+    dragRef.current.lastY = touch.clientY;
+    dragRef.current.lastTime = performance.now();
+    cameraRef.current.vx = 0;
+    cameraRef.current.vy = 0;
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
     if (dragRef.current.isDragging) {
       // Dragging
+      const now = performance.now();
+      const dt = Math.max(1, now - dragRef.current.lastTime);
       const touch = e.touches[0];
       const zoom = cameraRef.current.zoom;
+
       const dx = (touch.clientX - dragRef.current.startX) / zoom;
       const dy = (touch.clientY - dragRef.current.startY) / zoom;
+
+      // Track velocity
+      const instantVx =
+        ((dragRef.current.lastX - touch.clientX) / zoom) * (16 / dt);
+      const instantVy =
+        ((dragRef.current.lastY - touch.clientY) / zoom) * (16 / dt);
+
+      cameraRef.current.vx = cameraRef.current.vx * 0.4 + instantVx * 0.6;
+      cameraRef.current.vy = cameraRef.current.vy * 0.4 + instantVy * 0.6;
+
       cameraRef.current.x = dragRef.current.startCamX - dx;
       cameraRef.current.y = dragRef.current.startCamY - dy;
+
+      dragRef.current.lastX = touch.clientX;
+      dragRef.current.lastY = touch.clientY;
+      dragRef.current.lastTime = now;
     }
   };
 
@@ -1158,7 +1274,26 @@ export default function GunnyWarsUI({ game: baseGame }: GameUIProps) {
         </div>
 
         {/* Zoom Controls & Fullscreen */}
-        <div className="absolute bottom-4 right-4 flex flex-row gap-1 z-20 opacity-20 hover:opacity-100 transition-all duration-300">
+        <div className="absolute bottom-4 right-4 flex flex-row gap-1 z-20 opacity-30 hover:opacity-100 transition-all duration-300">
+          {/* Regenerate Map */}
+          <button
+            onClick={() => game.requestRegenerateMap()}
+            className="bg-purple-800/80 hover:bg-purple-700 p-2 rounded-full border border-purple-600 text-purple-200 shadow-lg backdrop-blur-sm transition-transform active:scale-95"
+            title="Regenerate Map"
+          >
+            <RotateCw size={18} />
+          </button>
+          {/* GPU/CPU Toggle */}
+          <button
+            onClick={() => setForceGpuRender(!forceGpuRender)}
+            className={`px-3 py-2 rounded-full border text-xs font-bold shadow-lg backdrop-blur-sm transition-all active:scale-95 ${
+              forceGpuRender
+                ? "bg-green-800/80 hover:bg-green-700 border-green-600 text-green-200"
+                : "bg-amber-800/80 hover:bg-amber-700 border-amber-600 text-amber-200"
+            }`}
+          >
+            {forceGpuRender ? "GPU" : "CPU"}
+          </button>
           <button
             onClick={() => handleZoom("in")}
             className="bg-gray-800/80 hover:bg-gray-700 p-2 rounded-full border border-gray-600 text-white shadow-lg backdrop-blur-sm transition-transform active:scale-95"

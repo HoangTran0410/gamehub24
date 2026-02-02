@@ -1,3 +1,5 @@
+import type { ParticleType } from "./constants";
+
 // Game Phase Enum
 export const GamePhase = {
   WAITING: "WAITING",
@@ -21,8 +23,14 @@ export const WeaponType = {
   TELEPORT: "TELEPORT",
   // LANDMINE: "LANDMINE",
   HEAL: "HEAL",
+  MIRV: "MIRV",
+  BOUNCY: "BOUNCY",
+  VAMPIRE: "VAMPIRE",
+  METEOR: "METEOR",
   // Internal types
   AIRSTRIKE_BOMB: "AIRSTRIKE_BOMB",
+  MIRV_MINI: "MIRV_MINI",
+  METEOR_STRIKE: "METEOR_STRIKE",
   // LANDMINE_ARMED: "LANDMINE_ARMED",
 } as const;
 export type WeaponType = (typeof WeaponType)[keyof typeof WeaponType];
@@ -43,7 +51,7 @@ export interface Particle {
   decay: number; // How much life to subtract per frame
   size: number;
   color: string;
-  type: "smoke" | "fire" | "spark" | "glow";
+  type: ParticleType;
 }
 
 // Weapon definition
@@ -90,6 +98,7 @@ export interface Projectile {
   weapon: WeaponType;
   ownerId: string;
   active: boolean;
+  bounces?: number; // For bouncy weapons
 }
 
 // Fire shot data (synced to all clients)
@@ -154,5 +163,6 @@ export type GunnyWarsAction =
   | { type: "FIRE_SHOT"; shot: FireShotData } // Synced fire event for local simulation
   | { type: "START_GAME" }
   | { type: "RESET_GAME" }
+  | { type: "REGENERATE_MAP"; seed: number }
   | { type: "ADD_BOT" }
   | { type: "REMOVE_BOT" };

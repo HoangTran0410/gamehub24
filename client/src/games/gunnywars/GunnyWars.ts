@@ -4,7 +4,6 @@ import {
   type GunnyWarsAction,
   type Tank,
   type Projectile,
-  type Particle,
   GamePhase,
   WeaponType,
   type MoveDirection,
@@ -22,9 +21,12 @@ import {
   INITIAL_HEALTH,
   WEAPONS,
   TANK_COLORS,
+  type ParticleType,
 } from "./constants";
 import { TerrainMap, TerrainRenderer } from "./TerrainMap";
 import { TerrainShaderRenderer } from "./TerrainShaderRenderer";
+import { ParticleShaderRenderer } from "./ParticleShaderRenderer";
+import { MAX_PARTICLES, PARTICLE_STRIDE, PARTICLE_TYPES } from "./constants";
 
 export default class GunnyWars extends BaseGame<GunnyWarsState> {
   // TerrainMap - for efficient collision detection
@@ -39,14 +41,20 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
 
   // LOCAL-ONLY simulation data (not synced over network)
   private _projectiles: Projectile[] = [];
-  private _particles: Particle[] = [];
+  private _particleData = new Float32Array(MAX_PARTICLES * PARTICLE_STRIDE);
+  private _particleCount = 0;
+  private _particleShaderRenderer: ParticleShaderRenderer | null = null;
 
   get projectiles(): Projectile[] {
     return this._projectiles;
   }
 
-  get particles(): Particle[] {
-    return this._particles;
+  get particleData(): Float32Array {
+    return this._particleData;
+  }
+
+  get particleCount(): number {
+    return this._particleCount;
   }
 
   // Bot state
@@ -73,7 +81,7 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
         username: p.username || null,
         tankId: null,
       })),
-      terrainSeed: Math.round(Math.random() * 1000000),
+      terrainSeed: Math.round(Math.random() * 10000),
       terrainMods: [],
       isSimulating: false,
     };
@@ -210,7 +218,21 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
     if (success && this.terrainMap) {
       this.terrainShaderRenderer.uploadModifications(this.state.terrainMods);
     }
+
+    // Also init particle renderer
+    const gl = canvas.getContext("webgl2");
+    if (gl) {
+      if (!this._particleShaderRenderer) {
+        this._particleShaderRenderer = new ParticleShaderRenderer();
+      }
+      this._particleShaderRenderer.init(gl);
+    }
+
     return success;
+  }
+
+  getParticleShaderRenderer(): ParticleShaderRenderer | null {
+    return this._particleShaderRenderer;
   }
 
   private seededRandom(seed: number): number {
@@ -244,6 +266,10 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
       case "MOVE_STOP":
         this.handleMoveStop(action.x, action.y, action.fuel, action.playerId);
         break;
+      case "REGENERATE_MAP":
+        this.handleRegenerateMap(action.seed);
+        break;
+
       default:
         if (!this.isHost) return;
 
@@ -251,7 +277,6 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
           case "FIRE":
             this.handleFire(action.playerId);
             break;
-
           case "START_GAME":
             this.handleStartGame();
             break;
@@ -278,6 +303,10 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
     if (this.state.phase !== GamePhase.AIMING) return;
 
     tank.angle = Math.max(0, Math.min(180, angle));
+
+    // update simulation
+    const sim = this._tankSimulations.get(tank.id);
+    if (sim) sim.angle = tank.angle;
   }
 
   // Syncs final power from UI (called on slider release)
@@ -367,7 +396,14 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
   // Track local position for smooth movement without state updates
   private _tankSimulations = new Map<
     string,
-    { x: number; y: number; fuel: number; angle: number }
+    {
+      x: number;
+      y: number;
+      fuel: number;
+      angle: number;
+      health: number;
+      falling: boolean;
+    }
   >();
 
   public update(): void {
@@ -388,6 +424,8 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
               y: tank.y,
               fuel: tank.fuel,
               angle: tank.angle,
+              health: tank.health,
+              falling: false,
             };
             this._tankSimulations.set(tank.id, simState);
           }
@@ -553,6 +591,7 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
         weapon: shot.weapon,
         ownerId: shot.tankId,
         active: true,
+        bounces: shot.weapon === WeaponType.BOUNCY ? 3 : undefined,
       };
     };
 
@@ -575,28 +614,53 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
   private updateTankPhysics(): boolean {
     let tanksMoving = false;
 
-    // --- Sim Tanks (Local visual movement) ---
-    this._tankSimulations.forEach((sim) => {
-      const { x, y, moving } = this.gravityTank(sim.x, sim.y, 100);
+    // --- Tank Gravity using LOCAL simulation (no socket sync per frame) ---
+    this.state.tanks.forEach((tank) => {
+      if (tank.health <= 0) {
+        this._tankSimulations.delete(tank.id);
+        return;
+      }
+
+      // Get or create simulation for this tank
+      let sim = this._tankSimulations.get(tank.id);
+      if (!sim) {
+        sim = {
+          x: tank.x,
+          y: tank.y,
+          fuel: tank.fuel,
+          angle: tank.angle,
+          health: tank.health,
+          falling: false,
+        };
+        this._tankSimulations.set(tank.id, sim);
+      }
+
+      // If sim is not falling, sync position from state (in case state was updated externally)
+      if (!sim.falling && !tank.isMoving) {
+        sim.x = tank.x;
+        sim.y = tank.y;
+        sim.health = tank.health;
+      }
+
+      // Apply gravity to LOCAL simulation
+      const { x, y, health, moving } = this.gravityTank(
+        sim.x,
+        sim.y,
+        sim.health,
+      );
+
       if (moving) {
         sim.x = x;
         sim.y = y;
+        sim.health = health;
+        sim.falling = true;
         tanksMoving = true;
-      }
-    });
-
-    // --- Tank Gravity (Actual synced state) ---
-    this.state.tanks.forEach((tank) => {
-      const { x, y, health, moving } = this.gravityTank(
-        tank.x,
-        tank.y,
-        tank.health,
-      );
-      if (moving) {
-        tank.x = x;
-        tank.y = y;
-        tank.health = health;
-        tanksMoving = true;
+      } else if (sim.falling) {
+        // Tank just stopped falling - sync to state ONCE
+        sim.falling = false;
+        tank.x = sim.x;
+        tank.y = sim.y;
+        tank.health = sim.health;
       }
     });
 
@@ -624,7 +688,9 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
       p.vx += this.state.wind;
 
       // Trail particles
-      if (Math.random() > 0.3) {
+      if (p.weapon === WeaponType.METEOR_STRIKE) {
+        for (let i = 0; i < 3; i++) this.createTrailParticle(p);
+      } else if (Math.random() > 0.3) {
         this.createTrailParticle(p);
       }
 
@@ -641,7 +707,24 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
 
       // Terrain collision
       if (this.checkSolid(p.x, p.y)) {
-        this.explode(p);
+        if (p.weapon === WeaponType.BOUNCY && (p.bounces || 0) > 0) {
+          // Bounce!
+          p.vy = -p.vy * 0.6; // Reverse and lose some energy
+          p.vx *= 0.8; // Friction
+          p.bounces = (p.bounces || 0) - 1;
+
+          // Push out of terrain to avoid sticking
+          let safety = 0;
+          while (this.checkSolid(p.x, p.y) && safety < 10) {
+            p.y -= 2;
+            safety++;
+          }
+
+          // Visual spark effect
+          this.createParticles(p.x, p.y, 5, PARTICLE_TYPES.spark, 1);
+        } else {
+          this.explode(p);
+        }
       }
     });
 
@@ -674,19 +757,40 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
   }
 
   private updateParticlePhysics(): boolean {
-    let particlesMoving = false;
-    this._particles.forEach((p) => {
-      p.x += p.vx;
-      p.y += p.vy;
-      p.life -= p.decay;
-      if (p.type === "smoke") {
-        p.vy -= 0.05;
-        p.size += 0.1;
+    if (this._particleCount === 0) return false;
+
+    for (let i = 0; i < this._particleCount; i++) {
+      const idx = i * PARTICLE_STRIDE;
+
+      // Update basic physics
+      this._particleData[idx + 0] += this._particleData[idx + 2]; // x += vx
+      this._particleData[idx + 1] += this._particleData[idx + 3]; // y += vy
+      this._particleData[idx + 4] -= this._particleData[idx + 5]; // life -= decay
+
+      // Special smoke behavior
+      const type = this._particleData[idx + 7];
+      if (type === PARTICLE_TYPES.smoke) {
+        this._particleData[idx + 3] -= 0.05; // vy -= 0.05 (rising)
+        this._particleData[idx + 6] += 0.1; // size += 0.1
       }
-      particlesMoving = true;
-    });
-    this._particles = this._particles.filter((p) => p.life > 0);
-    return particlesMoving;
+
+      // Check for death
+      if (this._particleData[idx + 4] <= 0) {
+        // Swap with last active particle
+        if (this._particleCount > 1) {
+          const lastIdx = (this._particleCount - 1) * PARTICLE_STRIDE;
+          this._particleData.copyWithin(
+            idx,
+            lastIdx,
+            lastIdx + PARTICLE_STRIDE,
+          );
+        }
+        this._particleCount--;
+        i--; // Re-check this index as it now contains the swapped particle
+      }
+    }
+
+    return this._particleCount > 0;
   }
 
   private checkPhaseTransitions(
@@ -801,6 +905,18 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
           if (magnitude > 0) {
             if (weapon.type === WeaponType.HEAL) {
               tank.health = Math.min(tank.maxHealth, tank.health + magnitude);
+            } else if (weapon.type === WeaponType.VAMPIRE) {
+              tank.health = Math.max(0, tank.health - magnitude);
+              // Heal the owner
+              const owner = this.state.tanks.find(
+                (t) => t.id === projectile.ownerId,
+              );
+              if (owner) {
+                owner.health = Math.min(
+                  owner.maxHealth,
+                  owner.health + magnitude,
+                );
+              }
             } else {
               tank.health = Math.max(0, tank.health - magnitude);
             }
@@ -826,12 +942,18 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
                 tank.x,
                 tank.y - 10,
                 8,
-                "glow",
+                PARTICLE_TYPES.glow,
                 1,
                 "#4ade80",
               );
             } else {
-              this.createParticles(tank.x, tank.y - 10, 10, "spark", 2);
+              this.createParticles(
+                tank.x,
+                tank.y - 10,
+                10,
+                PARTICLE_TYPES.spark,
+                2,
+              );
             }
           }
         }
@@ -909,6 +1031,46 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
         });
       }
     }
+
+    // MIRV Spawning
+    if (weapon.type === WeaponType.MIRV) {
+      // Use projectile position/id as seed base
+      const baseSeed = Number(projectile.id) || projectile.x;
+
+      for (let i = 0; i < 5; i++) {
+        const seed = baseSeed + i * 0.13;
+        // Spawn slightly above impact to avoid getting stuck
+        const vx = (this.seededRandom(seed) - 0.5) * 12;
+        const vy = -3 - this.seededRandom(seed + 0.05) * 8;
+
+        this._projectiles.push({
+          id: (baseSeed + i + 100).toString(36),
+          x: projectile.x,
+          y: projectile.y - 10,
+          vx,
+          vy,
+          radius: 5,
+          weapon: WeaponType.MIRV_MINI,
+          ownerId: projectile.ownerId,
+          active: true,
+        });
+      }
+    }
+
+    // Meteor Strike Trigger
+    if (weapon.type === WeaponType.METEOR) {
+      this._projectiles.push({
+        id: (Number(projectile.id) + 1000).toString(),
+        x: projectile.x,
+        y: -1000,
+        vx: projectile.vx * 0.1 + this.state.wind * 10,
+        vy: 6, // Slower fall
+        radius: 40, // Larger visual size
+        weapon: WeaponType.METEOR_STRIKE,
+        ownerId: projectile.ownerId,
+        active: true,
+      });
+    }
   }
 
   private createExplosionParticles(
@@ -917,24 +1079,32 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
     weapon: (typeof WEAPONS)[WeaponType],
   ): void {
     if (weapon.type === WeaponType.NUKE) {
-      this.createParticles(x, y, 100, "fire", 3);
-      this.createParticles(x, y, 50, "smoke", 2);
-      this.createParticles(x, y, 30, "glow", 4, "#d946ef");
+      this.createParticles(x, y, 100, PARTICLE_TYPES.smoke, 3);
+      this.createParticles(x, y, 50, PARTICLE_TYPES.smoke, 2);
+      this.createParticles(x, y, 30, PARTICLE_TYPES.glow, 4, "#d946ef");
     } else if (weapon.type === WeaponType.TELEPORT) {
-      this.createParticles(x, y, 30, "glow", 2, "#c084fc");
-      this.createParticles(x, y, 20, "spark", 3, "#ffffff");
+      this.createParticles(x, y, 30, PARTICLE_TYPES.glow, 2, "#c084fc");
+      this.createParticles(x, y, 20, PARTICLE_TYPES.spark, 3, "#ffffff");
+    } else if (weapon.type === WeaponType.METEOR_STRIKE) {
+      this.createParticles(x, y, 150, PARTICLE_TYPES.fire, 6, undefined, 0.3); // 5x longer life
+      this.createParticles(x, y, 50, PARTICLE_TYPES.smoke, 3, undefined, 0.3);
+      this.createParticles(x, y, 50, PARTICLE_TYPES.glow, 8, "#ff4500", 0.4);
+      // Column of fire
+      // for (let i = 0; i < 5; i++) {
+      //   this.createParticles(x, y - i * 15, 10, PARTICLE_TYPES.fire, 2, undefined, 0.4);
+      // }
     } else if (weapon.type === WeaponType.BUILDER) {
-      this.createParticles(x, y, 20, "smoke", 1, "#64748b");
+      this.createParticles(x, y, 20, PARTICLE_TYPES.smoke, 1, "#64748b");
     }
     // else if (weapon.type === WeaponType.LANDMINE_ARMED) {
-    //   this.createParticles(x, y, 40, "fire", 2, "#ef4444");
+    //   this.createParticles(x, y, 40, PARTICLE_TYPES.fire, 2, "#ef4444");
     // }
     else if (weapon.type === WeaponType.HEAL) {
-      this.createParticles(x, y, 20, "glow", 2, "#4ade80");
-      this.createParticles(x, y, 15, "spark", 1.5, "#ffffff");
+      this.createParticles(x, y, 20, PARTICLE_TYPES.glow, 2, "#4ade80");
+      this.createParticles(x, y, 15, PARTICLE_TYPES.spark, 1.5, "#ffffff");
     } else {
-      this.createParticles(x, y, 20, "fire", 1.5);
-      this.createParticles(x, y, 20, "smoke", 1);
+      this.createParticles(x, y, 20, PARTICLE_TYPES.fire, 1.5);
+      this.createParticles(x, y, 20, PARTICLE_TYPES.smoke, 1);
     }
   }
 
@@ -947,23 +1117,22 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
       [WeaponType.AIRSTRIKE_BOMB]: "#ef4444",
       [WeaponType.BUILDER]: "#60a5fa",
       [WeaponType.HEAL]: "#4ade80",
+      [WeaponType.METEOR_STRIKE]: "#fb923c",
     };
 
     const color = colors[p.weapon];
     if (color) {
-      this.createParticles(p.x, p.y, 1, "glow", 0.3, color);
+      this.createParticles(p.x, p.y, 1, PARTICLE_TYPES.glow, 0.3, color);
     } else {
-      this._particles.push({
-        x: p.x,
-        y: p.y,
-        vx: 0,
-        vy: 0,
-        life: 0.5,
-        decay: 0.1,
-        size: 2,
-        color: "rgba(255,255,255,0.5)",
-        type: "smoke",
-      });
+      this.createParticles(
+        p.x,
+        p.y,
+        1,
+        PARTICLE_TYPES.smoke,
+        0,
+        "rgba(255,255,255,0.5)",
+        5,
+      );
     }
   }
 
@@ -971,50 +1140,72 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
     x: number,
     y: number,
     count: number,
-    type: "smoke" | "fire" | "spark" | "glow",
+    type: ParticleType,
     speedMulti: number = 1,
     colorOverride?: string,
+    decayMulti: number = 1,
   ): void {
-    const limit = 50;
+    const limit = 100; // Increased limit because it's much faster now
     const actualCount = Math.min(count, limit);
 
     for (let i = 0; i < actualCount; i++) {
+      if (this._particleCount >= MAX_PARTICLES) break;
+
       const angle = Math.random() * Math.PI * 2;
       const speed = Math.random() * 2 * speedMulti;
 
-      let color = "#fff";
+      let colorStr = "#fff";
       let decay = 0.02;
       let size = Math.random() * 3 + 1;
+      let typeNum = PARTICLE_TYPES.smoke;
+      let additive = 0;
 
-      if (type === "fire") {
-        color = colorOverride || (Math.random() > 0.5 ? "#fbbf24" : "#ef4444");
-        decay = 0.04;
+      if (type === PARTICLE_TYPES.fire) {
+        colorStr =
+          colorOverride || (Math.random() > 0.5 ? "#fbbf24" : "#ef4444");
+        decay = 0.04 * decayMulti;
         size = Math.random() * 6 + 4;
-      } else if (type === "smoke") {
-        color = colorOverride || `rgba(100, 116, 139, ${Math.random()})`;
-        decay = 0.02;
+        typeNum = PARTICLE_TYPES.fire;
+        additive = 1;
+      } else if (type === PARTICLE_TYPES.smoke) {
+        colorStr = colorOverride || "#64748b"; // Simplified for default
+        decay = 0.02 * decayMulti;
         size = Math.random() * 8 + 4;
-      } else if (type === "spark") {
-        color = colorOverride || "#facc15";
-        decay = 0.08;
+        typeNum = PARTICLE_TYPES.smoke;
+      } else if (type === PARTICLE_TYPES.spark) {
+        colorStr = colorOverride || "#facc15";
+        decay = 0.08 * decayMulti;
         size = Math.random() * 2 + 1;
-      } else if (type === "glow") {
-        color = colorOverride || "#22c55e";
-        decay = 0.05;
+        typeNum = PARTICLE_TYPES.spark;
+        additive = 1;
+      } else if (type === PARTICLE_TYPES.glow) {
+        colorStr = colorOverride || "#22c55e";
+        decay = 0.05 * decayMulti;
         size = Math.random() * 5 + 2;
+        typeNum = PARTICLE_TYPES.glow;
+        additive = 1;
       }
 
-      this._particles.push({
-        x,
-        y,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed,
-        life: 1.0,
-        decay,
-        size,
-        color,
-        type,
-      });
+      // Parse color to RGB
+      const r = parseInt(colorStr.slice(1, 3), 16) / 255 || 1;
+      const g = parseInt(colorStr.slice(3, 5), 16) / 255 || 1;
+      const b = parseInt(colorStr.slice(5, 7), 16) / 255 || 1;
+
+      const idx = this._particleCount * PARTICLE_STRIDE;
+      this._particleData[idx + 0] = x;
+      this._particleData[idx + 1] = y;
+      this._particleData[idx + 2] = Math.cos(angle) * speed;
+      this._particleData[idx + 3] = Math.sin(angle) * speed;
+      this._particleData[idx + 4] = 1.0; // life
+      this._particleData[idx + 5] = decay;
+      this._particleData[idx + 6] = size;
+      this._particleData[idx + 7] = typeNum;
+      this._particleData[idx + 8] = r;
+      this._particleData[idx + 9] = g;
+      this._particleData[idx + 10] = b;
+      this._particleData[idx + 11] = additive;
+
+      this._particleCount++;
     }
   }
 
@@ -1265,9 +1456,12 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
     this.state.players.forEach((p) => {
       p.tankId = null;
     });
-    this.state.terrainSeed = Math.round(Math.random() * 1000000);
+    this.state.terrainSeed = Math.round(Math.random() * 10000);
     this.state.terrainMods = [];
     this.state.isSimulating = false;
+
+    this._tankSimulations.clear();
+    this.initTerrain();
   }
 
   addBot(): void {
@@ -1304,6 +1498,27 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
     this.makeAction({ type: "RESET_GAME" });
   }
 
+  requestRegenerateMap(): void {
+    const newSeed = Math.round(Math.random() * 10000);
+    this.makeAction({ type: "REGENERATE_MAP", seed: newSeed });
+  }
+
+  private handleRegenerateMap(seed: number): void {
+    // if (this.state.phase !== GamePhase.WAITING) return;
+
+    // Update terrain seed
+    this.state.terrainSeed = seed;
+    this.state.terrainMods = [];
+
+    // Clear tank simulations so they re-check gravity against new terrain
+    this._tankSimulations.clear();
+
+    // Re-initialize terrain with new seed
+    this.initTerrain();
+
+    console.log("Map regenerated with seed:", seed);
+  }
+
   // Player actions - syncs final values on release
   commitAngle(angle: number): void {
     const action: GunnyWarsAction = {
@@ -1335,7 +1550,7 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
   // Movement - called when movement starts
   moveStart(direction: MoveDirection): void {
     const tank = this.getMyTank();
-    if (!tank) return;
+    if (!tank || tank.fuel <= 0) return;
     const action: GunnyWarsAction = {
       type: "MOVE_START",
       direction,

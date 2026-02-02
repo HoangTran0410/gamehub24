@@ -4,6 +4,23 @@ import { type Weapon, WeaponType } from "./types";
 export const WORLD_WIDTH = 15000;
 export const WORLD_HEIGHT = 1000;
 
+// Biome System
+export const BIOME_TYPES = [
+  "plains",
+  "mountains",
+  "valley",
+  "desert",
+  "tundra",
+] as const;
+export type BiomeType = (typeof BIOME_TYPES)[number];
+
+// Biome generation parameters
+export const BIOME_SCALE = 0.0001; // Controls biome zone size (higher = smaller zones, more variety)
+export const BIOME_BLEND_WIDTH = 500; // Pixels for smooth biome transitions
+
+// Snow cap threshold (Y position, lower = higher on screen)
+export const SNOW_THRESHOLD_HEIGHT = 280; // Snow appears above this Y
+
 // Physics Constants
 export const GRAVITY = 0.2;
 export const MAX_POWER = 25;
@@ -15,6 +32,17 @@ export const MAX_FUEL = 300;
 export const INITIAL_HEALTH = 100;
 export const TANK_WIDTH = 30;
 export const TANK_HEIGHT = 20;
+
+// Particle Constants
+export const MAX_PARTICLES = 5000;
+export const PARTICLE_STRIDE = 12; // x, y, vx, vy, life, decay, size, type, r, g, b, additive
+export const PARTICLE_TYPES = {
+  smoke: 0,
+  fire: 1,
+  spark: 2,
+  glow: 3,
+};
+export type ParticleType = (typeof PARTICLE_TYPES)[keyof typeof PARTICLE_TYPES];
 
 // Weapon Definitions
 export const WEAPONS: Record<WeaponType, Weapon> = {
@@ -111,31 +139,68 @@ export const WEAPONS: Record<WeaponType, Weapon> = {
     count: 1,
     terrainDamageMultiplier: 0,
   },
-  // [WeaponType.LANDMINE]: {
-  //   type: WeaponType.LANDMINE,
-  //   name: "Mine",
-  //   damage: 50,
-  //   radius: 15, // Size of the mine visually
-  //   color: "#ef4444",
-  //   count: 1,
-  //   terrainDamageMultiplier: 0,
-  // },
-  // [WeaponType.LANDMINE_ARMED]: {
-  //   // Internal
-  //   type: WeaponType.LANDMINE_ARMED,
-  //   name: "Mine (Armed)",
-  //   damage: 80, // High damage on contact
-  //   radius: 60, // Explosion radius
-  //   color: "#ff0000",
-  //   count: 1,
-  //   terrainDamageMultiplier: 1,
-  // },
+  [WeaponType.MIRV]: {
+    type: WeaponType.MIRV,
+    name: "MIRV",
+    damage: 15,
+    radius: 30,
+    color: "#a78bfa", // Purple
+    count: 1,
+    terrainDamageMultiplier: 0.8,
+  },
+  [WeaponType.MIRV_MINI]: {
+    type: WeaponType.MIRV_MINI,
+    name: "Cluster",
+    damage: 15,
+    radius: 25,
+    color: "#a78bfa",
+    count: 1,
+    terrainDamageMultiplier: 1,
+  },
+  [WeaponType.BOUNCY]: {
+    type: WeaponType.BOUNCY,
+    name: "Bouncy",
+    damage: 30,
+    radius: 40,
+    color: "#4ade80", // Emerald
+    count: 1,
+    terrainDamageMultiplier: 1,
+  },
+  [WeaponType.VAMPIRE]: {
+    type: WeaponType.VAMPIRE,
+    name: "Vampire",
+    damage: 25,
+    radius: 35,
+    color: "#f43f5e", // Rose
+    count: 1,
+    terrainDamageMultiplier: 0.5,
+  },
+  [WeaponType.METEOR]: {
+    type: WeaponType.METEOR,
+    name: "Meteor",
+    damage: 0,
+    radius: 10,
+    color: "#f87171", // Red
+    count: 1,
+    terrainDamageMultiplier: 0,
+  },
+  [WeaponType.METEOR_STRIKE]: {
+    type: WeaponType.METEOR_STRIKE,
+    name: "Meteor Strike",
+    damage: 50,
+    radius: 100,
+    color: "#fb923c", // Orange
+    count: 1,
+    terrainDamageMultiplier: 2.5,
+  },
 };
 
 // Get user-selectable weapons (exclude internal types)
 export const SELECTABLE_WEAPONS = Object.values(WEAPONS).filter(
-  (w) => w.type !== WeaponType.AIRSTRIKE_BOMB,
-  // &&  w.type !== WeaponType.LANDMINE_ARMED,
+  (w) =>
+    w.type !== WeaponType.AIRSTRIKE_BOMB &&
+    w.type !== WeaponType.MIRV_MINI &&
+    w.type !== WeaponType.METEOR_STRIKE,
 );
 
 // Tank Colors

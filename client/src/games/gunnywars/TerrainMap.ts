@@ -1,9 +1,93 @@
-import { WORLD_WIDTH, WORLD_HEIGHT } from "./constants";
+import {
+  WORLD_WIDTH,
+  WORLD_HEIGHT,
+  BIOME_SCALE,
+  type BiomeType,
+} from "./constants";
 import type { TerrainModification } from "./types";
 
+// ============================================================================
+// Noise utilities for procedural generation
+// ============================================================================
+
 /**
- * Calculate base terrain height at a given X position using mathematical function.
- * This is the same algorithm as generateTerrain but returns Y value directly.
+ * Robust sine-less hash for perfect CPU/GPU alignment
+ */
+function hash(x: number, seed: number): number {
+  let p = x * 0.1031 + seed * 0.3117;
+  p = p - Math.floor(p);
+  p *= p + 33.33;
+  p *= p + p;
+  return p - Math.floor(p);
+}
+
+/**
+ * 1D noise function with linear interpolation
+ */
+function noise1D(x: number, seed: number): number {
+  const i = Math.floor(x);
+  const f = x - i;
+  // Smooth interpolation (smoothstep)
+  const u = f * f * (3 - 2 * f);
+  return hash(i, seed) * (1 - u) + hash(i + 1, seed) * u;
+}
+
+/**
+ * Multi-octave noise (Fractal Brownian Motion)
+ */
+function fbm(x: number, seed: number, octaves: number = 4): number {
+  let value = 0;
+  let amplitude = 0.5;
+  let frequency = 1;
+  for (let i = 0; i < octaves; i++) {
+    value += amplitude * noise1D(x * frequency, seed + i * 100);
+    amplitude *= 0.5;
+    frequency *= 2;
+  }
+  return value;
+}
+
+// ============================================================================
+// Biome System (for visual coloring only, NOT terrain height)
+// ============================================================================
+
+/**
+ * Biome index: 0=plains, 1=mountains, 2=valley, 3=desert, 4=tundra
+ * Used for visual coloring only - terrain height uses simple sine waves
+ */
+export function getBiomeIndex(x: number, seed: number): number {
+  // Use low-frequency noise for biome zones
+  const biomeNoise = fbm(x * BIOME_SCALE, seed, 2);
+
+  // Map noise value (0-1) to biome index (0-4)
+  if (biomeNoise < 0.2) return 2; // Valley
+  if (biomeNoise < 0.4) return 0; // Plains
+  if (biomeNoise < 0.6) return 1; // Mountains
+  if (biomeNoise < 0.8) return 3; // Desert
+  return 4; // Tundra
+}
+
+/**
+ * Get biome type string for a position
+ */
+export function getBiome(x: number, seed: number): BiomeType {
+  const biomes: BiomeType[] = [
+    "plains",
+    "mountains",
+    "valley",
+    "desert",
+    "tundra",
+  ];
+  return biomes[getBiomeIndex(x, seed)];
+}
+
+// ============================================================================
+// Terrain Height Calculation (SIMPLE SINE WAVE - matches GPU exactly)
+// ============================================================================
+
+/**
+ * Calculate base terrain height at a given X position using sine waves.
+ * This MUST match the GPU shader computeBaseHeight exactly!
  */
 export function calculateBaseHeight(x: number, seed: number): number {
   const width = WORLD_WIDTH;
@@ -932,11 +1016,28 @@ export class TerrainRenderer {
     const worldStartX = chunkX * CHUNK_SIZE;
     const worldStartY = chunkY * CHUNK_SIZE;
 
-    // OPTIMIZATION 4: Precompute all heights into TypedArray for better cache locality
+    // Precompute all heights into TypedArray for better cache locality
     const heights = new Float32Array(CHUNK_SIZE + 1);
     for (let i = 0; i <= CHUNK_SIZE; i++) {
       heights[i] = terrainMap.getBaseHeight(worldStartX + i);
     }
+
+    // Sample biome at chunk center for coloring
+    const centerX = worldStartX + CHUNK_SIZE / 2;
+    const biomeIdx = getBiomeIndex(centerX, terrainMap.getSeed());
+
+    // Biome color palettes
+    const biomeColors = {
+      // [topColor, bottomColor, grassColor, grassHighlight]
+      0: ["#475569", "#0f172a", "#22c55e", "#86efac"], // Plains - green
+      1: ["#737373", "#262626", "#a3a3a3", "#e5e5e5"], // Mountains - gray/snow
+      2: ["#2e4f36", "#1a2e22", "#166534", "#4ade80"], // Valley - dark green
+      3: ["#d4a574", "#8b4513", "#d4a574", "#f4d08a"], // Desert - sand
+      4: ["#d1d5db", "#5b6e80", "#e5e7eb", "#f9fafb"], // Tundra - ice white
+    };
+
+    const colors =
+      biomeColors[biomeIdx as keyof typeof biomeColors] || biomeColors[0];
 
     // Draw terrain for this chunk
     ctx.beginPath();
@@ -964,13 +1065,12 @@ export class TerrainRenderer {
     ctx.lineTo(0, CHUNK_SIZE);
     ctx.closePath();
 
-    // Fill with gradient based on WORLD Y coordinates (not local) for seamless chunks
-    // Gradient goes from #475569 at y=0 to #0f172a at y=WORLD_HEIGHT
-    const gradStartY = -worldStartY; // World Y=0 in local coords
-    const gradEndY = WORLD_HEIGHT - worldStartY; // World Y=WORLD_HEIGHT in local coords
+    // Fill with gradient based on WORLD Y coordinates (biome-aware colors)
+    const gradStartY = -worldStartY;
+    const gradEndY = WORLD_HEIGHT - worldStartY;
     const grad = ctx.createLinearGradient(0, gradStartY, 0, gradEndY);
-    grad.addColorStop(0, "#475569");
-    grad.addColorStop(1, "#0f172a");
+    grad.addColorStop(0, colors[0]);
+    grad.addColorStop(1, colors[1]);
     ctx.fillStyle = grad;
     ctx.fill();
 
@@ -987,7 +1087,7 @@ export class TerrainRenderer {
       ctx.fill();
     }
 
-    // Draw grass layer using precomputed heights
+    // Draw surface layer using precomputed heights (biome-aware colors)
     ctx.globalCompositeOperation = "source-over";
     ctx.beginPath();
     for (let localX = 0; localX <= CHUNK_SIZE; localX++) {
@@ -996,12 +1096,12 @@ export class TerrainRenderer {
       if (localX === 0) ctx.moveTo(localX, localSurfaceY);
       else ctx.lineTo(localX, localSurfaceY);
     }
-    ctx.strokeStyle = "#22c55e";
+    ctx.strokeStyle = colors[2];
     ctx.lineWidth = 15;
     ctx.lineCap = "round";
     ctx.stroke();
 
-    ctx.strokeStyle = "#86efac";
+    ctx.strokeStyle = colors[3];
     ctx.lineWidth = 4;
     ctx.stroke();
 
