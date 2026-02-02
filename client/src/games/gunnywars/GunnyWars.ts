@@ -1221,20 +1221,22 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
     this.state.isSimulating = false;
 
     // Check winner
-    const aliveTanks = this.state.tanks.filter((t) => t.health > 0);
-    if (aliveTanks.length <= 1) {
-      this.state.phase = GamePhase.GAME_OVER;
-      if (aliveTanks.length === 1) {
-        const winner = aliveTanks[0];
-        const winnerPlayer = this.state.players.find(
-          (p) => p.id === winner.playerId,
-        );
-        this.state.winner =
-          winnerPlayer?.username || (winner.isBot ? "Bot" : "Player");
-      } else {
-        this.state.winner = "Draw";
+    if (!this.state.isExploration) {
+      const aliveTanks = this.state.tanks.filter((t) => t.health > 0);
+      if (aliveTanks.length <= 1) {
+        this.state.phase = GamePhase.GAME_OVER;
+        if (aliveTanks.length === 1) {
+          const winner = aliveTanks[0];
+          const winnerPlayer = this.state.players.find(
+            (p) => p.id === winner.playerId,
+          );
+          this.state.winner =
+            winnerPlayer?.username || (winner.isBot ? "Bot" : "Player");
+        } else {
+          this.state.winner = "Draw";
+        }
+        return;
       }
-      return;
     }
 
     // Next turn

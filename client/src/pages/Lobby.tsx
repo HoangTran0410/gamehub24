@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, memo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Gamepad,
@@ -19,6 +19,7 @@ import useLanguage from "../stores/languageStore";
 import { getSocket } from "../services/socket";
 import { getAllGames } from "../games/registry";
 import type { Room } from "../stores/roomStore";
+import type { GameModule } from "../games/registry";
 import SettingsModal from "../components/SettingsModal";
 import { useGameFavorites } from "../hooks/useGameFavorites";
 import GameCategoryFilter from "../components/GameCategoryFilter";
@@ -27,7 +28,7 @@ import { CATEGORY_CONFIG, type GameCategory } from "../constants";
 import { useChatStore } from "../stores/chatStore";
 
 export default function Lobby() {
-  const { ti, ts } = useLanguage();
+  const { ti } = useLanguage();
   const { username } = useUserStore();
   const { isConnected } = useSocketStore();
   const { publicRooms, setPublicRooms } = useRoomStore();
@@ -227,88 +228,15 @@ export default function Lobby() {
                   {ti({ en: "No games available", vi: "Không có trò chơi" })}
                 </p>
               )}
-              {gamesToShow.map((game) => {
-                const Icon = game.icon;
-                return (
-                  <div
-                    key={game.id}
-                    className={`glass-card rounded-2xl p-4 md:p-6 hover:border-primary/30 transition-all duration-200 ${
-                      !game.isAvailable ? "opacity-50" : ""
-                    } relative group flex flex-col`}
-                  >
-                    {/* Favorite Button */}
-                    <button
-                      onClick={(e) => toggleFavorite(game.id, e)}
-                      className={`absolute top-2 right-2 md:top-4 md:right-4 p-2 rounded-full transition-all duration-200 z-10 ${
-                        favorites.includes(game.id)
-                          ? "text-yellow-500 bg-yellow-500/10 hover:bg-yellow-500/20"
-                          : "text-text-muted hover:text-yellow-500 hover:bg-white/5 md:opacity-0 group-hover:opacity-100"
-                      }`}
-                      title={ts({
-                        en: "Toggle Favorite",
-                        vi: "Đánh dấu yêu thích",
-                      })}
-                    >
-                      <Star
-                        className={`w-5 h-5 ${favorites.includes(game.id) ? "fill-current" : ""}`}
-                      />
-                    </button>
-
-                    {/* align center */}
-                    <div className="mb-3 md:mb-4 flex items-center justify-center">
-                      <Icon className="w-10 h-10 md:w-12 md:h-12 text-primary" />
-                    </div>
-                    <h4 className="font-display text-lg md:text-xl text-text-primary mb-2 text-center leading-tight">
-                      {ti(game.name)}
-                    </h4>
-                    <p className="text-sm text-text-secondary mb-3 hidden md:block text-center flex-1">
-                      {ti(game.description)}
-                    </p>
-                    {/* Category badges */}
-                    <div className="flex flex-wrap gap-1.5 mb-3 justify-center">
-                      {game.categories.map((cat) => (
-                        <span
-                          key={cat}
-                          className={`px-2 py-0.5 text-[11px] md:text-[10px] font-medium rounded-full border ${CATEGORY_CONFIG[cat].color}`}
-                        >
-                          {ti(CATEGORY_CONFIG[cat].label)}
-                        </span>
-                      ))}
-                    </div>
-                    <div className="flex items-center gap-1.5 md:gap-2 text-xs text-text-muted mb-4 justify-center">
-                      <Users className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                      <span>
-                        {game.minPlayers === game.maxPlayers
-                          ? `${game.minPlayers} ${ti({
-                              en: "Players",
-                              vi: "Người chơi",
-                            })}`
-                          : `${game.minPlayers}-${game.maxPlayers} ${ti({
-                              en: "Players",
-                              vi: "Người chơi",
-                            })}`}
-                      </span>
-                    </div>
-                    <div className="mt-auto">
-                      {game.isAvailable ? (
-                        <button
-                          onClick={() => handleSelectGame(game.id)}
-                          className="w-full px-4 py-2 bg-white/5 hover:bg-white/10 text-white text-sm md:text-base font-semibold rounded-lg transition-colors cursor-pointer"
-                        >
-                          {ti({ en: "Play", vi: "Chơi" })}
-                        </button>
-                      ) : (
-                        <button
-                          disabled
-                          className="w-full px-4 py-2 bg-white/5 text-text-muted text-sm md:text-base font-semibold rounded-lg cursor-not-allowed"
-                        >
-                          {ti({ en: "Coming Soon", vi: "Sắp ra mắt" })}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+              {gamesToShow.map((game) => (
+                <GameCard
+                  key={game.id}
+                  game={game}
+                  isFavorite={favorites.includes(game.id)}
+                  onToggleFavorite={toggleFavorite}
+                  onSelect={handleSelectGame}
+                />
+              ))}
             </div>
           </section>
 
@@ -387,8 +315,100 @@ export default function Lobby() {
   );
 }
 
+// Game Card Component
+const GameCard = memo(
+  ({
+    game,
+    isFavorite,
+    onToggleFavorite,
+    onSelect,
+  }: {
+    game: GameModule;
+    isFavorite: boolean;
+    onToggleFavorite: (gameId: string, e: React.MouseEvent) => void;
+    onSelect: (gameId: string) => void;
+  }) => {
+    const { ti, ts } = useLanguage();
+    const Icon = game.icon;
+
+    return (
+      <div
+        className={`glass-card rounded-2xl p-4 md:p-6 hover:border-primary/30 transition-all duration-200 ${
+          !game.isAvailable ? "opacity-50" : ""
+        } relative group flex flex-col will-change-transform`}
+      >
+        <button
+          onClick={(e) => onToggleFavorite(game.id, e)}
+          className={`absolute top-2 right-2 md:top-4 md:right-4 p-2 rounded-full transition-all duration-200 z-10 ${
+            isFavorite
+              ? "text-yellow-500 bg-yellow-500/10 hover:bg-yellow-500/20"
+              : "text-text-muted hover:text-yellow-500 hover:bg-white/5 md:opacity-0 group-hover:opacity-100"
+          }`}
+          title={ts({
+            en: "Toggle Favorite",
+            vi: "Đánh dấu yêu thích",
+          })}
+        >
+          <Star className={`w-5 h-5 ${isFavorite ? "fill-current" : ""}`} />
+        </button>
+
+        <div className="mb-3 md:mb-4 flex items-center justify-center">
+          <Icon className="w-10 h-10 md:w-12 md:h-12 text-primary" />
+        </div>
+        <h4 className="font-display text-lg md:text-xl text-text-primary mb-2 text-center leading-tight">
+          {ti(game.name)}
+        </h4>
+        <p className="text-sm text-text-secondary mb-3 hidden md:block text-center flex-1">
+          {ti(game.description)}
+        </p>
+        <div className="flex flex-wrap gap-1.5 mb-3 justify-center">
+          {game.categories.map((cat: string) => (
+            <span
+              key={cat}
+              className={`px-2 py-0.5 text-[11px] md:text-[10px] font-medium rounded-full border ${CATEGORY_CONFIG[cat as keyof typeof CATEGORY_CONFIG].color}`}
+            >
+              {ti(CATEGORY_CONFIG[cat as keyof typeof CATEGORY_CONFIG].label)}
+            </span>
+          ))}
+        </div>
+        <div className="flex items-center gap-1.5 md:gap-2 text-xs text-text-muted mb-4 justify-center">
+          <Users className="w-3.5 h-3.5 md:w-4 md:h-4" />
+          <span>
+            {game.minPlayers === game.maxPlayers
+              ? `${game.minPlayers} ${ti({
+                  en: "Players",
+                  vi: "Người chơi",
+                })}`
+              : `${game.minPlayers}-${game.maxPlayers} ${ti({
+                  en: "Players",
+                  vi: "Người chơi",
+                })}`}
+          </span>
+        </div>
+        <div className="mt-auto">
+          {game.isAvailable ? (
+            <button
+              onClick={() => onSelect(game.id)}
+              className="w-full px-4 py-2 bg-white/5 hover:bg-white/10 text-white text-sm md:text-base font-semibold rounded-lg transition-colors cursor-pointer"
+            >
+              {ti({ en: "Play", vi: "Chơi" })}
+            </button>
+          ) : (
+            <button
+              disabled
+              className="w-full px-4 py-2 bg-white/5 text-text-muted text-sm md:text-base font-semibold rounded-lg cursor-not-allowed"
+            >
+              {ti({ en: "Coming Soon", vi: "Sắp ra mắt" })}
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  },
+);
+
 // Room List Item Component
-function RoomListItem({ room }: { room: Room }) {
+const RoomListItem = memo(({ room }: { room: Room }) => {
   const navigate = useNavigate();
   const { username } = useUserStore();
   const { setCurrentRoom } = useRoomStore();
@@ -502,239 +522,238 @@ function RoomListItem({ room }: { room: Room }) {
       </div>
     </div>
   );
-}
+});
 
 // Create Room Modal Component
-function CreateRoomModal({
-  onClose,
-  gameId,
-}: {
-  onClose: () => void;
-  gameId: string;
-}) {
-  const { username, userId } = useUserStore();
-  const [roomName, setRoomName] = useState(username);
-  const [gameType, setGameType] = useState(
-    gameId || localStorage.getItem("gamehub24_lastGameId") || "",
-  );
-  const [isPublic, setIsPublic] = useState(false);
-  const [requirePassword, setRequirePassword] = useState(false);
-  const [password, setPassword] = useState("");
-  const navigate = useNavigate();
-  const { setCurrentRoom } = useRoomStore();
-  const { show: showAlert } = useAlertStore();
-  const { isConnected } = useSocketStore();
-  const { ti, ts } = useLanguage();
-
-  useEffect(() => {
-    if (gameType) localStorage.setItem("gamehub24_lastGameId", gameType);
-  }, [gameType]);
-
-  const allGames = useMemo(() => getAllGames(), []);
-
-  const selectedGame = useMemo(() => {
-    return allGames.find((g) => g.id === gameType) || allGames[0];
-  }, [gameType]);
-
-  const handleCreate = () => {
-    const socket = getSocket();
-    if (!socket || !isConnected)
-      return showAlert("Socket not connected", { type: "error" });
-
-    if (!selectedGame) return showAlert("Game not found", { type: "error" });
-
-    console.log(selectedGame);
-
-    socket.emit(
-      "room:create",
-      {
-        name: roomName.trim() || username,
-        gameType: selectedGame.id,
-        isPublic,
-        password: requirePassword ? password : undefined,
-        maxPlayers: selectedGame.maxPlayers,
-      },
-      (response: { success: boolean; room?: Room; error?: string }) => {
-        if (response.success && response.room) {
-          setCurrentRoom(response.room);
-          navigate(`/room/${response.room.id}`, { replace: true });
-        } else {
-          showAlert(response.error || "Failed to create room", {
-            type: "error",
-          });
-        }
-      },
+const CreateRoomModal = memo(
+  ({ onClose, gameId }: { onClose: () => void; gameId: string }) => {
+    const { username, userId } = useUserStore();
+    const [roomName, setRoomName] = useState(username);
+    const [gameType, setGameType] = useState(
+      gameId || localStorage.getItem("gamehub24_lastGameId") || "",
     );
-  };
+    const [isPublic, setIsPublic] = useState(false);
+    const [requirePassword, setRequirePassword] = useState(false);
+    const [password, setPassword] = useState("");
+    const navigate = useNavigate();
+    const { setCurrentRoom } = useRoomStore();
+    const { show: showAlert } = useAlertStore();
+    const { isConnected } = useSocketStore();
+    const { ti, ts } = useLanguage();
 
-  const handleCreateOffline = () => {
-    const game = allGames.find((g) => g.id === gameType) || allGames[0];
-    if (!game) return showAlert("Game not found", { type: "error" });
+    useEffect(() => {
+      if (gameType) localStorage.setItem("gamehub24_lastGameId", gameType);
+    }, [gameType]);
 
-    const localRoomId = `local_${Date.now()}`;
-    const localRoom: Room = {
-      id: localRoomId,
-      name: roomName.trim() || username,
-      ownerId: userId, // Using username as ID for local to match checks if mostly based on ID equality
-      gameType: game.id,
-      isPublic: false,
-      players: [
+    const allGames = useMemo(() => getAllGames(), []);
+
+    const selectedGame = useMemo(() => {
+      return allGames.find((g) => g.id === gameType) || allGames[0];
+    }, [gameType, allGames]);
+
+    const handleCreate = () => {
+      const socket = getSocket();
+      if (!socket || !isConnected)
+        return showAlert("Socket not connected", { type: "error" });
+
+      if (!selectedGame) return showAlert("Game not found", { type: "error" });
+
+      console.log(selectedGame);
+
+      socket.emit(
+        "room:create",
         {
-          id: userId, // ownerId matches this
-          username: username,
-          isHost: true,
-          isBot: false,
+          name: roomName.trim() || username,
+          gameType: selectedGame.id,
+          isPublic,
+          password: requirePassword ? password : undefined,
+          maxPlayers: selectedGame.maxPlayers,
         },
-      ],
-      spectators: [],
-      maxPlayers: game.maxPlayers,
-      createdAt: new Date(),
-
-      isOffline: true,
+        (response: { success: boolean; room?: Room; error?: string }) => {
+          if (response.success && response.room) {
+            setCurrentRoom(response.room);
+            navigate(`/room/${response.room.id}`, { replace: true });
+          } else {
+            showAlert(response.error || "Failed to create room", {
+              type: "error",
+            });
+          }
+        },
+      );
     };
 
-    setCurrentRoom(localRoom);
-    navigate(`/room/${localRoomId}`, { replace: true });
-  };
+    const handleCreateOffline = () => {
+      const game = allGames.find((g) => g.id === gameType) || allGames[0];
+      if (!game) return showAlert("Game not found", { type: "error" });
 
-  return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 animate-fadeIn">
-      <div className="bg-background-secondary border border-white/10 rounded-2xl p-8 max-w-md w-full shadow-2xl mx-4 text-center">
-        <h2 className="font-display text-2xl text-text-primary mb-6">
-          {ti({ en: "Create Room", vi: "Tạo Phòng" })}
-        </h2>
+      const localRoomId = `local_${Date.now()}`;
+      const localRoom: Room = {
+        id: localRoomId,
+        name: roomName.trim() || username,
+        ownerId: userId, // Using username as ID for local to match checks if mostly based on ID equality
+        gameType: game.id,
+        isPublic: false,
+        players: [
+          {
+            id: userId, // ownerId matches this
+            username: username,
+            isHost: true,
+            isBot: false,
+          },
+        ],
+        spectators: [],
+        maxPlayers: game.maxPlayers,
+        createdAt: new Date(),
 
-        <div className="space-y-4 mb-6">
-          {/* Room Name */}
-          <div>
-            <label className="block text-sm text-text-secondary mb-2 text-left">
-              {ti({ en: "Room Name", vi: "Tên Phòng" })}
-            </label>
-            <input
-              type="text"
-              value={roomName}
-              onChange={(e) => setRoomName(e.target.value)}
-              placeholder={ts({
-                en: `Name your room (default: ${username})`,
-                vi: `Đặt tên phòng (mặc định: ${username})`,
-              })}
-              className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-            />
-          </div>
+        isOffline: true,
+      };
 
-          {/* Game Type */}
-          <div>
-            <label className="block text-sm font-medium text-text-secondary mb-2 text-left">
-              {ti({ en: "Game", vi: "Trò chơi" })}
-            </label>
-            <select
-              value={gameType}
-              onChange={(e) => setGameType(e.target.value)}
-              className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent cursor-pointer"
-            >
-              {allGames.map((game) => (
-                <option
-                  key={game.id}
-                  value={game.id}
-                  disabled={!game.isAvailable}
-                >
-                  {ts(game.name)}
-                  {!game.isAvailable &&
-                    ` (${ts({ en: "Coming Soon", vi: "Sắp ra mắt" })})`}
-                </option>
-              ))}{" "}
-            </select>
+      setCurrentRoom(localRoom);
+      navigate(`/room/${localRoomId}`, { replace: true });
+    };
 
-            {selectedGame && (
-              <div className="mt-2 text-center">
-                <p className="text-sm text-text-muted">
-                  {ts(selectedGame.description)}
-                </p>
+    return (
+      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 animate-fadeIn">
+        <div className="bg-background-secondary border border-white/10 rounded-2xl p-8 max-w-md w-full shadow-2xl mx-4 text-center">
+          <h2 className="font-display text-2xl text-text-primary mb-6">
+            {ti({ en: "Create Room", vi: "Tạo Phòng" })}
+          </h2>
+
+          <div className="space-y-4 mb-6">
+            {/* Room Name */}
+            <div>
+              <label className="block text-sm text-text-secondary mb-2 text-left">
+                {ti({ en: "Room Name", vi: "Tên Phòng" })}
+              </label>
+              <input
+                type="text"
+                value={roomName}
+                onChange={(e) => setRoomName(e.target.value)}
+                placeholder={ts({
+                  en: `Name your room (default: ${username})`,
+                  vi: `Đặt tên phòng (mặc định: ${username})`,
+                })}
+                className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+              />
+            </div>
+
+            {/* Game Type */}
+            <div>
+              <label className="block text-sm font-medium text-text-secondary mb-2 text-left">
+                {ti({ en: "Game", vi: "Trò chơi" })}
+              </label>
+              <select
+                value={gameType}
+                onChange={(e) => setGameType(e.target.value)}
+                className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent cursor-pointer"
+              >
+                {allGames.map((game) => (
+                  <option
+                    key={game.id}
+                    value={game.id}
+                    disabled={!game.isAvailable}
+                  >
+                    {ts(game.name)}
+                    {!game.isAvailable &&
+                      ` (${ts({ en: "Coming Soon", vi: "Sắp ra mắt" })})`}
+                  </option>
+                ))}{" "}
+              </select>
+
+              {selectedGame && (
+                <div className="mt-2 text-center">
+                  <p className="text-sm text-text-muted">
+                    {ts(selectedGame.description)}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Public/Private */}
+            <div>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isPublic}
+                  onChange={(e) => setIsPublic(e.target.checked)}
+                  className="w-4 h-4 text-primary bg-white/5 border-white/10 rounded focus:ring-2 focus:ring-primary cursor-pointer"
+                />
+                <span className="text-sm text-text-secondary">
+                  {ti({ en: "Public Room", vi: "Phòng công khai" })}
+                </span>
+              </label>
+              {isPublic && (
+                <label className="text-xs text-text-muted">
+                  {ti({
+                    en: "Everyone can see your public room",
+                    vi: "Ai cũng có thể thấy phòng công khai của bạn",
+                  })}
+                </label>
+              )}
+            </div>
+
+            {/* Require Password */}
+            <div>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={requirePassword}
+                  onChange={(e) => setRequirePassword(e.target.checked)}
+                  className="w-4 h-4 text-primary bg-white/5 border-white/10 rounded focus:ring-2 focus:ring-primary cursor-pointer"
+                />
+                <span className="text-sm text-text-secondary">
+                  {ti({ en: "Require Password", vi: "Yêu cầu mật khẩu" })}
+                </span>
+              </label>
+            </div>
+
+            {/* Password (if private) */}
+            {requirePassword && (
+              <div>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder={ts({
+                    en: "Enter password",
+                    vi: "Nhập mật khẩu",
+                  })}
+                  className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                />
               </div>
             )}
           </div>
 
-          {/* Public/Private */}
-          <div>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={isPublic}
-                onChange={(e) => setIsPublic(e.target.checked)}
-                className="w-4 h-4 text-primary bg-white/5 border-white/10 rounded focus:ring-2 focus:ring-primary cursor-pointer"
-              />
-              <span className="text-sm text-text-secondary">
-                {ti({ en: "Public Room", vi: "Phòng công khai" })}
-              </span>
-            </label>
-            {isPublic && (
-              <label className="text-xs text-text-muted">
-                {ti({
-                  en: "Everyone can see your public room",
-                  vi: "Ai cũng có thể thấy phòng công khai của bạn",
-                })}
-              </label>
-            )}
-          </div>
+          <div className="flex gap-2 flex-col md:flex-row justify-center items-center">
+            <div className="flex gap-2">
+              <button
+                onClick={handleCreateOffline}
+                className="px-4 py-2 md:py-2.5 bg-slate-700 hover:bg-slate-500 text-white rounded-lg cursor-pointer"
+              >
+                {ti({ en: "Play Offline", vi: "Chơi Offline" })}
+              </button>
 
-          {/* Require Password */}
-          <div>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={requirePassword}
-                onChange={(e) => setRequirePassword(e.target.checked)}
-                className="w-4 h-4 text-primary bg-white/5 border-white/10 rounded focus:ring-2 focus:ring-primary cursor-pointer"
-              />
-              <span className="text-sm text-text-secondary">
-                {ti({ en: "Require Password", vi: "Yêu cầu mật khẩu" })}
-              </span>
-            </label>
-          </div>
-
-          {/* Password (if private) */}
-          {requirePassword && (
-            <div>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder={ts({ en: "Enter password", vi: "Nhập mật khẩu" })}
-                className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-              />
+              <button
+                onClick={handleCreate}
+                className="px-4 py-2 md:py-2.5 bg-primary hover:bg-primary-light text-white rounded-lg shadow-lg shadow-primary/30 transition-all cursor-pointer"
+              >
+                {ti({ en: "Create Online", vi: "Tạo Online" })}
+              </button>
             </div>
-          )}
-        </div>
-
-        <div className="flex gap-2 flex-col md:flex-row justify-center items-center">
-          <div className="flex gap-2">
             <button
-              onClick={handleCreateOffline}
-              className="px-4 py-2 md:py-2.5 bg-slate-700 hover:bg-slate-500 text-white rounded-lg cursor-pointer"
+              onClick={onClose}
+              className="px-4 py-2 md:py-2.5 bg-white/5 hover:bg-white/10 text-text-secondary rounded-lg transition-colors cursor-pointer"
             >
-              {ti({ en: "Play Offline", vi: "Chơi Offline" })}
-            </button>
-
-            <button
-              onClick={handleCreate}
-              className="px-4 py-2 md:py-2.5 bg-primary hover:bg-primary-light text-white rounded-lg shadow-lg shadow-primary/30 transition-all cursor-pointer"
-            >
-              {ti({ en: "Create Online", vi: "Tạo Online" })}
+              {ti({ en: "Cancel", vi: "Hủy" })}
             </button>
           </div>
-          <button
-            onClick={onClose}
-            className="px-4 py-2 md:py-2.5 bg-white/5 hover:bg-white/10 text-text-secondary rounded-lg transition-colors cursor-pointer"
-          >
-            {ti({ en: "Cancel", vi: "Hủy" })}
-          </button>
         </div>
       </div>
-    </div>
-  );
-}
+    );
+  },
+);
 
-function JoinRoomModal({ onClose }: { onClose: () => void }) {
+const JoinRoomModal = memo(({ onClose }: { onClose: () => void }) => {
   const [roomId, setRoomId] = useState("");
   const [password, setPassword] = useState("");
   const navigate = useNavigate();
@@ -823,4 +842,4 @@ function JoinRoomModal({ onClose }: { onClose: () => void }) {
       </div>
     </div>
   );
-}
+});

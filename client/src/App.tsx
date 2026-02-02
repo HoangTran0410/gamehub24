@@ -9,13 +9,23 @@ import UsernameModal from "./components/UsernameModal";
 import Lobby from "./pages/Lobby";
 import Room from "./pages/Room";
 import GlobalChat from "./components/GlobalChat";
+import { useSettingsStore } from "./stores/settingsStore";
 
 export default function App() {
   const [isChecking, setIsChecking] = useState(true);
   const [isDuplicateTab, setIsDuplicateTab] = useState(false);
   const [showUsernameModal, setShowUsernameModal] = useState(false);
   const { username, setUsername, hasHydrated } = useUserStore();
+  const { enableGlassEffects } = useSettingsStore();
   const { ti } = useLanguage();
+
+  useEffect(() => {
+    if (enableGlassEffects) {
+      document.body.classList.remove("no-glass");
+    } else {
+      document.body.classList.add("no-glass");
+    }
+  }, [enableGlassEffects]);
 
   useEffect(() => {
     if (!hasHydrated) return;

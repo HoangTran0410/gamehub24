@@ -7,6 +7,7 @@ import {
   Save,
   Dices,
   X,
+  Zap,
 } from "lucide-react";
 import { useSocketStore } from "../stores/socketStore";
 import {
@@ -18,12 +19,22 @@ import {
 import useLanguage, { Language } from "../stores/languageStore";
 import { getServerUrl, setServerUrl } from "../services/socket";
 import { useAlertStore } from "../stores/alertStore";
+import { useSettingsStore } from "../stores/settingsStore";
 
 export default function SettingsModal({ onClose }: { onClose: () => void }) {
   const { isConnected } = useSocketStore();
   const { username, setUsername } = useUserStore();
   const { show: showAlert } = useAlertStore();
   const { ti, ts, language, setLanguage } = useLanguage();
+  const { enableGlassEffects, setEnableGlassEffects } = useSettingsStore();
+
+  useEffect(() => {
+    if (enableGlassEffects) {
+      document.body.classList.remove("no-glass");
+    } else {
+      document.body.classList.add("no-glass");
+    }
+  }, [enableGlassEffects]);
 
   const [url, setUrl] = useState(getServerUrl());
   const [newUsername, setNewUsername] = useState("");
@@ -215,6 +226,38 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
                   ? ti({ en: "Connected", vi: "Đã kết nối" })
                   : ti({ en: "Disconnected", vi: "Mất kết nối" })}
               </div>
+            </div>
+
+            {/* Performance - Glass Effects */}
+            <div className="bg-white/5 rounded-xl p-4 flex items-center justify-between">
+              <div className="flex flex-col">
+                <span className="text-sm font-medium text-text-primary">
+                  {ti({ en: "Hi-Quality UI", vi: "Giao diện chất lượng cao" })}
+                </span>
+                <span className="text-xs text-text-muted">
+                  {ti({
+                    en: "Glass effects (may be laggy on old PCs)",
+                    vi: "Hiệu ứng kính (gây lag trên máy yếu)",
+                  })}
+                </span>
+              </div>
+              <button
+                onClick={() => setEnableGlassEffects(!enableGlassEffects)}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all ${
+                  enableGlassEffects
+                    ? "bg-primary/20 border-primary/50 text-primary"
+                    : "bg-white/5 border-white/10 text-text-secondary"
+                }`}
+              >
+                <Zap
+                  className={`w-4 h-4 ${enableGlassEffects ? "fill-current" : ""}`}
+                />
+                <span className="text-xs font-bold">
+                  {enableGlassEffects
+                    ? ti({ en: "ON", vi: "BẬT" })
+                    : ti({ en: "OFF", vi: "TẮT" })}
+                </span>
+              </button>
             </div>
           </div>
 

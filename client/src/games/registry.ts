@@ -419,7 +419,7 @@ games.set("gunnywars", {
     vi: "Game bắn súng tọa độ. Căn góc và lực trúng mục tiêu!",
   },
   icon: Crosshair,
-  categories: ["strategy", "party"],
+  categories: ["gun", "strategy", "party"],
   minPlayers: 1,
   maxPlayers: 2,
   isAvailable: true,
