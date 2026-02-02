@@ -115,9 +115,10 @@ export interface FireShotData {
 
 // Player info
 export interface PlayerInfo {
-  id: string | null;
+  id: string | null; // unique bot ID or user ID
   username: string | null;
   tankId: string | null;
+  isBot?: boolean;
 }
 
 export interface TerrainModification {
@@ -150,6 +151,7 @@ export interface GunnyWarsState {
   terrainSeed: number; // For synchronized terrain generation
   terrainMods: TerrainModification[];
   isSimulating: boolean;
+  isExploration?: boolean;
 }
 
 // Socket Actions
@@ -165,4 +167,5 @@ export type GunnyWarsAction =
   | { type: "RESET_GAME" }
   | { type: "REGENERATE_MAP"; seed: number }
   | { type: "ADD_BOT" }
-  | { type: "REMOVE_BOT" };
+  | { type: "REMOVE_BOT" }
+  | { type: "START_EXPLORATION" };

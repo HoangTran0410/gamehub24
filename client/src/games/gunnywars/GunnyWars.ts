@@ -1348,25 +1348,48 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
   }
 
   private executeBotPlan(bot: Tank): void {
+    // Capture botState locally for this specific execution to avoid conflicts between multiple bots
+    const plan = {
+      moveTimer: this.botState.moveTimer,
+      moveDir: this.botState.moveDir,
+      aimTimer: this.botState.aimTimer,
+      targetAngle: this.botState.targetAngle,
+      targetPower: this.botState.targetPower,
+      targetWeapon: this.botState.targetWeapon,
+    };
+
     // Set movement flags at start (if bot needs to move)
-    if (this.botState.moveTimer > 0 && !bot.isMoving) {
+    if (plan.moveTimer > 0 && !bot.isMoving) {
       bot.isMoving = true;
-      bot.moveDir = this.botState.moveDir; // Safe: moveDir is -1 or 1 here
-      if (this.botState.moveDir === -1) {
+      bot.moveDir = plan.moveDir;
+      if (plan.moveDir === -1) {
         bot.angle = Math.max(90, Math.min(180, bot.angle));
       } else {
         bot.angle = Math.max(0, Math.min(90, bot.angle));
       }
     }
 
-    const step = () => {
-      console.log("step");
+    const botId = bot.id;
+    const botPlayerId = bot.playerId;
 
-      // Move phase - done locally by UI/game loop
-      if (this.botState.moveTimer > 0) {
-        this.botState.moveTimer--;
-        if (this.botState.moveTimer <= 0) {
-          // Movement finished - clear flag, position already updated by local sim
+    const step = () => {
+      // Check if it's still THIS bot's turn
+      const currentTank = this.state.tanks[this.state.currentTurnIndex];
+      if (
+        !currentTank ||
+        currentTank.id !== botId ||
+        this.state.phase !== GamePhase.AIMING
+      ) {
+        // Turn changed prematurely or game phase changed, abort bot execution
+        bot.isMoving = false;
+        bot.moveDir = undefined;
+        return;
+      }
+
+      // Move phase
+      if (plan.moveTimer > 0) {
+        plan.moveTimer--;
+        if (plan.moveTimer <= 0) {
           bot.isMoving = false;
           bot.moveDir = undefined;
         }
@@ -1375,25 +1398,25 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
       }
 
       // Aim phase
-      if (this.botState.aimTimer > 0) {
-        bot.weapon = this.botState.targetWeapon;
+      if (plan.aimTimer > 0) {
+        bot.weapon = plan.targetWeapon;
 
         // Faster interpolation
-        const angDiff = this.botState.targetAngle - bot.angle;
+        const angDiff = plan.targetAngle - bot.angle;
         bot.angle += angDiff * 0.4;
 
-        const pwrDiff = this.botState.targetPower - bot.power;
+        const pwrDiff = plan.targetPower - bot.power;
         bot.power += pwrDiff * 0.4;
 
-        this.botState.aimTimer--;
+        plan.aimTimer--;
         requestAnimationFrame(step);
         return;
       }
 
       // Fire!
-      bot.angle = this.botState.targetAngle;
-      bot.power = this.botState.targetPower;
-      this.handleFire(bot.playerId || "BOT");
+      bot.angle = plan.targetAngle;
+      bot.power = plan.targetPower;
+      this.handleFire(botPlayerId || "BOT");
     };
 
     requestAnimationFrame(step);
@@ -1424,9 +1447,9 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
 
       return {
         id: tankId,
-        name: player.username || (player.id === "BOT" ? "Bot" : "Player"),
+        name: player.username || (player.isBot ? "Bot" : "Player"),
         playerId: player.id,
-        isBot: player.id === "BOT",
+        isBot: !!player.isBot,
         x,
         y,
         angle: 45,
@@ -1467,10 +1490,13 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
   addBot(): void {
     if (!this.isHost) return;
     if (this.state.phase !== GamePhase.WAITING) return;
+    const botCount = this.state.players.filter((p) => p.isBot).length;
+    const botId = `BOT_${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
     this.state.players.push({
-      id: "BOT",
-      username: `Bot ${this.state.players.filter((p) => p.id === "BOT").length + 1}`,
+      id: botId,
+      username: `Bot ${botCount + 1}`,
       tankId: null,
+      isBot: true,
     });
   }
 
@@ -1479,7 +1505,7 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
     if (this.state.phase !== GamePhase.WAITING) return;
     const lastBotIndex = [...this.state.players]
       .reverse()
-      .findIndex((p) => p.id === "BOT");
+      .findIndex((p) => p.isBot);
     if (lastBotIndex !== -1) {
       const actualIndex = this.state.players.length - 1 - lastBotIndex;
       this.state.players.splice(actualIndex, 1);

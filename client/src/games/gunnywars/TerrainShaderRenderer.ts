@@ -108,10 +108,10 @@ int getBiomeIndex(float x) {
   // Sample at the center of each 256-pixel chunk
   float chunkX = floor(x / 256.0) * 256.0 + 128.0;
   float biomeNoise = fbm1D(chunkX * BIOME_SCALE, u_seed, 2);
-  if (biomeNoise < 0.2) return 2; // Valley
-  if (biomeNoise < 0.4) return 0; // Plains
-  if (biomeNoise < 0.6) return 1; // Mountains
-  if (biomeNoise < 0.8) return 3; // Desert
+  if (biomeNoise < 0.15) return 2; // Valley
+  if (biomeNoise < 0.30) return 0; // Plains
+  if (biomeNoise < 0.45) return 1; // Mountains
+  if (biomeNoise < 0.60) return 3; // Desert
   return 4; // Tundra
 }
 
@@ -123,9 +123,9 @@ float computeBaseHeight(float x) {
   float f3 = 0.02;
 
   // Amplitudes
-  float a1 = 200.0;
-  float a2 = 50.0;
-  float a3 = 10.0;
+  float a1 = 300.0;
+  float a2 = 80.0;
+  float a3 = 20.0;
 
   // Noise from sine waves
   float terrainNoise =
@@ -134,7 +134,7 @@ float computeBaseHeight(float x) {
     sin((x + u_seed * 3.0) * f3) * a3;
 
   // Mountain features
-  float mountain = sin((x / u_worldSize.x) * 3.14159265 * 5.0 + u_seed) * -120.0;
+  float mountain = sin((x / u_worldSize.x) * 3.14159265 * 5.0 + u_seed) * -200.0;
 
   float y = u_worldSize.y / 1.6 + terrainNoise + mountain;
 
@@ -236,8 +236,8 @@ vec4 getCloud(vec2 uv, float layer) {
 
 // === Weather Particles (snow, sand) ===
 float weatherParticle(vec2 screenPos, vec2 cameraPos, float particleSize, float fallSpeed, float drift) {
-  // Create grid of potential particle positions
-  vec2 uv = screenPos / particleSize;
+  // Use a mix of screen and camera position for parallax effect
+  vec2 uv = (screenPos + vec2(cameraPos.x, -cameraPos.y) * 0.4 * u_zoom) / particleSize;
   vec2 cellId = floor(uv);
   vec2 cellUV = fract(uv);
 
@@ -249,24 +249,25 @@ float weatherParticle(vec2 screenPos, vec2 cameraPos, float particleSize, float 
       vec2 id = cellId + neighbor;
 
       // Random offset within cell
-      float randX = hash1D(id.x * 0.1, id.y * 0.2); // Better hash for grid
+      float randX = hash1D(id.x * 0.1, id.y * 0.2);
       float randY = hash1D(id.y * 0.3, id.x * 0.4);
       float randPresent = hash1D(id.x, id.y + 200.0);
 
-      // Only some cells have particles
-      if (randPresent < 0.2) {
-        // Particle position with falling animation (simulated with camera Y + time)
+      if (randPresent < 0.25) {
         vec2 particlePos = neighbor + vec2(randX * 0.8 + 0.1, randY * 0.8 + 0.1);
 
-        // Add falling motion based on camera position + time for desert animation
-        float timeScale = (drift > 0.5) ? u_time * 0.002 : 0.0; // Only Desert (drift=0.8) animate significantly with time
-        particlePos.y += fract(cameraPos.y * fallSpeed * 0.01 + randY * 10.0 + timeScale * 0.5);
-        particlePos.x += sin(cameraPos.y * drift * 0.005 + randX * 6.28 + timeScale) * 0.4;
+        // Slowed down falling motion (0.0006 instead of 0.001)
+        float timeScale = u_time * 0.0006;
+        float progress = fract(randY * 10.0 - timeScale * fallSpeed * 10.0);
+        particlePos.y += progress;
+        particlePos.x += sin(u_time * 0.0005 * drift * 5.0 + randX * 6.28) * 0.4;
+
+        // Vertical fade to avoid "jumping" or "jitter" at cell boundaries
+        float verticalFade = smoothstep(0.0, 0.2, progress) * smoothstep(1.0, 0.7, progress);
 
         float d = length(cellUV - particlePos);
-        // Bigger snow/sand particles
-        float size = 0.08 + randX * 0.12;
-        particles += smoothstep(size, size * 0.5, d);
+        float size = 0.04 + randX * 0.08;
+        particles += smoothstep(size, size * 0.5, d) * verticalFade;
       }
     }
   }
@@ -361,7 +362,7 @@ vec4 getDecorationColor(float worldX, float worldY, float baseH, int biomeIdx) {
     if (biomeIdx == 0 || biomeIdx == 2 || biomeIdx == 4) {
       float trunkW = 4.0;
       float trunkH = 40.0 + cellRand * 30.0;
-      if (biomeIdx == 4) trunkH *= 0.7;
+      if (biomeIdx == 4) trunkH *= 1.5; // Increased from 0.7 to 1.5
 
       // Trunk
       if (abs(dx) < trunkW && dy < 0.0 && dy > -trunkH) {
@@ -371,7 +372,7 @@ vec4 getDecorationColor(float worldX, float worldY, float baseH, int biomeIdx) {
       // Foliage
       float leafY = dy + trunkH * 0.9;
       if (biomeIdx == 4) { // Pine shape for Tundra
-        float pineW = (dy + trunkH) * 0.4;
+        float pineW = (dy + trunkH) * 0.5; // Increased width factor to 0.5
         if (abs(dx) < pineW && dy < 0.0 && dy > -trunkH * 1.1) {
           float noiseVal = noise(vec2(worldX * 0.2, worldY * 0.2));
           vec3 leafColor = mix(vec3(0.1, 0.2, 0.15), vec3(0.8, 0.85, 0.9), step(0.6, noiseVal));
@@ -544,14 +545,12 @@ void main() {
 
     // Tundra - falling snow
     if (skyBiomeIdx == 4) {
-      // Increased particleSize from 20 to 35
-      float snow = weatherParticle(screenPos, u_cameraPos, 35.0, 0.5, 0.3);
+      float snow = weatherParticle(screenPos, u_cameraPos, 20.0, 0.6, 0.2);
       skyColor = mix(skyColor, vec3(1.0), snow * 0.8);
     }
     // Desert - blowing sand/dust
     else if (skyBiomeIdx == 3) {
-      // Increased particleSize from 30 to 45
-      float sand = weatherParticle(screenPos, u_cameraPos, 45.0, 0.2, 0.8);
+      float sand = weatherParticle(screenPos, u_cameraPos, 25.0, 0.3, 0.7);
       skyColor = mix(skyColor, vec3(0.9, 0.8, 0.6), sand * 0.3);
     }
 

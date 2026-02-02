@@ -31,6 +31,7 @@ import type { GameUIProps } from "../types";
 import useLanguage from "../../stores/languageStore";
 import { formatNumber } from "../../utils";
 import useGameState from "../../hooks/useGameState";
+import { useAlertStore } from "../../stores/alertStore";
 
 // Star type for background
 interface Star {
@@ -62,6 +63,7 @@ let fpsTimer = 0;
 export default function GunnyWarsUI({ game: baseGame }: GameUIProps) {
   const game = baseGame as unknown as GunnyWars;
   const { ts, ti } = useLanguage();
+  const { confirm: showConfirm } = useAlertStore();
 
   // UI state
   const [state] = useGameState(game);
@@ -258,8 +260,8 @@ export default function GunnyWarsUI({ game: baseGame }: GameUIProps) {
         cameraRef.current.vy *= 0.95;
 
         // Stop if too slow
-        if (Math.abs(cameraRef.current.vx) < 0.1) cameraRef.current.vx = 0;
-        if (Math.abs(cameraRef.current.vy) < 0.1) cameraRef.current.vy = 0;
+        // if (Math.abs(cameraRef.current.vx) < 0.1) cameraRef.current.vx = 0;
+        // if (Math.abs(cameraRef.current.vy) < 0.1) cameraRef.current.vy = 0;
 
         // Reset velocity if too much time passed since last move (flick prevention if held still)
         // const timeSinceLastMove = performance.now() - dragRef.current.lastTime;
@@ -1168,7 +1170,7 @@ export default function GunnyWarsUI({ game: baseGame }: GameUIProps) {
                 key={(p.id || "bot") + index}
                 className="flex items-center gap-3 p-3 bg-gray-800 rounded-lg"
               >
-                {p.id === "BOT" ? (
+                {p.isBot ? (
                   <Bot size={18} className="text-red-400" />
                 ) : (
                   <User
@@ -1186,7 +1188,7 @@ export default function GunnyWarsUI({ game: baseGame }: GameUIProps) {
                     {ts({ en: "Host", vi: "Chủ phòng" })}
                   </span>
                 )}
-                {p.id === "BOT" && game.isHost && (
+                {p.isBot && game.isHost && (
                   <button
                     onClick={() => game.requestRemoveBot()}
                     className="ml-auto text-red-400 hover:text-red-300 transition-colors p-2 bg-red-400/20 rounded-lg"
@@ -1276,13 +1278,29 @@ export default function GunnyWarsUI({ game: baseGame }: GameUIProps) {
         {/* Zoom Controls & Fullscreen */}
         <div className="absolute bottom-4 right-4 flex flex-row gap-1 z-20 opacity-30 hover:opacity-100 transition-all duration-300">
           {/* Regenerate Map */}
-          <button
-            onClick={() => game.requestRegenerateMap()}
-            className="bg-purple-800/80 hover:bg-purple-700 p-2 rounded-full border border-purple-600 text-purple-200 shadow-lg backdrop-blur-sm transition-transform active:scale-95"
-            title="Regenerate Map"
-          >
-            <RotateCw size={18} />
-          </button>
+          {game.isHost && (
+            <button
+              onClick={async () => {
+                if (
+                  await showConfirm(
+                    ts({
+                      en: "Map will be randomly regenerated",
+                      vi: "Bản đồ sẽ được tạo mới ngẫu nhiên",
+                    }),
+                    ts({
+                      en: "Regenerate map?",
+                      vi: "Tạo map mới?",
+                    }),
+                  )
+                )
+                  game.requestRegenerateMap();
+              }}
+              className="bg-purple-800/80 hover:bg-purple-700 p-2 rounded-full border border-purple-600 text-purple-200 shadow-lg backdrop-blur-sm transition-transform active:scale-95"
+              title="Regenerate Map"
+            >
+              <RotateCw size={18} />
+            </button>
+          )}
           {/* GPU/CPU Toggle */}
           <button
             onClick={() => setForceGpuRender(!forceGpuRender)}
@@ -1351,21 +1369,38 @@ export default function GunnyWarsUI({ game: baseGame }: GameUIProps) {
           {/* Row 1: Turn/Fuel + Movement + Fire */}
           <div className="grid grid-cols-12 gap-2 @md:gap-4 items-stretch">
             {/* Status Panel */}
-            <div className="col-span-12 @md:col-span-3 bg-gray-800/50 rounded-lg p-2 border border-gray-700 flex items-center justify-center gap-2">
+            <div
+              className="col-span-12 @md:col-span-3 bg-gray-800/50 rounded-lg p-2 border border-gray-700 flex items-center justify-center gap-2 cursor-pointer hover:bg-gray-700/50 transition-colors"
+              onClick={() => {
+                if (currentTank) {
+                  focusedTankIdRef.current = currentTank.id;
+                  cameraRef.current.mode = "FOLLOW_TANK";
+                }
+              }}
+            >
               {/* Turn */}
               <div className="flex items-center gap-2">
                 {currentTank?.isBot ? (
-                  <Bot size={18} className="text-red-400" />
+                  <Bot
+                    size={18}
+                    style={{ color: currentTank?.color || "#f87171" }}
+                  />
                 ) : (
                   <User
                     size={18}
-                    className={isMyTurn ? "text-blue-400" : "text-red-400"}
+                    style={{
+                      color:
+                        currentTank?.color ||
+                        (isMyTurn ? "#60a5fa" : "#f87171"),
+                    }}
                   />
                 )}
                 <span
-                  className={`font-bold uppercase tracking-wider text-xs @md:text-sm ${
-                    isMyTurn ? "text-blue-400" : "text-red-400"
-                  }`}
+                  className="font-bold uppercase tracking-wider text-xs @md:text-sm"
+                  style={{
+                    color:
+                      currentTank?.color || (isMyTurn ? "#60a5fa" : "#f87171"),
+                  }}
                 >
                   {state.players.find((p) => p.tankId === currentTank?.id)
                     ?.username ||

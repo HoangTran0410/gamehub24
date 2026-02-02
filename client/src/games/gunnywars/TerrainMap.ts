@@ -60,11 +60,11 @@ export function getBiomeIndex(x: number, seed: number): number {
   const biomeNoise = fbm(x * BIOME_SCALE, seed, 2);
 
   // Map noise value (0-1) to biome index (0-4)
-  if (biomeNoise < 0.2) return 2; // Valley
-  if (biomeNoise < 0.4) return 0; // Plains
-  if (biomeNoise < 0.6) return 1; // Mountains
-  if (biomeNoise < 0.8) return 3; // Desert
-  return 4; // Tundra
+  if (biomeNoise < 0.15) return 2; // Valley (15%)
+  if (biomeNoise < 0.3) return 0; // Plains (15%)
+  if (biomeNoise < 0.45) return 1; // Mountains (15%)
+  if (biomeNoise < 0.6) return 3; // Desert (15%)
+  return 4; // Tundra (40%)
 }
 
 /**
@@ -99,9 +99,9 @@ export function calculateBaseHeight(x: number, seed: number): number {
   const f3 = 0.02;
 
   // Amplitudes
-  const a1 = 200;
-  const a2 = 50;
-  const a3 = 10;
+  const a1 = 300; // Was 200
+  const a2 = 80; // Was 50
+  const a3 = 20; // Was 10
 
   // Noise from sine waves
   const noise =
@@ -110,7 +110,7 @@ export function calculateBaseHeight(x: number, seed: number): number {
     Math.sin((x + seed * 3) * f3) * a3;
 
   // Mountain features
-  const mountain = Math.sin((x / width) * Math.PI * 5 + seed) * -120;
+  const mountain = Math.sin((x / width) * Math.PI * 5 + seed) * -200; // Was -120
 
   let y = height / 1.6 + noise + mountain;
 

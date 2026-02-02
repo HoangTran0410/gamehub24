@@ -1,7 +1,7 @@
 import { type Weapon, WeaponType } from "./types";
 
 // World Dimensions (Large Map)
-export const WORLD_WIDTH = 15000;
+export const WORLD_WIDTH = 30000;
 export const WORLD_HEIGHT = 1000;
 
 // Biome System
