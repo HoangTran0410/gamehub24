@@ -5,6 +5,8 @@ import cors from "cors";
 import dotenv from "dotenv";
 import { v4 as uuidv4 } from "uuid";
 import { RoomManager } from "./RoomManager";
+import { statsManager } from "./StatsManager";
+import { calculateSize, formatSize, log } from "./utils";
 import type { ChatMessage, CreateRoomData, JoinRoomData } from "./types";
 
 dotenv.config();
@@ -43,6 +45,12 @@ const spamMap = new Map<string, { count: number; lastMessageTime: number }>();
 const SPAM_WINDOW_MS = 5000;
 const MAX_MESSAGES_PER_WINDOW = 5;
 
+function trackDataStats(roomId: string, size: number) {
+  const room = roomManager.getRoom(roomId);
+  if (!room || !room.gameType) return;
+  statsManager.trackDataTransfer(room.gameType, size);
+}
+
 // Cleanup spam map every 10 minutes to prevent memory leaks
 setInterval(
   () => {
@@ -68,18 +76,6 @@ function formatUpTime(diff: number) {
   return `${days}d ${hoursRemainder}h ${minutesRemainder}m ${secondsRemainder}s`;
 }
 
-function log(...args: any[]) {
-  const now = new Date();
-
-  // This automatically calculates the offset for Vietnam (ICT)
-  const vietnamTime = now.toLocaleString("vi-VN", {
-    timeZone: "Asia/Ho_Chi_Minh",
-    hour12: false, // Use 24-hour format if preferred
-  });
-
-  console.log(`[${vietnamTime}]`, ...args);
-}
-
 // Health check endpoint
 app.get("/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
@@ -92,14 +88,29 @@ app.get("/stats", (req, res) => {
     (acc, room) => acc + room.players.length,
     0,
   );
-  const stats = {
+  const stats = statsManager.getStats();
+  const dataTransfer = Object.entries(stats.dataTransfer).reduce(
+    (acc, [key, value]) => {
+      acc[key] = {
+        value,
+        formatted: formatSize(value),
+      };
+      return acc;
+    },
+    {} as Record<string, { value: number; formatted: string }>,
+  );
+  const result = {
     online: io.engine.clientsCount,
     rooms: rooms.length,
     players: playersInRooms,
     startTime: new Date(START_TIME).toISOString(),
     uptime: formatUpTime(Date.now() - START_TIME),
+    stats: {
+      ...stats,
+      dataTransfer,
+    },
   };
-  res.json(stats);
+  res.json(result);
 });
 
 // Socket.IO connection handler
@@ -139,7 +150,13 @@ io.on("connection", (socket: Socket) => {
       const room = roomManager.createRoom(data, userId, username, socket.id);
       socket.join(room.id);
 
-      log(`📦 Room created: ${room.name} (${room.id}) by ${username}`);
+      log(
+        `📦 Room created: ${room.name} (${room.id}) (game: ${data.gameType}) by ${username}`,
+      );
+
+      if (data.gameType) {
+        statsManager.trackPlay(data.gameType);
+      }
 
       callback?.({ success: true, room });
 
@@ -309,6 +326,9 @@ io.on("connection", (socket: Socket) => {
 
       // Update game type if provided
       if (data.gameType) {
+        if (room.gameType !== data.gameType) {
+          statsManager.trackPlay(data.gameType);
+        }
         room.gameType = data.gameType;
         log(`🔄 Room ${room.name} game changed to: ${data.gameType}`);
 
@@ -493,25 +513,31 @@ io.on("connection", (socket: Socket) => {
 
   // Relay game actions
   socket.on("game:action", (data: { roomId: string; action: any }) => {
-    log(`game:action ${userId} -> ${data.roomId}: ${JSON.stringify(data)}`);
+    const { json, size } = calculateSize(data);
+    log(
+      `game:action ${userId} -> ${data.roomId} (${(size / 1024).toFixed(2)} KB) ${json}\n\n`,
+    );
+    trackDataStats(data.roomId, size);
     socket.to(data.roomId).emit("game:action", data);
   });
 
   // Relay game state
   socket.on("game:state", (data: { roomId: string; state: any }) => {
-    const json = JSON.stringify(data);
+    const { json, size } = calculateSize(data);
     log(
-      `game:state ${userId} -> ${data.roomId} (${(json.length / 1024).toFixed(2)} KB) ${json}\n\n`,
+      `game:state ${userId} -> ${data.roomId} (${(size / 1024).toFixed(2)} KB) ${json}\n\n`,
     );
+    trackDataStats(data.roomId, size);
     socket.to(data.roomId).emit("game:state", data);
   });
 
   // Relay game state patch
   socket.on("game:state:patch", (data: { roomId: string; patch: any }) => {
-    const json = JSON.stringify(data);
+    const { json, size } = calculateSize(data);
     log(
-      `game:state:patch ${userId} -> ${data.roomId} (${(json.length / 1024).toFixed(2)} KB) ${json}\n\n`,
+      `game:state:patch ${userId} -> ${data.roomId} (${(size / 1024).toFixed(2)} KB) ${json}\n\n`,
     );
+    trackDataStats(data.roomId, size);
     socket.to(data.roomId).emit("game:state:patch", data);
   });
 
@@ -538,11 +564,12 @@ io.on("connection", (socket: Socket) => {
       state: any;
       version: number;
     }) => {
-      const json = JSON.stringify(data);
+      const { json, size } = calculateSize(data);
 
       log(
-        `game:state:direct ${data.roomId} -> ${data.targetUser || data.targetSocketId} (${(json.length / 1024).toFixed(2)} KB) ${json}\n\n`,
+        `game:state:direct ${data.roomId} -> ${data.targetUser || data.targetSocketId} (${(size / 1024).toFixed(2)} KB) ${json}\n\n`,
       );
+      trackDataStats(data.roomId, size);
       io.to(data.targetSocketId).emit("game:state", {
         roomId: data.roomId,
         state: data.state,

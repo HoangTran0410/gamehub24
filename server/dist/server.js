@@ -10,6 +10,8 @@ const cors_1 = __importDefault(require("cors"));
 const dotenv_1 = __importDefault(require("dotenv"));
 const uuid_1 = require("uuid");
 const RoomManager_1 = require("./RoomManager");
+const StatsManager_1 = require("./StatsManager");
+const utils_1 = require("./utils");
 dotenv_1.default.config();
 const PORT = process.env.PORT || 3001;
 const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:5173";
@@ -40,6 +42,12 @@ const globalChatHistory = [];
 const spamMap = new Map();
 const SPAM_WINDOW_MS = 5000;
 const MAX_MESSAGES_PER_WINDOW = 5;
+function trackDataStats(roomId, size) {
+    const room = roomManager.getRoom(roomId);
+    if (!room || !room.gameType)
+        return;
+    StatsManager_1.statsManager.trackDataTransfer(room.gameType, size);
+}
 // Cleanup spam map every 10 minutes to prevent memory leaks
 setInterval(() => {
     const now = Date.now();
@@ -60,15 +68,6 @@ function formatUpTime(diff) {
     const secondsRemainder = seconds % 60;
     return `${days}d ${hoursRemainder}h ${minutesRemainder}m ${secondsRemainder}s`;
 }
-function log(...args) {
-    const now = new Date();
-    // This automatically calculates the offset for Vietnam (ICT)
-    const vietnamTime = now.toLocaleString("vi-VN", {
-        timeZone: "Asia/Ho_Chi_Minh",
-        hour12: false, // Use 24-hour format if preferred
-    });
-    console.log(`[${vietnamTime}]`, ...args);
-}
 // Health check endpoint
 app.get("/health", (req, res) => {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
@@ -77,26 +76,38 @@ app.get("/health", (req, res) => {
 app.get("/stats", (req, res) => {
     const rooms = roomManager.getPublicRooms();
     const playersInRooms = rooms.reduce((acc, room) => acc + room.players.length, 0);
-    const stats = {
+    const stats = StatsManager_1.statsManager.getStats();
+    const dataTransfer = Object.entries(stats.dataTransfer).reduce((acc, [key, value]) => {
+        acc[key] = {
+            value,
+            formatted: (0, utils_1.formatSize)(value),
+        };
+        return acc;
+    }, {});
+    const result = {
         online: io.engine.clientsCount,
         rooms: rooms.length,
         players: playersInRooms,
         startTime: new Date(START_TIME).toISOString(),
         uptime: formatUpTime(Date.now() - START_TIME),
+        stats: {
+            ...stats,
+            dataTransfer,
+        },
     };
-    res.json(stats);
+    res.json(result);
 });
 // Socket.IO connection handler
 io.on("connection", (socket) => {
     const { userId, username } = socket.handshake.auth;
-    log(`🟢 User connected: ${username} (${userId}) [${socket.id}]`);
+    (0, utils_1.log)(`🟢 User connected: ${username} (${userId}) [${socket.id}]`);
     // Update socket ID if user reconnects
     roomManager.updatePlayerSocketId(userId, socket.id);
     // Check if user is in a room and rejoin if necessary
     const currentRoom = roomManager.getRoomByUserId(userId);
     if (currentRoom) {
         socket.join(currentRoom.id);
-        log(`🔄 User ${username} rejoined room ${currentRoom.id} (socket updated)`);
+        (0, utils_1.log)(`🔄 User ${username} rejoined room ${currentRoom.id} (socket updated)`);
     }
     // heartbeat
     socket.on("heartbeat", () => { });
@@ -116,7 +127,10 @@ io.on("connection", (socket) => {
         try {
             const room = roomManager.createRoom(data, userId, username, socket.id);
             socket.join(room.id);
-            log(`📦 Room created: ${room.name} (${room.id}) by ${username}`);
+            (0, utils_1.log)(`📦 Room created: ${room.name} (${room.id}) (game: ${data.gameType}) by ${username}`);
+            if (data.gameType) {
+                StatsManager_1.statsManager.trackPlay(data.gameType);
+            }
             callback?.({ success: true, room });
             // Broadcast updated room list to all clients
             if (room.isPublic) {
@@ -148,11 +162,11 @@ io.on("connection", (socket) => {
                     maxPlayers: 10,
                 }, userId, username, socket.id, data.roomId);
                 result = { success: true, room };
-                log(`📦 Room auto-created: ${room.name} (${room.id}) by ${username} (using ${savedSettings ? "saved" : "default"} settings)`);
+                (0, utils_1.log)(`📦 Room auto-created: ${room.name} (${room.id}) by ${username} (using ${savedSettings ? "saved" : "default"} settings)`);
             }
             if (result.success && result.room) {
                 socket.join(result.room.id);
-                log(`👤 ${username} joined room: ${result.room.name}`);
+                (0, utils_1.log)(`👤 ${username} joined room: ${result.room.name}`);
                 // Send room data to joiner
                 callback?.({ success: true, room: result.room });
                 // Broadcast updated lists to room
@@ -193,7 +207,7 @@ io.on("connection", (socket) => {
             const result = roomManager.leaveRoom(userId);
             if (result.roomId) {
                 socket.leave(result.roomId);
-                log(`👋 ${username} left room: ${result.roomId}`);
+                (0, utils_1.log)(`👋 ${username} left room: ${result.roomId}`);
                 if (result.room) {
                     // Room still exists, broadcast updated lists
                     // io.to(result.roomId).emit("room:players", result.room.players);
@@ -213,7 +227,7 @@ io.on("connection", (socket) => {
                 }
                 else {
                     // Room was deleted, notify all
-                    log(`🗑️  Room deleted: ${result.roomId}`);
+                    (0, utils_1.log)(`🗑️  Room deleted: ${result.roomId}`);
                     // Remove chat history
                     chatHistory.delete(result.roomId);
                     if (result.wasHost) {
@@ -254,8 +268,11 @@ io.on("connection", (socket) => {
                 return;
             // Update game type if provided
             if (data.gameType) {
+                if (room.gameType !== data.gameType) {
+                    StatsManager_1.statsManager.trackPlay(data.gameType);
+                }
                 room.gameType = data.gameType;
-                log(`🔄 Room ${room.name} game changed to: ${data.gameType}`);
+                (0, utils_1.log)(`🔄 Room ${room.name} game changed to: ${data.gameType}`);
                 // Save updated settings
                 roomManager.saveRoomSettings(data.roomId, {
                     gameType: room.gameType,
@@ -407,24 +424,28 @@ io.on("connection", (socket) => {
     // GAME EVENTS (Pure relay)
     // Relay game actions
     socket.on("game:action", (data) => {
-        log(`game:action ${userId} -> ${data.roomId}: ${JSON.stringify(data)}`);
+        const { json, size } = (0, utils_1.calculateSize)(data);
+        (0, utils_1.log)(`game:action ${userId} -> ${data.roomId} (${(size / 1024).toFixed(2)} KB) ${json}\n\n`);
+        trackDataStats(data.roomId, size);
         socket.to(data.roomId).emit("game:action", data);
     });
     // Relay game state
     socket.on("game:state", (data) => {
-        const json = JSON.stringify(data);
-        log(`game:state ${userId} -> ${data.roomId} (${(json.length / 1024).toFixed(2)} KB) ${json}\n\n`);
+        const { json, size } = (0, utils_1.calculateSize)(data);
+        (0, utils_1.log)(`game:state ${userId} -> ${data.roomId} (${(size / 1024).toFixed(2)} KB) ${json}\n\n`);
+        trackDataStats(data.roomId, size);
         socket.to(data.roomId).emit("game:state", data);
     });
     // Relay game state patch
     socket.on("game:state:patch", (data) => {
-        const json = JSON.stringify(data);
-        log(`game:state:patch ${userId} -> ${data.roomId} (${(json.length / 1024).toFixed(2)} KB) ${json}\n\n`);
+        const { json, size } = (0, utils_1.calculateSize)(data);
+        (0, utils_1.log)(`game:state:patch ${userId} -> ${data.roomId} (${(size / 1024).toFixed(2)} KB) ${json}\n\n`);
+        trackDataStats(data.roomId, size);
         socket.to(data.roomId).emit("game:state:patch", data);
     });
     // Request sync (Relay to host, with requester socketId)
     socket.on("game:request_sync", (data) => {
-        log(`game:request_sync ${userId} -> ${data.roomId}`);
+        (0, utils_1.log)(`game:request_sync ${userId} -> ${data.roomId}`);
         // Determine host? The host is in the room.
         // Actually we can just broadcast to the room, the host will pick it up.
         // But we need to attach the requester's socket ID so the host knows who to reply to.
@@ -436,8 +457,9 @@ io.on("connection", (socket) => {
     });
     // Direct state sync (Host -> Specific User)
     socket.on("game:state:direct", (data) => {
-        const json = JSON.stringify(data);
-        log(`game:state:direct ${data.roomId} -> ${data.targetUser || data.targetSocketId} (${(json.length / 1024).toFixed(2)} KB) ${json}\n\n`);
+        const { json, size } = (0, utils_1.calculateSize)(data);
+        (0, utils_1.log)(`game:state:direct ${data.roomId} -> ${data.targetUser || data.targetSocketId} (${(size / 1024).toFixed(2)} KB) ${json}\n\n`);
+        trackDataStats(data.roomId, size);
         io.to(data.targetSocketId).emit("game:state", {
             roomId: data.roomId,
             state: data.state,
@@ -541,7 +563,7 @@ io.on("connection", (socket) => {
     });
     // DISCONNECT
     socket.on("disconnect", (reason) => {
-        log(`🔴 User disconnected: ${username} (${userId}) [${socket.id}]. Reason: ${reason}`);
+        (0, utils_1.log)(`🔴 User disconnected: ${username} (${userId}) [${socket.id}]. Reason: ${reason}`);
         // Handle room cleanup
         const result = roomManager.leaveRoom(userId);
         if (result.roomId) {
@@ -560,7 +582,7 @@ io.on("connection", (socket) => {
             }
             else {
                 // Room was deleted because host left/disconnected
-                log(`🗑️  Room deleted (host disconnected): ${result.roomId}`);
+                (0, utils_1.log)(`🗑️  Room deleted (host disconnected): ${result.roomId}`);
                 // Delete chat for room
                 chatHistory.delete(result.roomId);
                 if (result.wasHost) {
@@ -578,7 +600,7 @@ io.on("connection", (socket) => {
 });
 // Start server
 httpServer.listen(PORT, () => {
-    log(`
+    (0, utils_1.log)(`
   ╔═══════════════════════════════════════╗
   ║   🎮 Game Hub Server Running 🎮      ║
   ╠═══════════════════════════════════════╣
