@@ -6,9 +6,10 @@ import { useAlertStore } from "../stores/alertStore";
 import useLanguage from "../stores/languageStore";
 import { getSocket } from "../services/socket";
 import { getGame } from "./registry";
-import type { GameUIProps } from "./types";
 import { RotateCcw } from "lucide-react";
+import type { GameUIProps } from "./types";
 import type { BaseGame } from "./BaseGame";
+import { lastUpdatedTime } from "../constants";
 
 export default function GameContainer({
   onShowChangeGameModal,
@@ -108,26 +109,38 @@ export default function GameContainer({
             const savedItem = localStorage.getItem(key);
             if (savedItem) {
               const { state, timestamp } = JSON.parse(savedItem);
-              const dateStr = new Date(timestamp).toLocaleString();
 
-              const shouldRestore = await showConfirm(
-                ts({
-                  en: `Found unfinished game from ${dateStr}. Resume?`,
-                  vi: `Tìm thấy ván game chưa xong lúc ${dateStr}. Tiếp tục?`,
-                }),
-                ts({ en: "Resume Game", vi: "Tiếp tục game" }),
-              );
-
-              if (shouldRestore) {
-                game.setState(state);
-                // Sync current players to the restored state
-                game.updatePlayers(currentRoom.players);
-                // Ensure broadcast happens to sync all clients
-                // First time host enter room, no one here yet -> no need to broadcast
-                // game.broadcastState();
-              } else {
-                // User chose to start new, clear old state
+              // Check if saved state is outdated
+              if (
+                timestamp <
+                Math.max(gameModule.lastUpdatedTime || 0, lastUpdatedTime)
+              ) {
+                console.log(
+                  `State for ${gameType} is outdated. Removing saved state.`,
+                );
                 localStorage.removeItem(key);
+              } else {
+                const dateStr = new Date(timestamp).toLocaleString();
+
+                const shouldRestore = await showConfirm(
+                  ts({
+                    en: `Found unfinished game from ${dateStr}. Resume?`,
+                    vi: `Tìm thấy ván game chưa xong lúc ${dateStr}. Tiếp tục?`,
+                  }),
+                  ts({ en: "Resume Game", vi: "Tiếp tục game" }),
+                );
+
+                if (shouldRestore) {
+                  game.setState(state);
+                  // Sync current players to the restored state
+                  game.updatePlayers(currentRoom.players);
+                  // Ensure broadcast happens to sync all clients
+                  // First time host enter room, no one here yet -> no need to broadcast
+                  // game.broadcastState();
+                } else {
+                  // User chose to start new, clear old state
+                  localStorage.removeItem(key);
+                }
               }
             }
           } catch (e) {

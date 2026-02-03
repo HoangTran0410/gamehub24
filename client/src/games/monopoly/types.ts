@@ -1,28 +1,34 @@
 // === Cờ Tỷ Phú (Monopoly) Types ===
 
 // Property colors (8 color groups)
-export type PropertyColor =
-  | "brown"
-  | "lightblue"
-  | "pink"
-  | "orange"
-  | "red"
-  | "yellow"
-  | "green"
-  | "blue";
+// Property colors (8 color groups) as numeric enum
+export const PropertyColor = {
+  BROWN: 0,
+  LIGHTBLUE: 1,
+  PINK: 2,
+  ORANGE: 3,
+  RED: 4,
+  YELLOW: 5,
+  GREEN: 6,
+  BLUE: 7,
+} as const;
+export type PropertyColor = (typeof PropertyColor)[keyof typeof PropertyColor];
 
 // Types of board spaces
-export type SpaceType =
-  | "go"
-  | "property"
-  | "railroad"
-  | "utility"
-  | "tax"
-  | "chance"
-  | "chest"
-  | "jail"
-  | "parking"
-  | "gotojail";
+// Types of board spaces as numeric enum
+export const SpaceType = {
+  GO: 0,
+  PROPERTY: 1,
+  RAILROAD: 2,
+  UTILITY: 3,
+  TAX: 4,
+  CHANCE: 5,
+  CHEST: 6,
+  JAIL: 7,
+  PARKING: 8,
+  GOTOJAIL: 9,
+} as const;
+export type SpaceType = (typeof SpaceType)[keyof typeof SpaceType];
 
 // Board space interface
 // Base interface for all spaces
@@ -35,7 +41,7 @@ interface BaseSpace {
 
 // 1. Color Property
 export interface PropertySpace extends BaseSpace {
-  type: "property";
+  type: typeof SpaceType.PROPERTY;
   color: PropertyColor;
   price: number;
   rent: number[]; // [base, 1house, 2house, 3house, 4house, hotel]
@@ -44,27 +50,33 @@ export interface PropertySpace extends BaseSpace {
 
 // 2. Railroad
 export interface RailroadSpace extends BaseSpace {
-  type: "railroad";
+  type: typeof SpaceType.RAILROAD;
   price: number;
   baseRent: number;
 }
 
 // 3. Utility
 export interface UtilitySpace extends BaseSpace {
-  type: "utility";
+  type: typeof SpaceType.UTILITY;
   price: number;
   baseRent: number; // multiplier
 }
 
 // 4. Tax
 export interface TaxSpace extends BaseSpace {
-  type: "tax";
+  type: typeof SpaceType.TAX;
   taxAmount: number;
 }
 
 // 5. Action/Corner Spaces (Go, Jail, etc)
 export interface OtherSpace extends BaseSpace {
-  type: "go" | "chance" | "chest" | "jail" | "parking" | "gotojail";
+  type:
+    | typeof SpaceType.GO
+    | typeof SpaceType.CHANCE
+    | typeof SpaceType.CHEST
+    | typeof SpaceType.JAIL
+    | typeof SpaceType.PARKING
+    | typeof SpaceType.GOTOJAIL;
 }
 
 export type BoardSpace =
@@ -82,6 +94,13 @@ export interface OwnedProperty {
   mortgaged: boolean;
 }
 
+// Player flags bitfield
+export const PlayerFlag = {
+  IN_JAIL: 1 << 0,
+  BANKRUPT: 1 << 1,
+  BOT: 1 << 2,
+} as const;
+
 // Player interface
 export interface MonopolyPlayer {
   id: string | null;
@@ -89,11 +108,9 @@ export interface MonopolyPlayer {
   color: string; // Token color
   position: number; // 0-39
   money: number;
-  inJail: boolean;
   jailTurns: number;
-  isBankrupt: boolean;
-  isBot: boolean;
-  moneyHistory: Record<string, number>;
+  flags: number; // bitfield of PlayerFlag
+  moneyHistory: number[]; // Array of values (limit 50)
 }
 
 // Chance/Community Chest cards
@@ -114,11 +131,36 @@ export type CardAction =
   | { type: "COLLECT_FROM_EACH"; amount: number }
   | { type: "REPAIRS"; perHouse: number; perHotel: number };
 
+// Game phases as numeric enum
+export const GamePhase = {
+  WAITING: 0,
+  PLAYING: 1,
+  ENDED: 2,
+} as const;
+export type GamePhase = (typeof GamePhase)[keyof typeof GamePhase];
+
+// Log types as numeric enum
+export const LogType = {
+  INFO: 0,
+  ACTION: 1,
+  ALERT: 2,
+} as const;
+export type LogType = (typeof LogType)[keyof typeof LogType];
+
+// Trade status as numeric enum
+export const TradeStatus = {
+  PENDING: 0,
+  ACCEPTED: 1,
+  DECLINED: 2,
+  CANCELLED: 3,
+} as const;
+export type TradeStatus = (typeof TradeStatus)[keyof typeof TradeStatus];
+
 // Game Log interface
 export interface GameLog {
   id: string;
   message: string | { en: string; vi: string };
-  type: "info" | "action" | "alert";
+  type: LogType;
   timestamp: number;
 }
 
@@ -131,14 +173,14 @@ export interface MonopolyState {
   doublesCount: number; // Consecutive doubles rolled
   hasRolled: boolean;
   canRollAgain: boolean;
-  gamePhase: "waiting" | "playing" | "ended";
+  gamePhase: GamePhase;
   winner: string | null;
   pendingAction:
     | null
     | { type: "BUY_DECISION"; spaceId: number }
     | { type: "PAY_RENT"; amount: number; toPlayerId: string }
     | { type: "PAY_TAX"; amount: number }
-    | { type: "CARD"; card: Card };
+    | { type: "CARD"; cardId: number };
   lastAction: string | { en: string; vi: string } | null; // Description of last action for UI
   logs: Record<string, GameLog>;
   tradeOffers: TradeOffer[];
@@ -150,7 +192,7 @@ export interface TradeOffer {
   toPlayerId: string;
   propertyId: number; // Space ID
   price: number;
-  status: "pending" | "accepted" | "declined" | "cancelled";
+  status: TradeStatus;
   responseMessage?: { en: string; vi: string };
 }
 
@@ -296,7 +338,7 @@ export const BOARD_SPACES: BoardSpace[] = [
   {
     id: 0,
     name: { en: "GO", vi: "KHỞI HÀNH" },
-    type: "go",
+    type: SpaceType.GO,
     description: {
       en: "Passing here earns you " + SALARY,
       vi: "Đi qua đây bạn sẽ nhận được " + SALARY,
@@ -305,18 +347,22 @@ export const BOARD_SPACES: BoardSpace[] = [
   {
     id: 1,
     name: { en: "Hang Bai", vi: "Hàng Bài" },
-    type: "property",
-    color: "brown",
+    type: SpaceType.PROPERTY,
+    color: PropertyColor.BROWN,
     price: 600,
     rent: [20, 100, 300, 900, 1600, 2500],
     houseCost: 500,
   },
-  { id: 2, name: { en: "Community Chest", vi: "Cộng Đồng" }, type: "chest" },
+  {
+    id: 2,
+    name: { en: "Community Chest", vi: "Cộng Đồng" },
+    type: SpaceType.CHEST,
+  },
   {
     id: 3,
     name: { en: "Hang Dao", vi: "Hàng Đào" },
-    type: "property",
-    color: "brown",
+    type: SpaceType.PROPERTY,
+    color: PropertyColor.BROWN,
     price: 600,
     rent: [40, 200, 600, 1800, 3200, 4500],
     houseCost: 500,
@@ -324,31 +370,31 @@ export const BOARD_SPACES: BoardSpace[] = [
   {
     id: 4,
     name: { en: "Income Tax", vi: "Thuế Thu Nhập" },
-    type: "tax",
+    type: SpaceType.TAX,
     taxAmount: 2000,
   },
   {
     id: 5,
     name: { en: "Ga Ha Noi", vi: "Ga Hà Nội" },
-    type: "railroad",
+    type: SpaceType.RAILROAD,
     price: 2000,
     baseRent: 250,
   },
   {
     id: 6,
     name: { en: "Hang Gai", vi: "Hàng Gai" },
-    type: "property",
-    color: "lightblue",
+    type: SpaceType.PROPERTY,
+    color: PropertyColor.LIGHTBLUE,
     price: 1000,
     rent: [60, 300, 900, 2700, 4000, 5500],
     houseCost: 500,
   },
-  { id: 7, name: { en: "Chance", vi: "Cơ Hội" }, type: "chance" },
+  { id: 7, name: { en: "Chance", vi: "Cơ Hội" }, type: SpaceType.CHANCE },
   {
     id: 8,
     name: { en: "Hang Bong", vi: "Hàng Bông" },
-    type: "property",
-    color: "lightblue",
+    type: SpaceType.PROPERTY,
+    color: PropertyColor.LIGHTBLUE,
     price: 1000,
     rent: [60, 300, 900, 2700, 4000, 5500],
     houseCost: 500,
@@ -356,8 +402,8 @@ export const BOARD_SPACES: BoardSpace[] = [
   {
     id: 9,
     name: { en: "Hang Ma", vi: "Hàng Mã" },
-    type: "property",
-    color: "lightblue",
+    type: SpaceType.PROPERTY,
+    color: PropertyColor.LIGHTBLUE,
     price: 1200,
     rent: [80, 400, 1000, 3000, 4500, 6000],
     houseCost: 500,
@@ -366,7 +412,7 @@ export const BOARD_SPACES: BoardSpace[] = [
   {
     id: 10,
     name: { en: "Jail", vi: "Nhà Tù" },
-    type: "jail",
+    type: SpaceType.JAIL,
     description: {
       en:
         "If you pass it: Nothing happen.\nIf you are in jail: Pay " +
@@ -385,8 +431,8 @@ export const BOARD_SPACES: BoardSpace[] = [
   {
     id: 11,
     name: { en: "Pho Hue", vi: "Phố Huế" },
-    type: "property",
-    color: "pink",
+    type: SpaceType.PROPERTY,
+    color: PropertyColor.PINK,
     price: 1400,
     rent: [100, 500, 1500, 4500, 6250, 7500],
     houseCost: 1000,
@@ -394,15 +440,15 @@ export const BOARD_SPACES: BoardSpace[] = [
   {
     id: 12,
     name: { en: "Electric Company", vi: "Công Ty Điện" },
-    type: "utility",
+    type: SpaceType.UTILITY,
     price: 1500,
     baseRent: 40, // 4x or 10x dice roll
   },
   {
     id: 13,
     name: { en: "Ba Trieu", vi: "Bà Triệu" },
-    type: "property",
-    color: "pink",
+    type: SpaceType.PROPERTY,
+    color: PropertyColor.PINK,
     price: 1400,
     rent: [100, 500, 1500, 4500, 6250, 7500],
     houseCost: 1000,
@@ -410,8 +456,8 @@ export const BOARD_SPACES: BoardSpace[] = [
   {
     id: 14,
     name: { en: "Trang Tien", vi: "Tràng Tiền" },
-    type: "property",
-    color: "pink",
+    type: SpaceType.PROPERTY,
+    color: PropertyColor.PINK,
     price: 1600,
     rent: [120, 600, 1800, 5000, 7000, 9000],
     houseCost: 1000,
@@ -419,25 +465,29 @@ export const BOARD_SPACES: BoardSpace[] = [
   {
     id: 15,
     name: { en: "Ga Sai Gon", vi: "Ga Sài Gòn" },
-    type: "railroad",
+    type: SpaceType.RAILROAD,
     price: 2000,
     baseRent: 250,
   },
   {
     id: 16,
     name: { en: "Le Loi", vi: "Lê Lợi" },
-    type: "property",
-    color: "orange",
+    type: SpaceType.PROPERTY,
+    color: PropertyColor.ORANGE,
     price: 1800,
     rent: [140, 700, 2000, 5500, 7500, 9500],
     houseCost: 1000,
   },
-  { id: 17, name: { en: "Community Chest", vi: "Cộng Đồng" }, type: "chest" },
+  {
+    id: 17,
+    name: { en: "Community Chest", vi: "Cộng Đồng" },
+    type: SpaceType.CHEST,
+  },
   {
     id: 18,
     name: { en: "Ham Nghi", vi: "Hàm Nghi" },
-    type: "property",
-    color: "orange",
+    type: SpaceType.PROPERTY,
+    color: PropertyColor.ORANGE,
     price: 1800,
     rent: [140, 700, 2000, 5500, 7500, 9500],
     houseCost: 1000,
@@ -445,8 +495,8 @@ export const BOARD_SPACES: BoardSpace[] = [
   {
     id: 19,
     name: { en: "Nguyen Hue", vi: "Nguyễn Huệ" },
-    type: "property",
-    color: "orange",
+    type: SpaceType.PROPERTY,
+    color: PropertyColor.ORANGE,
     price: 2000,
     rent: [160, 800, 2200, 6000, 8000, 10000],
     houseCost: 1000,
@@ -459,23 +509,23 @@ export const BOARD_SPACES: BoardSpace[] = [
       en: "Nothing happens here.",
       vi: "Chỉ là chỗ nghỉ, không có tác dụng",
     },
-    type: "parking",
+    type: SpaceType.PARKING,
   },
   {
     id: 21,
     name: { en: "Dong Khoi", vi: "Đồng Khởi" },
-    type: "property",
-    color: "red",
+    type: SpaceType.PROPERTY,
+    color: PropertyColor.RED,
     price: 2200,
     rent: [180, 900, 2500, 7000, 8750, 10500],
     houseCost: 1500,
   },
-  { id: 22, name: { en: "Chance", vi: "Cơ Hội" }, type: "chance" },
+  { id: 22, name: { en: "Chance", vi: "Cơ Hội" }, type: SpaceType.CHANCE },
   {
     id: 23,
     name: { en: "Le Thanh Ton", vi: "Lê Thánh Tôn" },
-    type: "property",
-    color: "red",
+    type: SpaceType.PROPERTY,
+    color: PropertyColor.RED,
     price: 2200,
     rent: [180, 900, 2500, 7000, 8750, 10500],
     houseCost: 1500,
@@ -483,8 +533,8 @@ export const BOARD_SPACES: BoardSpace[] = [
   {
     id: 24,
     name: { en: "Hai Ba Trung", vi: "Hai Bà Trưng" },
-    type: "property",
-    color: "red",
+    type: SpaceType.PROPERTY,
+    color: PropertyColor.RED,
     price: 2400,
     rent: [200, 1000, 3000, 7500, 9250, 11000],
     houseCost: 1500,
@@ -492,15 +542,15 @@ export const BOARD_SPACES: BoardSpace[] = [
   {
     id: 25,
     name: { en: "Ga Da Nang", vi: "Ga Đà Nẵng" },
-    type: "railroad",
+    type: SpaceType.RAILROAD,
     price: 2000,
     baseRent: 250,
   },
   {
     id: 26,
     name: { en: "Phan Boi Chau", vi: "Phan Bội Châu" },
-    type: "property",
-    color: "yellow",
+    type: SpaceType.PROPERTY,
+    color: PropertyColor.YELLOW,
     price: 2600,
     rent: [220, 1100, 3300, 8000, 9750, 11500],
     houseCost: 1500,
@@ -508,8 +558,8 @@ export const BOARD_SPACES: BoardSpace[] = [
   {
     id: 27,
     name: { en: "Phan Chu Trinh", vi: "Phan Chu Trinh" },
-    type: "property",
-    color: "yellow",
+    type: SpaceType.PROPERTY,
+    color: PropertyColor.YELLOW,
     price: 2600,
     rent: [220, 1100, 3300, 8000, 9750, 11500],
     houseCost: 1500,
@@ -517,15 +567,15 @@ export const BOARD_SPACES: BoardSpace[] = [
   {
     id: 28,
     name: { en: "Water Works", vi: "Công Ty Nước" },
-    type: "utility",
+    type: SpaceType.UTILITY,
     price: 1500,
     baseRent: 40,
   },
   {
     id: 29,
     name: { en: "Ly Thai To", vi: "Lý Thái Tổ" },
-    type: "property",
-    color: "yellow",
+    type: SpaceType.PROPERTY,
+    color: PropertyColor.YELLOW,
     price: 2800,
     rent: [240, 1200, 3600, 8500, 10250, 12000],
     houseCost: 1500,
@@ -534,7 +584,7 @@ export const BOARD_SPACES: BoardSpace[] = [
   {
     id: 30,
     name: { en: "Go To Jail", vi: "Vào Tù" },
-    type: "gotojail",
+    type: SpaceType.GOTOJAIL,
     description: {
       en: "Move to Jail cell",
       vi: "Được chuyển đến ô Nhà Tù",
@@ -543,8 +593,8 @@ export const BOARD_SPACES: BoardSpace[] = [
   {
     id: 31,
     name: { en: "Tran Hung Dao", vi: "Trần Hưng Đạo" },
-    type: "property",
-    color: "green",
+    type: SpaceType.PROPERTY,
+    color: PropertyColor.GREEN,
     price: 3000,
     rent: [260, 1300, 3900, 9000, 11000, 12750],
     houseCost: 2000,
@@ -552,18 +602,22 @@ export const BOARD_SPACES: BoardSpace[] = [
   {
     id: 32,
     name: { en: "Dien Bien Phu", vi: "Điện Biên Phủ" },
-    type: "property",
-    color: "green",
+    type: SpaceType.PROPERTY,
+    color: PropertyColor.GREEN,
     price: 3000,
     rent: [260, 1300, 3900, 9000, 11000, 12750],
     houseCost: 2000,
   },
-  { id: 33, name: { en: "Community Chest", vi: "Cộng Đồng" }, type: "chest" },
+  {
+    id: 33,
+    name: { en: "Community Chest", vi: "Cộng Đồng" },
+    type: SpaceType.CHEST,
+  },
   {
     id: 34,
     name: { en: "Le Duan", vi: "Lê Duẩn" },
-    type: "property",
-    color: "green",
+    type: SpaceType.PROPERTY,
+    color: PropertyColor.GREEN,
     price: 3200,
     rent: [280, 1500, 4500, 10000, 12000, 14000],
     houseCost: 2000,
@@ -571,16 +625,16 @@ export const BOARD_SPACES: BoardSpace[] = [
   {
     id: 35,
     name: { en: "Ga Hue", vi: "Ga Huế" },
-    type: "railroad",
+    type: SpaceType.RAILROAD,
     price: 2000,
     baseRent: 250,
   },
-  { id: 36, name: { en: "Chance", vi: "Cơ Hội" }, type: "chance" },
+  { id: 36, name: { en: "Chance", vi: "Cơ Hội" }, type: SpaceType.CHANCE },
   {
     id: 37,
     name: { en: "Phu My Hung", vi: "Phú Mỹ Hưng" },
-    type: "property",
-    color: "blue",
+    type: SpaceType.PROPERTY,
+    color: PropertyColor.BLUE,
     price: 3500,
     rent: [350, 1750, 5000, 11000, 13000, 15000],
     houseCost: 2000,
@@ -588,30 +642,30 @@ export const BOARD_SPACES: BoardSpace[] = [
   {
     id: 38,
     name: { en: "Luxury Tax", vi: "Thuế Xa Xỉ" },
-    type: "tax",
+    type: SpaceType.TAX,
     taxAmount: 1000,
   },
   {
     id: 39,
     name: { en: "Thu Thiem", vi: "Thủ Thiêm" },
-    type: "property",
-    color: "blue",
+    type: SpaceType.PROPERTY,
+    color: PropertyColor.BLUE,
     price: 4000,
     rent: [500, 2000, 6000, 14000, 17000, 20000],
     houseCost: 2000,
   },
 ];
 
-// Property color display colors
-export const PROPERTY_COLORS: Record<PropertyColor, string> = {
-  brown: "#8B4513",
-  lightblue: "#87CEEB",
-  pink: "#FF69B4",
-  orange: "#FFA500",
-  red: "#FF0000",
-  yellow: "#FFD700",
-  green: "#228B22",
-  blue: "#0000CD",
+// Property color display colors (internal mapping)
+export const PROPERTY_COLORS_MAP: Record<PropertyColor, string> = {
+  [PropertyColor.BROWN]: "#8B4513",
+  [PropertyColor.LIGHTBLUE]: "#87CEEB",
+  [PropertyColor.PINK]: "#FF69B4",
+  [PropertyColor.ORANGE]: "#FFA500",
+  [PropertyColor.RED]: "#FF0000",
+  [PropertyColor.YELLOW]: "#FFD700",
+  [PropertyColor.GREEN]: "#228B22",
+  [PropertyColor.BLUE]: "#0000CD",
 };
 
 // Chance cards

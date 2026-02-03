@@ -5,17 +5,36 @@ import {
   type LudoPlayer,
   type Token,
   type TokenPosition,
-  type PlayerColor,
+  PlayerColor,
+  LudoGamePhase,
+  LudoPlayerFlag,
+  TOKEN_POS,
   BOARD_SIZE,
   FINISH_LANE_SIZE,
   TOKENS_PER_PLAYER,
   START_POSITIONS,
   SAFE_POSITIONS,
 } from "./types";
+import { hasFlag } from "../../utils";
 
 // Player colors in clockwise order matching board layout:
 // Red (top-left) → Green (top-right) → Yellow (bottom-right) → Blue (bottom-left)
-const PLAYER_COLORS: PlayerColor[] = ["red", "green", "yellow", "blue"];
+const PLAYER_COLORS: PlayerColor[] = [
+  PlayerColor.RED,
+  PlayerColor.GREEN,
+  PlayerColor.YELLOW,
+  PlayerColor.BLUE,
+];
+
+export const isHome = (pos: TokenPosition) =>
+  pos >= TOKEN_POS.HOME_BASE && pos < TOKEN_POS.FINISH_LANE;
+export const isBoard = (pos: TokenPosition) =>
+  pos >= 0 && pos < TOKEN_POS.HOME_BASE;
+export const isFinishLane = (pos: TokenPosition) =>
+  pos >= TOKEN_POS.FINISH_LANE && pos < TOKEN_POS.FINISHED;
+export const isFinished = (pos: TokenPosition) => pos === TOKEN_POS.FINISHED;
+export const getFinishLanePos = (pos: TokenPosition) =>
+  pos - TOKEN_POS.FINISH_LANE;
 
 export default class Ludo extends BaseGame<LudoState> {
   getInitState(): LudoState {
@@ -24,15 +43,14 @@ export default class Ludo extends BaseGame<LudoState> {
         id: this.players[index]?.id || null,
         username: this.players[index]?.username || `Player ${index + 1}`,
         color,
-        isBot: false,
+        flags: 0,
         tokens: this.createInitialTokens(),
-        hasFinished: false,
       })),
       currentPlayerIndex: 0,
       diceValue: null,
       hasRolled: false,
       canRollAgain: false,
-      gamePhase: "waiting",
+      gamePhase: LudoGamePhase.WAITING,
       winner: null,
       lastMove: null,
       consecutiveSixes: 0,
@@ -44,7 +62,7 @@ export default class Ludo extends BaseGame<LudoState> {
       .fill(null)
       .map((_, i) => ({
         id: i,
-        position: { type: "home" as const, index: i },
+        position: TOKEN_POS.HOME_BASE + i,
       }));
   }
 
@@ -77,7 +95,7 @@ export default class Ludo extends BaseGame<LudoState> {
   // ============== Game Logic ==============
 
   private handleStartGame(): void {
-    if (this.state.gamePhase !== "waiting") return;
+    if (this.state.gamePhase !== LudoGamePhase.WAITING) return;
 
     // Count active players (at least 2 required)
     const activePlayers = this.state.players.filter((p) => p.id !== null);
@@ -86,10 +104,10 @@ export default class Ludo extends BaseGame<LudoState> {
     // Reset all tokens to home
     this.state.players.forEach((player) => {
       player.tokens = this.createInitialTokens();
-      player.hasFinished = false;
+      player.flags &= ~LudoPlayerFlag.FINISHED;
     });
 
-    this.state.gamePhase = "playing";
+    this.state.gamePhase = LudoGamePhase.PLAYING;
     this.state.currentPlayerIndex = this.findFirstActivePlayer();
     this.state.diceValue = null;
     this.state.hasRolled = false;
@@ -109,7 +127,7 @@ export default class Ludo extends BaseGame<LudoState> {
   }
 
   private handleRollDice(playerId: string): void {
-    if (this.state.gamePhase !== "playing") return;
+    if (this.state.gamePhase !== LudoGamePhase.PLAYING) return;
 
     const currentPlayer = this.state.players[this.state.currentPlayerIndex];
     if (currentPlayer.id !== playerId) return;
@@ -159,7 +177,10 @@ export default class Ludo extends BaseGame<LudoState> {
 
         this.checkBotTurn();
       }, 3000);
-    } else if (movableTokens.length === 1 && !currentPlayer.isBot) {
+    } else if (
+      movableTokens.length === 1 &&
+      !hasFlag(currentPlayer.flags, LudoPlayerFlag.BOT)
+    ) {
       // Only 1 movable token - auto move after a short delay for dice animation
       setTimeout(() => {
         this.handleMoveToken(playerId, movableTokens[0].id);
@@ -170,7 +191,7 @@ export default class Ludo extends BaseGame<LudoState> {
   }
 
   private handleMoveToken(playerId: string, tokenId: number): void {
-    if (this.state.gamePhase !== "playing") return;
+    if (this.state.gamePhase !== LudoGamePhase.PLAYING) return;
     if (this.state.diceValue === null) return;
 
     const currentPlayer = this.state.players[this.state.currentPlayerIndex];
@@ -185,13 +206,13 @@ export default class Ludo extends BaseGame<LudoState> {
       currentPlayer.color,
       dice,
     );
-    if (!newPosition) return;
+    if (newPosition === null) return;
 
     // Save last move
     this.state.lastMove = {
       playerId,
       tokenId,
-      from: { ...token.position } as TokenPosition,
+      from: token.position,
       to: newPosition,
     };
 
@@ -199,17 +220,17 @@ export default class Ludo extends BaseGame<LudoState> {
     token.position = newPosition;
 
     // Check for capture
-    if (newPosition.type === "board") {
-      this.checkCapture(currentPlayer.color, newPosition.position);
+    if (isBoard(newPosition)) {
+      this.checkCapture(currentPlayer.color, newPosition);
     }
 
     // Check if token finished
-    if (newPosition.type === "finished") {
+    if (isFinished(newPosition)) {
       // Check if all tokens finished
-      if (currentPlayer.tokens.every((t) => t.position.type === "finished")) {
-        currentPlayer.hasFinished = true;
+      if (currentPlayer.tokens.every((t) => isFinished(t.position))) {
+        currentPlayer.flags |= LudoPlayerFlag.FINISHED;
         this.state.winner = playerId;
-        this.state.gamePhase = "ended";
+        this.state.gamePhase = LudoGamePhase.ENDED;
         this.clearSavedState();
 
         return;
@@ -243,16 +264,15 @@ export default class Ludo extends BaseGame<LudoState> {
     const pos = token.position;
     const startPos = START_POSITIONS[color];
 
-    if (pos.type === "home") {
+    if (isHome(pos)) {
       // Can only leave home with a 6
       if (dice !== 6) return null;
-      return { type: "board", position: startPos };
+      return startPos;
     }
 
-    if (pos.type === "board") {
+    if (isBoard(pos)) {
       // Calculate steps around the board
-      let newPos = pos.position;
-      let stepsToFinish = this.getStepsToFinishEntry(pos.position, color);
+      const stepsToFinish = this.getStepsToFinishEntry(pos, color);
 
       if (stepsToFinish < dice) {
         // Would enter finish lane
@@ -261,28 +281,29 @@ export default class Ludo extends BaseGame<LudoState> {
           return null; // Would overshoot
         }
         if (finishPos === FINISH_LANE_SIZE - 1) {
-          return { type: "finished" };
+          return TOKEN_POS.FINISHED;
         }
-        return { type: "finish", position: finishPos };
+        return TOKEN_POS.FINISH_LANE + finishPos;
       } else if (stepsToFinish === dice) {
         // Exactly at finish entry, go to finish lane
-        return { type: "finish", position: 0 };
+        return TOKEN_POS.FINISH_LANE;
       } else {
         // Normal move around board
-        newPos = (pos.position + dice) % BOARD_SIZE;
-        return { type: "board", position: newPos };
+        const newPos = (pos + dice) % BOARD_SIZE;
+        return newPos;
       }
     }
 
-    if (pos.type === "finish") {
-      const newFinishPos = pos.position + dice;
+    if (isFinishLane(pos)) {
+      const currentFinishPos = getFinishLanePos(pos);
+      const newFinishPos = currentFinishPos + dice;
       if (newFinishPos > FINISH_LANE_SIZE - 1) {
         return null; // Would overshoot
       }
       if (newFinishPos === FINISH_LANE_SIZE - 1) {
-        return { type: "finished" };
+        return TOKEN_POS.FINISHED;
       }
-      return { type: "finish", position: newFinishPos };
+      return TOKEN_POS.FINISH_LANE + newFinishPos;
     }
 
     return null;
@@ -307,15 +328,12 @@ export default class Ludo extends BaseGame<LudoState> {
       if (player.color === currentColor) continue;
 
       for (const token of player.tokens) {
-        if (
-          token.position.type === "board" &&
-          token.position.position === boardPosition
-        ) {
+        if (isBoard(token.position) && token.position === boardPosition) {
           // Send token back to home
-          const homeIndex = player.tokens.filter(
-            (t) => t.position.type === "home",
+          const homeIndex = player.tokens.filter((t) =>
+            isHome(t.position),
           ).length;
-          token.position = { type: "home", index: homeIndex };
+          token.position = TOKEN_POS.HOME_BASE + homeIndex;
         }
       }
     }
@@ -333,7 +351,7 @@ export default class Ludo extends BaseGame<LudoState> {
       nextIndex = (nextIndex + 1) % this.state.players.length;
     } while (
       this.state.players[nextIndex].id === null ||
-      this.state.players[nextIndex].hasFinished
+      hasFlag(this.state.players[nextIndex].flags, LudoPlayerFlag.FINISHED)
     );
 
     this.state.currentPlayerIndex = nextIndex;
@@ -346,7 +364,7 @@ export default class Ludo extends BaseGame<LudoState> {
   private hasAnyTokenOnBoard(player: LudoPlayer): boolean {
     if (player.id === null) return false;
     for (const token of player.tokens) {
-      if (token.position.type === "board" || token.position.type === "finish") {
+      if (isBoard(token.position) || isFinishLane(token.position)) {
         return true;
       }
     }
@@ -356,39 +374,40 @@ export default class Ludo extends BaseGame<LudoState> {
   // ============== Bot AI ==============
 
   private handleAddBot(slotIndex: number): void {
-    if (this.state.gamePhase !== "waiting") return;
+    if (this.state.gamePhase !== LudoGamePhase.WAITING) return;
     if (slotIndex < 0 || slotIndex >= 4) return;
     if (this.state.players[slotIndex].id !== null) return;
 
     const player = this.state.players[slotIndex];
     player.id = `BOT_${Date.now()}_${slotIndex}`;
     player.username = `Bot ${slotIndex + 1}`;
-    player.isBot = true;
+    player.flags |= LudoPlayerFlag.BOT;
   }
 
   private handleRemoveBot(slotIndex: number): void {
-    if (this.state.gamePhase !== "waiting") return;
+    if (this.state.gamePhase !== LudoGamePhase.WAITING) return;
     if (slotIndex < 0 || slotIndex >= 4) return;
-    if (!this.state.players[slotIndex].isBot) return;
+    if (!hasFlag(this.state.players[slotIndex].flags, LudoPlayerFlag.BOT))
+      return;
 
     const player = this.state.players[slotIndex];
     player.id = null;
     player.username = `Player ${slotIndex + 1}`;
-    player.isBot = false;
+    player.flags &= ~LudoPlayerFlag.BOT;
   }
 
   private checkBotTurn(): void {
     if (!this.isHost) return;
-    if (this.state.gamePhase !== "playing") return;
+    if (this.state.gamePhase !== LudoGamePhase.PLAYING) return;
 
     const currentPlayer = this.state.players[this.state.currentPlayerIndex];
-    if (currentPlayer.isBot && currentPlayer.id) {
+    if (hasFlag(currentPlayer.flags, LudoPlayerFlag.BOT) && currentPlayer.id) {
       setTimeout(() => this.executeBotTurn(currentPlayer.id!), 800);
     }
   }
 
   private executeBotTurn(botId: string): void {
-    if (this.state.gamePhase !== "playing") return;
+    if (this.state.gamePhase !== LudoGamePhase.PLAYING) return;
 
     const currentPlayer = this.state.players[this.state.currentPlayerIndex];
     if (currentPlayer.id !== botId) return;
@@ -430,7 +449,7 @@ export default class Ludo extends BaseGame<LudoState> {
 
     for (const token of tokens) {
       const newPos = this.calculateNewPosition(token, player.color, dice);
-      if (newPos?.type === "finished") {
+      if (newPos !== null && isFinished(newPos)) {
         return token;
       }
     }
@@ -439,17 +458,18 @@ export default class Ludo extends BaseGame<LudoState> {
     for (const token of tokens) {
       const newPos = this.calculateNewPosition(token, player.color, dice);
       if (
-        newPos?.type === "board" &&
-        !SAFE_POSITIONS.includes(newPos.position)
+        newPos !== null &&
+        isBoard(newPos) &&
+        !SAFE_POSITIONS.includes(newPos)
       ) {
-        if (this.canCaptureAt(player.color, newPos.position)) {
+        if (this.canCaptureAt(player.color, newPos)) {
           return token;
         }
       }
     }
 
     // Prefer moving from home
-    const homeToken = tokens.find((t) => t.position.type === "home");
+    const homeToken = tokens.find((t) => isHome(t.position));
     if (homeToken && dice === 6) {
       return homeToken;
     }
@@ -466,10 +486,7 @@ export default class Ludo extends BaseGame<LudoState> {
     for (const player of this.state.players) {
       if (player.color === currentColor) continue;
       for (const token of player.tokens) {
-        if (
-          token.position.type === "board" &&
-          token.position.position === position
-        ) {
+        if (isBoard(token.position) && token.position === position) {
           return true;
         }
       }
@@ -479,15 +496,15 @@ export default class Ludo extends BaseGame<LudoState> {
 
   private getTokenProgress(token: Token, color: PlayerColor): number {
     const pos = token.position;
-    if (pos.type === "home") return 0;
-    if (pos.type === "finished") return BOARD_SIZE + FINISH_LANE_SIZE + 1;
-    if (pos.type === "finish") return BOARD_SIZE + pos.position;
-    if (pos.type === "board") {
+    if (isHome(pos)) return 0;
+    if (isFinished(pos)) return BOARD_SIZE + FINISH_LANE_SIZE + 1;
+    if (isFinishLane(pos)) return BOARD_SIZE + getFinishLanePos(pos);
+    if (isBoard(pos)) {
       const startPos = START_POSITIONS[color];
-      if (pos.position >= startPos) {
-        return pos.position - startPos;
+      if (pos >= startPos) {
+        return pos - startPos;
       }
-      return BOARD_SIZE - startPos + pos.position;
+      return BOARD_SIZE - startPos + pos;
     }
     return 0;
   }
@@ -531,24 +548,24 @@ export default class Ludo extends BaseGame<LudoState> {
   reset(): void {
     this.state.players.forEach((p) => {
       p.tokens = this.createInitialTokens();
-      p.hasFinished = false;
+      p.flags &= ~LudoPlayerFlag.FINISHED;
     });
     this.state.currentPlayerIndex = 0;
     this.state.diceValue = null;
     this.state.hasRolled = false;
     this.state.canRollAgain = false;
-    this.state.gamePhase = "waiting";
+    this.state.gamePhase = LudoGamePhase.WAITING;
     this.state.winner = null;
     this.state.lastMove = null;
     this.state.consecutiveSixes = 0;
   }
 
   updatePlayers(players: { id: string; username: string }[]): void {
-    if (this.state.gamePhase !== "waiting") return;
+    if (this.state.gamePhase !== LudoGamePhase.WAITING) return;
 
     // Reset non-bot slots
     this.state.players.forEach((p, i) => {
-      if (!p.isBot) {
+      if (!hasFlag(p.flags, LudoPlayerFlag.BOT)) {
         p.id = null;
         p.username = `Player ${i + 1}`;
       }
@@ -556,7 +573,7 @@ export default class Ludo extends BaseGame<LudoState> {
 
     let playerIndex = 0;
     for (let i = 0; i < 4; i++) {
-      if (!this.state.players[i].isBot) {
+      if (!hasFlag(this.state.players[i].flags, LudoPlayerFlag.BOT)) {
         if (playerIndex < players.length) {
           this.state.players[i].id = players[playerIndex].id;
           this.state.players[i].username = players[playerIndex].username;

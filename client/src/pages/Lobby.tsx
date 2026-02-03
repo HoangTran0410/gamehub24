@@ -353,7 +353,8 @@ const GameCard = memo(
       <div
         className={`glass-card rounded-2xl p-4 md:p-6 hover:border-primary/30 transition-all duration-200 ${
           !game.isAvailable ? "opacity-50" : ""
-        } relative group flex flex-col will-change-transform`}
+        } relative group flex flex-col will-change-transform hover:scale-[1.02] cursor-pointer`}
+        onClick={() => onSelect(game.id)}
       >
         <button
           onClick={(e) => onToggleFavorite(game.id, e)}

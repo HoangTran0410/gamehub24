@@ -1,17 +1,27 @@
-// Cell types
-export type Cell = null | "red" | "yellow";
+import type { Player } from "../../stores/roomStore";
 
 // Player info
-export interface Connect4Player {
+export const Connect4PlayerColor = {
+  RED: 0,
+  YELLOW: 1,
+} as const;
+export type Connect4PlayerColor =
+  (typeof Connect4PlayerColor)[keyof typeof Connect4PlayerColor];
+
+export const Connect4PlayerFlag = {
+  BOT: 1 << 0,
+} as const;
+export type Connect4PlayerFlag =
+  (typeof Connect4PlayerFlag)[keyof typeof Connect4PlayerFlag];
+
+export interface Connect4Player extends Omit<Player, "id"> {
   id: string | null;
-  username: string;
-  color: "red" | "yellow";
-  isBot: boolean;
+  flags: number;
 }
 
-// Move history for undo
+// Move history for undo (Host-only)
 export interface MoveHistory {
-  board: Cell[][];
+  b: string; // encoded board
   currentPlayerIndex: number;
 }
 
@@ -21,17 +31,24 @@ export interface UndoRequest {
   fromName: string;
 }
 
+export const Connect4GamePhase = {
+  WAITING: 0,
+  PLAYING: 1,
+  ENDED: 2,
+} as const;
+export type Connect4GamePhase =
+  (typeof Connect4GamePhase)[keyof typeof Connect4GamePhase];
+
 // Main game state
 export interface Connect4State {
-  board: Cell[][]; // 6 rows x 7 columns
-  players: [Connect4Player, Connect4Player]; // Always 2 players
+  board: string; // 6 rows x 7 cols = 42 chars (0: empty, 1: red, 2: yellow)
+  players: [Connect4Player, Connect4Player];
   currentPlayerIndex: number; // 0 or 1
   winner: string | null;
-  gamePhase: "waiting" | "playing" | "ended";
+  gamePhase: Connect4GamePhase;
   undoRequest: UndoRequest | null;
-  moveHistory: Record<string, MoveHistory>;
-  lastMove: { row: number; col: number } | null;
-  winningCells: { row: number; col: number }[]; // Cells forming the winning line
+  lastMove: number | null; // Encoded coordinate: row * 7 + col
+  winningCells: number[]; // Encoded coordinates
 }
 
 // Constants

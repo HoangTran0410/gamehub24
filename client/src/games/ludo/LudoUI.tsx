@@ -1,41 +1,53 @@
 import { useEffect, useState, useRef } from "react";
-import Ludo from "./Ludo";
-import type { Token, PlayerColor, TokenPosition } from "./types";
-import { SAFE_POSITIONS } from "./types";
+import Ludo, {
+  getFinishLanePos,
+  isBoard,
+  isFinished,
+  isFinishLane,
+  isHome,
+} from "./Ludo";
+import type { Token, TokenPosition } from "./types";
+import {
+  SAFE_POSITIONS,
+  PlayerColor,
+  LudoGamePhase,
+  LudoPlayerFlag,
+} from "./types";
 import { Play, RefreshCw, Dices, BookOpen, X } from "lucide-react";
 import { useAlertStore } from "../../stores/alertStore";
 import type { GameUIProps } from "../types";
 import useLanguage from "../../stores/languageStore";
 import { createPortal } from "react-dom";
 import useGameState from "../../hooks/useGameState";
+import { hasFlag } from "../../utils";
 
 // Color mappings for CSS
 const COLOR_CLASSES: Record<
-  PlayerColor,
+  number,
   { bg: string; light: string; ring: string; fill: string; text: string }
 > = {
-  red: {
+  [PlayerColor.RED]: {
     bg: "bg-red-500",
     light: "bg-red-200",
     ring: "ring-red-400",
     fill: "#ef4444",
     text: "text-red-500",
   },
-  blue: {
+  [PlayerColor.BLUE]: {
     bg: "bg-blue-500",
     light: "bg-blue-200",
     ring: "ring-blue-400",
     fill: "#3b82f6",
     text: "text-blue-500",
   },
-  green: {
+  [PlayerColor.GREEN]: {
     bg: "bg-green-500",
     light: "bg-green-200",
     ring: "ring-green-400",
     fill: "#22c55e",
     text: "text-green-500",
   },
-  yellow: {
+  [PlayerColor.YELLOW]: {
     bg: "bg-yellow-400",
     light: "bg-yellow-200",
     ring: "ring-yellow-400",
@@ -45,10 +57,10 @@ const COLOR_CLASSES: Record<
 };
 
 const COLORS = {
-  red: "#ef444444",
-  blue: "#3b82f644",
-  green: "#22c55e44",
-  yellow: "#eab30844",
+  [PlayerColor.RED]: "#ef444444",
+  [PlayerColor.BLUE]: "#3b82f644",
+  [PlayerColor.GREEN]: "#22c55e44",
+  [PlayerColor.YELLOW]: "#eab30844",
   stroke: "#0002",
   base: "#fff1",
   cell: "#4b5563",
@@ -127,7 +139,7 @@ export default function LudoUI({ game: baseGame, currentUserId }: GameUIProps) {
             setShowingResult(true);
 
             // Hide result after 2 seconds
-            setTimeout(() => setShowingResult(false), 2000);
+            setTimeout(() => setShowingResult(false), 1000);
           }
         }, 80);
 
@@ -160,8 +172,8 @@ export default function LudoUI({ game: baseGame, currentUserId }: GameUIProps) {
   const hasMovableTokens =
     state.diceValue !== null &&
     state.players[state.currentPlayerIndex]?.tokens.some((token) => {
-      if (token.position.type === "home") return state.diceValue === 6;
-      if (token.position.type === "finished") return false;
+      if (isHome(token.position)) return state.diceValue === 6;
+      if (isFinished(token.position)) return false;
       return true; // tokens on board or in finish lane can potentially move
     });
 
@@ -191,18 +203,10 @@ export default function LudoUI({ game: baseGame, currentUserId }: GameUIProps) {
 
     const tokensAtSamePosition = myPlayer.tokens.filter((t) => {
       if (!game.isTokenMovable(t.id)) return false;
-      // Check if same position type and value
-      if (t.position.type !== token.position.type) return false;
-      if (t.position.type === "board" && token.position.type === "board") {
-        return t.position.position === token.position.position;
-      }
-      if (t.position.type === "home" && token.position.type === "home") {
-        return false; // All home tokens share the home base
-      }
-      if (t.position.type === "finish" && token.position.type === "finish") {
-        return t.position.position === token.position.position;
-      }
-      return false;
+      // Check if same position
+      if (t.position !== token.position) return false;
+      if (isHome(t.position)) return false; // All home tokens share the home base
+      return true;
     });
 
     if (tokensAtSamePosition.length > 1) {
@@ -235,13 +239,13 @@ export default function LudoUI({ game: baseGame, currentUserId }: GameUIProps) {
     color: PlayerColor,
     tokenIndex: number,
   ): { x: number; y: number } | null => {
-    if (pos.type === "home") {
+    if (isHome(pos)) {
       // Home tokens in 4 corners, 2x2 grid inside the home base
-      const homeOffsets: Record<PlayerColor, { x: number; y: number }> = {
-        red: { x: 3, y: 3 }, // Top-left corner
-        green: { x: 12, y: 3 }, // Top-right corner
-        yellow: { x: 12, y: 12 }, // Bottom-right corner
-        blue: { x: 3, y: 12 }, // Bottom-left corner
+      const homeOffsets: Record<number, { x: number; y: number }> = {
+        [PlayerColor.RED]: { x: 3, y: 3 }, // Top-left corner
+        [PlayerColor.GREEN]: { x: 12, y: 3 }, // Top-right corner
+        [PlayerColor.YELLOW]: { x: 12, y: 12 }, // Bottom-right corner
+        [PlayerColor.BLUE]: { x: 3, y: 12 }, // Bottom-left corner
       };
       const base = homeOffsets[color];
       const offset = [
@@ -253,35 +257,35 @@ export default function LudoUI({ game: baseGame, currentUserId }: GameUIProps) {
       return { x: base.x + offset.dx, y: base.y + offset.dy };
     }
 
-    if (pos.type === "board") {
-      return getBoardPosition(pos.position);
+    if (isBoard(pos)) {
+      return getBoardPosition(pos);
     }
 
-    if (pos.type === "finish") {
+    if (isFinishLane(pos)) {
       // Finish lanes (home run) - 5 cells leading to center
-      const finishPaths: Record<PlayerColor, { x: number; y: number }[]> = {
-        red: [
+      const finishPaths: Record<number, { x: number; y: number }[]> = {
+        [PlayerColor.RED]: [
           { x: 1.5, y: 7.5 },
           { x: 2.5, y: 7.5 },
           { x: 3.5, y: 7.5 },
           { x: 4.5, y: 7.5 },
           { x: 5.5, y: 7.5 },
         ],
-        green: [
+        [PlayerColor.GREEN]: [
           { x: 7.5, y: 1.5 },
           { x: 7.5, y: 2.5 },
           { x: 7.5, y: 3.5 },
           { x: 7.5, y: 4.5 },
           { x: 7.5, y: 5.5 },
         ],
-        yellow: [
+        [PlayerColor.YELLOW]: [
           { x: 13.5, y: 7.5 },
           { x: 12.5, y: 7.5 },
           { x: 11.5, y: 7.5 },
           { x: 10.5, y: 7.5 },
           { x: 9.5, y: 7.5 },
         ],
-        blue: [
+        [PlayerColor.BLUE]: [
           { x: 7.5, y: 13.5 },
           { x: 7.5, y: 12.5 },
           { x: 7.5, y: 11.5 },
@@ -289,10 +293,10 @@ export default function LudoUI({ game: baseGame, currentUserId }: GameUIProps) {
           { x: 7.5, y: 9.5 },
         ],
       };
-      return finishPaths[color][pos.position] || { x: 7.5, y: 7.5 };
+      return finishPaths[color][getFinishLanePos(pos)] || { x: 7.5, y: 7.5 };
     }
 
-    if (pos.type === "finished") {
+    if (isFinished(pos)) {
       return { x: 7.5, y: 7.5 }; // Center of board
     }
 
@@ -486,14 +490,16 @@ export default function LudoUI({ game: baseGame, currentUserId }: GameUIProps) {
     color: PlayerColor,
   ): { x: string; y: string } => {
     switch (color) {
-      case "red":
+      case PlayerColor.RED:
         return { x: "20%", y: "3%" }; // Top-left corner
-      case "green":
+      case PlayerColor.GREEN:
         return { x: "80%", y: "3%" }; // Top-right corner
-      case "yellow":
+      case PlayerColor.YELLOW:
         return { x: "80%", y: "97%" }; // Bottom-right corner
-      case "blue":
+      case PlayerColor.BLUE:
         return { x: "20%", y: "97%" }; // Bottom-left corner
+      default:
+        return { x: "0%", y: "0%" };
     }
   };
 
@@ -631,7 +637,7 @@ export default function LudoUI({ game: baseGame, currentUserId }: GameUIProps) {
         </div>
       )}
       {/* Turn & Dice Display */}
-      {state.gamePhase === "playing" && (
+      {state.gamePhase === LudoGamePhase.PLAYING && (
         <div className="flex flex-col items-center gap-3">
           <div className="text-lg text-gray-400">
             {isMyTurn ? (
@@ -642,7 +648,9 @@ export default function LudoUI({ game: baseGame, currentUserId }: GameUIProps) {
               <span>
                 {ti({ en: "Waiting for", vi: "Đợi" })}{" "}
                 <span
-                  className={COLOR_CLASSES[currentPlayer?.color || "red"].text}
+                  className={
+                    COLOR_CLASSES[currentPlayer?.color ?? PlayerColor.RED].text
+                  }
                 >
                   {currentPlayer?.username}
                 </span>
@@ -684,7 +692,7 @@ export default function LudoUI({ game: baseGame, currentUserId }: GameUIProps) {
       )}
 
       {/* Game Over */}
-      {state.gamePhase === "ended" && (
+      {state.gamePhase === LudoGamePhase.ENDED && (
         <div className="text-center p-4 bg-slate-800 rounded-lg">
           <h3 className="text-xl font-bold text-white mb-2">Game Over!</h3>
           <p className="text-gray-300">
@@ -696,7 +704,7 @@ export default function LudoUI({ game: baseGame, currentUserId }: GameUIProps) {
       )}
 
       {/* Player List for waiting phase */}
-      {state.gamePhase === "waiting" && (
+      {state.gamePhase === LudoGamePhase.WAITING && (
         <div className="grid grid-cols-2 gap-2 w-full max-w-md">
           {/* Render in board layout order: [Red, Green] top, [Blue, Yellow] bottom */}
           {[0, 1, 3, 2].map((index) => {
@@ -714,13 +722,13 @@ export default function LudoUI({ game: baseGame, currentUserId }: GameUIProps) {
                     {player.id
                       ? player.username
                       : ti({ en: "(empty)", vi: "(trống)" })}
-                    {player.isBot && " 🤖"}
+                    {hasFlag(player.flags, LudoPlayerFlag.BOT) && " 🤖"}
                     {player.id === currentUserId &&
                       ti({ en: " (You)", vi: " (Bạn)" })}
                   </span>
                 </div>
                 {isHost &&
-                  (player.isBot ? (
+                  (hasFlag(player.flags, LudoPlayerFlag.BOT) ? (
                     <button
                       onClick={() => game.requestRemoveBot(index)}
                       className="text-xs px-2 py-1 bg-red-600 hover:bg-red-500 text-white rounded"
@@ -745,16 +753,18 @@ export default function LudoUI({ game: baseGame, currentUserId }: GameUIProps) {
 
       {/* Action Buttons */}
       <div className="flex gap-3">
-        {state.gamePhase === "waiting" && isHost && game.canStartGame() && (
-          <button
-            onClick={() => game.requestStartGame()}
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg transition-colors"
-          >
-            <Play className="w-4 h-4" />{" "}
-            {ti({ en: "Start Game", vi: "Bắt đầu" })}
-          </button>
-        )}
-        {state.gamePhase === "ended" && (
+        {state.gamePhase === LudoGamePhase.WAITING &&
+          isHost &&
+          game.canStartGame() && (
+            <button
+              onClick={() => game.requestStartGame()}
+              className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg transition-colors"
+            >
+              <Play className="w-4 h-4" />{" "}
+              {ti({ en: "Start Game", vi: "Bắt đầu" })}
+            </button>
+          )}
+        {state.gamePhase === LudoGamePhase.ENDED && (
           <button
             onClick={() => game.requestNewGame()}
             className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg transition-colors"
@@ -778,7 +788,7 @@ export default function LudoUI({ game: baseGame, currentUserId }: GameUIProps) {
             y="0"
             width="6"
             height="6"
-            fill={COLORS.red}
+            fill={COLORS[PlayerColor.RED]}
             stroke={COLORS.stroke}
             strokeWidth="0.05"
           />
@@ -787,7 +797,7 @@ export default function LudoUI({ game: baseGame, currentUserId }: GameUIProps) {
             cx="2"
             cy="2"
             r="0.6"
-            fill={COLORS.red}
+            fill={COLORS[PlayerColor.RED]}
             stroke={COLORS.stroke}
             strokeWidth="0.03"
           />
@@ -795,7 +805,7 @@ export default function LudoUI({ game: baseGame, currentUserId }: GameUIProps) {
             cx="4"
             cy="2"
             r="0.6"
-            fill={COLORS.red}
+            fill={COLORS[PlayerColor.RED]}
             stroke={COLORS.stroke}
             strokeWidth="0.03"
           />
@@ -803,7 +813,7 @@ export default function LudoUI({ game: baseGame, currentUserId }: GameUIProps) {
             cx="2"
             cy="4"
             r="0.6"
-            fill={COLORS.red}
+            fill={COLORS[PlayerColor.RED]}
             stroke={COLORS.stroke}
             strokeWidth="0.03"
           />
@@ -811,7 +821,7 @@ export default function LudoUI({ game: baseGame, currentUserId }: GameUIProps) {
             cx="4"
             cy="4"
             r="0.6"
-            fill={COLORS.red}
+            fill={COLORS[PlayerColor.RED]}
             stroke={COLORS.stroke}
             strokeWidth="0.03"
           />
@@ -822,7 +832,7 @@ export default function LudoUI({ game: baseGame, currentUserId }: GameUIProps) {
             y="0"
             width="6"
             height="6"
-            fill={COLORS.green}
+            fill={COLORS[PlayerColor.GREEN]}
             stroke={COLORS.stroke}
             strokeWidth="0.05"
           />
@@ -831,7 +841,7 @@ export default function LudoUI({ game: baseGame, currentUserId }: GameUIProps) {
             cx="11"
             cy="2"
             r="0.6"
-            fill={COLORS.green}
+            fill={COLORS[PlayerColor.GREEN]}
             stroke={COLORS.stroke}
             strokeWidth="0.03"
           />
@@ -839,7 +849,7 @@ export default function LudoUI({ game: baseGame, currentUserId }: GameUIProps) {
             cx="13"
             cy="2"
             r="0.6"
-            fill={COLORS.green}
+            fill={COLORS[PlayerColor.GREEN]}
             stroke={COLORS.stroke}
             strokeWidth="0.03"
           />
@@ -847,7 +857,7 @@ export default function LudoUI({ game: baseGame, currentUserId }: GameUIProps) {
             cx="11"
             cy="4"
             r="0.6"
-            fill={COLORS.green}
+            fill={COLORS[PlayerColor.GREEN]}
             stroke={COLORS.stroke}
             strokeWidth="0.03"
           />
@@ -855,7 +865,7 @@ export default function LudoUI({ game: baseGame, currentUserId }: GameUIProps) {
             cx="13"
             cy="4"
             r="0.6"
-            fill={COLORS.green}
+            fill={COLORS[PlayerColor.GREEN]}
             stroke={COLORS.stroke}
             strokeWidth="0.03"
           />
@@ -866,7 +876,7 @@ export default function LudoUI({ game: baseGame, currentUserId }: GameUIProps) {
             y="9"
             width="6"
             height="6"
-            fill={COLORS.yellow}
+            fill={COLORS[PlayerColor.YELLOW]}
             stroke={COLORS.stroke}
             strokeWidth="0.05"
           />
@@ -875,7 +885,7 @@ export default function LudoUI({ game: baseGame, currentUserId }: GameUIProps) {
             cx="11"
             cy="11"
             r="0.6"
-            fill={COLORS.yellow}
+            fill={COLORS[PlayerColor.YELLOW]}
             stroke={COLORS.stroke}
             strokeWidth="0.03"
           />
@@ -883,7 +893,7 @@ export default function LudoUI({ game: baseGame, currentUserId }: GameUIProps) {
             cx="13"
             cy="11"
             r="0.6"
-            fill={COLORS.yellow}
+            fill={COLORS[PlayerColor.YELLOW]}
             stroke={COLORS.stroke}
             strokeWidth="0.03"
           />
@@ -891,7 +901,7 @@ export default function LudoUI({ game: baseGame, currentUserId }: GameUIProps) {
             cx="11"
             cy="13"
             r="0.6"
-            fill={COLORS.yellow}
+            fill={COLORS[PlayerColor.YELLOW]}
             stroke={COLORS.stroke}
             strokeWidth="0.03"
           />
@@ -899,7 +909,7 @@ export default function LudoUI({ game: baseGame, currentUserId }: GameUIProps) {
             cx="13"
             cy="13"
             r="0.6"
-            fill={COLORS.yellow}
+            fill={COLORS[PlayerColor.YELLOW]}
             stroke={COLORS.stroke}
             strokeWidth="0.03"
           />
@@ -910,7 +920,7 @@ export default function LudoUI({ game: baseGame, currentUserId }: GameUIProps) {
             y="9"
             width="6"
             height="6"
-            fill={COLORS.blue}
+            fill={COLORS[PlayerColor.BLUE]}
             stroke={COLORS.stroke}
             strokeWidth="0.05"
           />
@@ -919,7 +929,7 @@ export default function LudoUI({ game: baseGame, currentUserId }: GameUIProps) {
             cx="2"
             cy="11"
             r="0.6"
-            fill={COLORS.blue}
+            fill={COLORS[PlayerColor.BLUE]}
             stroke={COLORS.stroke}
             strokeWidth="0.03"
           />
@@ -927,7 +937,7 @@ export default function LudoUI({ game: baseGame, currentUserId }: GameUIProps) {
             cx="4"
             cy="11"
             r="0.6"
-            fill={COLORS.blue}
+            fill={COLORS[PlayerColor.BLUE]}
             stroke={COLORS.stroke}
             strokeWidth="0.03"
           />
@@ -935,7 +945,7 @@ export default function LudoUI({ game: baseGame, currentUserId }: GameUIProps) {
             cx="2"
             cy="13"
             r="0.6"
-            fill={COLORS.blue}
+            fill={COLORS[PlayerColor.BLUE]}
             stroke={COLORS.stroke}
             strokeWidth="0.03"
           />
@@ -943,7 +953,7 @@ export default function LudoUI({ game: baseGame, currentUserId }: GameUIProps) {
             cx="4"
             cy="13"
             r="0.6"
-            fill={COLORS.blue}
+            fill={COLORS[PlayerColor.BLUE]}
             stroke={COLORS.stroke}
             strokeWidth="0.03"
           />
@@ -957,7 +967,7 @@ export default function LudoUI({ game: baseGame, currentUserId }: GameUIProps) {
                 y={6}
                 width="1"
                 height="1"
-                fill={col === 1 ? COLORS.red : COLORS.cell}
+                fill={col === 1 ? COLORS[PlayerColor.RED] : COLORS.cell}
                 stroke={COLORS.stroke}
                 strokeWidth="0.02"
               />
@@ -966,7 +976,7 @@ export default function LudoUI({ game: baseGame, currentUserId }: GameUIProps) {
                 y={7}
                 width="1"
                 height="1"
-                fill={col === 0 ? COLORS.cell : COLORS.red}
+                fill={col === 0 ? COLORS.cell : COLORS[PlayerColor.RED]}
                 stroke={COLORS.stroke}
                 strokeWidth="0.02"
               />
@@ -999,7 +1009,7 @@ export default function LudoUI({ game: baseGame, currentUserId }: GameUIProps) {
                 y={7}
                 width="1"
                 height="1"
-                fill={col < 5 ? COLORS.yellow : COLORS.cell}
+                fill={col < 5 ? COLORS[PlayerColor.YELLOW] : COLORS.cell}
                 stroke={COLORS.stroke}
                 strokeWidth="0.02"
               />
@@ -1008,7 +1018,7 @@ export default function LudoUI({ game: baseGame, currentUserId }: GameUIProps) {
                 y={8}
                 width="1"
                 height="1"
-                fill={col === 4 ? COLORS.yellow : COLORS.cell}
+                fill={col === 4 ? COLORS[PlayerColor.YELLOW] : COLORS.cell}
                 stroke={COLORS.stroke}
                 strokeWidth="0.02"
               />
@@ -1032,7 +1042,7 @@ export default function LudoUI({ game: baseGame, currentUserId }: GameUIProps) {
                 y={row}
                 width="1"
                 height="1"
-                fill={row > 0 ? COLORS.green : COLORS.cell}
+                fill={row > 0 ? COLORS[PlayerColor.GREEN] : COLORS.cell}
                 stroke={COLORS.stroke}
                 strokeWidth="0.02"
               />
@@ -1041,7 +1051,7 @@ export default function LudoUI({ game: baseGame, currentUserId }: GameUIProps) {
                 y={row}
                 width="1"
                 height="1"
-                fill={row === 1 ? COLORS.green : COLORS.cell}
+                fill={row === 1 ? COLORS[PlayerColor.GREEN] : COLORS.cell}
                 stroke={COLORS.stroke}
                 strokeWidth="0.02"
               />
@@ -1056,7 +1066,7 @@ export default function LudoUI({ game: baseGame, currentUserId }: GameUIProps) {
                 y={9 + row}
                 width="1"
                 height="1"
-                fill={row === 4 ? COLORS.blue : COLORS.cell}
+                fill={row === 4 ? COLORS[PlayerColor.BLUE] : COLORS.cell}
                 stroke={COLORS.stroke}
                 strokeWidth="0.02"
               />
@@ -1065,7 +1075,7 @@ export default function LudoUI({ game: baseGame, currentUserId }: GameUIProps) {
                 y={9 + row}
                 width="1"
                 height="1"
-                fill={row < 5 ? COLORS.blue : COLORS.cell}
+                fill={row < 5 ? COLORS[PlayerColor.BLUE] : COLORS.cell}
                 stroke={COLORS.stroke}
                 strokeWidth="0.02"
               />
@@ -1084,25 +1094,25 @@ export default function LudoUI({ game: baseGame, currentUserId }: GameUIProps) {
           {/* === CENTER TRIANGLES === */}
           <polygon
             points="6,6 9,6 7.5,7.5"
-            fill={COLORS.green}
+            fill={COLORS[PlayerColor.GREEN]}
             stroke={COLORS.stroke}
             strokeWidth="0.03"
           />
           <polygon
             points="9,6 9,9 7.5,7.5"
-            fill={COLORS.yellow}
+            fill={COLORS[PlayerColor.YELLOW]}
             stroke={COLORS.stroke}
             strokeWidth="0.03"
           />
           <polygon
             points="9,9 6,9 7.5,7.5"
-            fill={COLORS.blue}
+            fill={COLORS[PlayerColor.BLUE]}
             stroke={COLORS.stroke}
             strokeWidth="0.03"
           />
           <polygon
             points="6,9 6,6 7.5,7.5"
-            fill={COLORS.red}
+            fill={COLORS[PlayerColor.RED]}
             stroke={COLORS.stroke}
             strokeWidth="0.03"
           />
@@ -1122,16 +1132,16 @@ export default function LudoUI({ game: baseGame, currentUserId }: GameUIProps) {
           })}
 
           {/* Highlight current player's corner */}
-          {state.gamePhase === "playing" &&
+          {state.gamePhase === LudoGamePhase.PLAYING &&
             (() => {
               const current = state.players[state.currentPlayerIndex];
-              const positions: Record<PlayerColor, { x: number; y: number }> = {
-                red: { x: 0, y: 0 },
-                green: { x: 9, y: 0 },
-                yellow: { x: 9, y: 9 },
-                blue: { x: 0, y: 9 },
+              const positions: Record<number, { x: number; y: number }> = {
+                [PlayerColor.RED]: { x: 0, y: 0 },
+                [PlayerColor.GREEN]: { x: 9, y: 0 },
+                [PlayerColor.YELLOW]: { x: 9, y: 9 },
+                [PlayerColor.BLUE]: { x: 0, y: 9 },
               };
-              const pos = positions[current.color];
+              const pos = positions[current.color] || { x: 0, y: 0 };
               return (
                 <rect
                   x={pos.x}
@@ -1151,7 +1161,8 @@ export default function LudoUI({ game: baseGame, currentUserId }: GameUIProps) {
         {state.players.map((player, idx) => {
           const namePos = getPlayerNamePosition(player.color);
           const isCurrent =
-            state.currentPlayerIndex === idx && state.gamePhase === "playing";
+            state.currentPlayerIndex === idx &&
+            state.gamePhase === LudoGamePhase.PLAYING;
           const colors = COLOR_CLASSES[player.color];
 
           return (
@@ -1174,8 +1185,10 @@ export default function LudoUI({ game: baseGame, currentUserId }: GameUIProps) {
                 })`,
               }}
             >
-              {player.id ? player.username : "(empty)"}
-              {player.isBot && " 🤖"}
+              {player.id
+                ? player.username
+                : ti({ en: "(empty)", vi: "(trống)" })}
+              {hasFlag(player.flags, LudoPlayerFlag.BOT) && " 🤖"}
             </div>
           );
         })}
@@ -1190,7 +1203,7 @@ export default function LudoUI({ game: baseGame, currentUserId }: GameUIProps) {
         )}
       </div>
 
-      {state.gamePhase === "playing" && isHost && (
+      {state.gamePhase === LudoGamePhase.PLAYING && isHost && (
         <button
           onClick={async () => {
             const confirmed = await useAlertStore.getState().confirm(

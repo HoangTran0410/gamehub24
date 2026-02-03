@@ -73,3 +73,7 @@ export function createSeededRandom(seed: number) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
+
+export function hasFlag(flags: number, flag: number) {
+  return (flags & flag) !== 0;
+}

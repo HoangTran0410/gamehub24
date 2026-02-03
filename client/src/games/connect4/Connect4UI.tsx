@@ -1,29 +1,21 @@
 import { useState } from "react";
 import Connect4 from "./Connect4";
-import { ROWS, COLS } from "./types";
+import { Connect4GamePhase, Connect4PlayerFlag, COLS, ROWS } from "./types";
 import {
   Bot,
-  RotateCcw,
   Play,
+  RotateCcw,
   RefreshCw,
   Check,
   X,
   BookOpen,
 } from "lucide-react";
-import useLanguage from "../../stores/languageStore";
 import type { GameUIProps } from "../types";
+import useLanguage from "../../stores/languageStore";
+import { useAlertStore } from "../../stores/alertStore";
 import { createPortal } from "react-dom";
 import useGameState from "../../hooks/useGameState";
-
-// CSS for drop animation
-const dropStyle = `
-@keyframes drop {
-  0% { transform: translateY(-400px); }
-  60% { transform: translateY(10px); }
-  80% { transform: translateY(-5px); }
-  100% { transform: translateY(0); }
-}
-`;
+import { hasFlag } from "../../utils";
 
 export default function Connect4UI({
   game: baseGame,
@@ -31,89 +23,66 @@ export default function Connect4UI({
 }: GameUIProps) {
   const game = baseGame as Connect4;
   const [state] = useGameState(game);
-  const [hoverCol, setHoverCol] = useState<number | null>(null);
   const [showRules, setShowRules] = useState(false);
   const { ti, ts } = useLanguage();
+  const { confirm: showConfirm } = useAlertStore();
 
-  const myIndex = game.getMyPlayerIndex();
-  const myColor = myIndex >= 0 ? state.players[myIndex].color : null;
-  const currentPlayer = state.players[state.currentPlayerIndex];
-  const isMyTurn = currentPlayer?.id === currentUserId;
+  const myPlayerIndex = game.getMyPlayerIndex();
   const isHost = game.isHost;
 
+  if (!state) return null;
+
+  const isMyTurn = state.currentPlayerIndex === myPlayerIndex;
+
   const handleColumnClick = (col: number) => {
-    if (state.gamePhase !== "playing") return;
+    if (state.gamePhase !== Connect4GamePhase.PLAYING) return;
     if (!isMyTurn) return;
     if (game.isColumnFull(col)) return;
     game.requestMove(col);
   };
 
-  const isWinningCell = (row: number, col: number) =>
-    state.winningCells?.some((c) => c.row === row && c.col === col);
-
-  const isLastMove = (row: number, col: number) =>
-    state.lastMove?.row === row && state.lastMove?.col === col;
-
   const renderCell = (row: number, col: number) => {
-    const cell = state.board[row][col];
-    const winning = isWinningCell(row, col);
-    const last = isLastMove(row, col);
+    const pos = row * COLS + col;
+    const cellVal = state.board[pos];
+    const isWinningCell = state.winningCells.includes(pos);
+    const isLastMove = state.lastMove === pos;
+
+    const hasWinner = state.winningCells.length > 0;
+    const isDimmed = hasWinner && !isWinningCell;
 
     return (
-      <div
-        key={`${row}-${col}`}
-        className="aspect-square flex items-center justify-center bg-blue-700 p-1"
-      >
+      <div key={`${row}-${col}`} className="w-full relative pb-[100%] h-0">
         <div
-          className={`
-            w-full h-full rounded-full transition-all duration-200
-            ${!cell ? "bg-blue-900" : ""}
-            ${cell === "red" ? "bg-red-500" : ""}
-            ${cell === "yellow" ? "bg-yellow-400" : ""}
-            ${winning ? "ring-4 ring-white animate-pulse" : ""}
-            ${last && !winning ? "ring-2 ring-white/50" : ""}
-          `}
-          style={last && cell ? { animation: "drop 0.5s ease-out" } : undefined}
-        />
-      </div>
-    );
-  };
-
-  const renderPreviewRow = () => {
-    return (
-      <div className="grid grid-cols-7 gap-1 mb-1">
-        {Array(COLS)
-          .fill(null)
-          .map((_, col) => {
-            const canDrop =
-              state.gamePhase === "playing" &&
-              isMyTurn &&
-              !game.isColumnFull(col);
-            const showPreview = hoverCol === col && canDrop;
-
-            return (
-              <div
-                key={col}
-                className={`
-                  aspect-square flex items-center justify-center
-                  rounded-full transition-all duration-200
-                  ${canDrop ? "cursor-pointer" : "cursor-default"}
-                `}
-                onMouseEnter={() => setHoverCol(col)}
-                onMouseLeave={() => setHoverCol(null)}
-                onClick={() => handleColumnClick(col)}
-              >
-                {showPreview && (
-                  <div
-                    className={`
-                      w-[80%] h-[80%] rounded-full opacity-60
-                      ${myColor === "red" ? "bg-red-500" : "bg-yellow-400"}
-                    `}
-                  />
-                )}
-              </div>
-            );
-          })}
+          className={`absolute inset-0 bg-blue-900/40 rounded-full flex items-center justify-center shadow-inner border border-blue-400/20 transition-opacity duration-500 ${
+            isDimmed ? "opacity-40" : "opacity-100"
+          }`}
+        >
+          {isWinningCell && (
+            <div className="absolute inset-0 rounded-full ring-4 ring-white animate-winner-pulse shadow-[0_0_20px_rgba(255,255,255,0.8)] z-10" />
+          )}
+          {cellVal !== "0" && (
+            <div
+              className={`
+                w-[85%] h-[85%] rounded-full shadow-lg transform transition-all duration-300
+                ${cellVal === "1" ? "bg-red-500" : "bg-yellow-500"}
+                ${isLastMove ? "border-4 border-white" : ""}
+                ${isWinningCell ? "animate-winner-glow" : "animate-drop"}
+                ${isDimmed ? "opacity-40 grayscale-[0.5]" : "opacity-100"}
+              `}
+              style={
+                !isWinningCell
+                  ? {
+                      animationDuration: `${0.4 + row * 0.1}s`,
+                      animationTimingFunction: "cubic-bezier(0.4, 0, 0.2, 1)",
+                    }
+                  : {}
+              }
+            >
+              {/* Glossy effect */}
+              {/* <div className="absolute top-1 left-2 w-1/2 h-1/2 bg-white/20 rounded-full blur-[1px]" /> */}
+            </div>
+          )}
+        </div>
       </div>
     );
   };
@@ -193,68 +162,162 @@ export default function Connect4UI({
   };
 
   return (
-    <div className="flex flex-col items-center gap-4 p-4 w-full max-w-lg mx-auto pb-16!">
-      {/* Inject drop animation CSS */}
-      <style dangerouslySetInnerHTML={{ __html: dropStyle }} />
+    <div className="flex flex-col items-center gap-4 p-4 w-full max-w-2xl mx-auto pb-16!">
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
+        @keyframes drop {
+          0% { transform: translateY(-500%); opacity: 0.5; }
+          100% { transform: translateY(0); opacity: 1; }
+        }
+        @keyframes winner-pulse {
+          0%, 100% { transform: scale(1); opacity: 1; box-shadow: 0 0 20px rgba(255, 255, 255, 0.8); }
+          50% { transform: scale(1.05); opacity: 0.8; box-shadow: 0 0 40px rgba(255, 255, 255, 1); }
+        }
+        @keyframes winner-glow {
+          0%, 100% { filter: brightness(1); }
+          50% { filter: brightness(1.3); }
+        }
+        .animate-drop {
+          animation-name: drop;
+          animation-fill-mode: forwards;
+        }
+        .animate-winner-pulse {
+          animation: winner-pulse 1s ease-in-out infinite;
+        }
+        .animate-winner-glow {
+          animation: winner-glow 1s ease-in-out infinite;
+        }
+      `,
+        }}
+      />
 
-      {/* Player List */}
-      <div className="flex flex-col gap-2 p-4 bg-slate-800 rounded-lg w-full">
-        <h3 className="text-sm font-medium text-gray-400 mb-1">Players</h3>
-        {state.players.map((player, index) => (
-          <div
-            key={index}
-            className={`
-              flex items-center justify-between p-2 rounded-lg
-              ${
-                state.currentPlayerIndex === index &&
-                state.gamePhase === "playing"
-                  ? "bg-slate-600 ring-2 ring-blue-400"
-                  : "bg-slate-700"
-              }
-            `}
-          >
-            <div className="flex items-center gap-3">
-              <div
-                className={`
-                  w-6 h-6 rounded-full
-                  ${player.color === "red" ? "bg-red-500" : "bg-yellow-400"}
-                `}
-              />
-              <span className="text-white">
-                {player.id
-                  ? player.username
-                  : ti({ en: "(waiting...)", vi: "(đang chờ...)" })}
-                {player.isBot && " 🤖"}
-                {player.id === currentUserId &&
-                  ti({ en: " (You)", vi: " (Bạn)" })}
-              </span>
+      {/* Players */}
+      <div className="flex flex-col gap-2 p-4 bg-slate-800 rounded-lg w-full max-w-md border border-slate-700">
+        <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">
+          {ti({ en: "Players", vi: "Người chơi" })}
+        </h3>
+        {state.players.map((player, index) => {
+          const isTurn = state.currentPlayerIndex === index;
+          return (
+            <div
+              key={index}
+              className={`flex items-center justify-between p-3 rounded-lg transition-all ${
+                isTurn
+                  ? "bg-slate-700 ring-2 ring-blue-500 shadow-lg"
+                  : "bg-slate-900 border border-slate-800"
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <div
+                  className={`w-6 h-6 rounded-full shadow-inner ${
+                    index === 0 ? "bg-red-500" : "bg-yellow-400"
+                  }`}
+                />
+                <span
+                  className={`font-medium ${isTurn ? "text-white" : "text-gray-400"}`}
+                >
+                  {player.username}
+                  {hasFlag(player.flags, Connect4PlayerFlag.BOT) && " 🤖"}
+                </span>
+              </div>
+              {hasFlag(player.flags, Connect4PlayerFlag.BOT) && isHost && (
+                <button
+                  onClick={() => game.requestRemoveBot()}
+                  className="text-xs px-2 py-1 bg-red-600 hover:bg-red-500 text-white rounded transition-colors"
+                >
+                  {ti({ en: "Remove", vi: "Xóa" })}
+                </button>
+              )}
+              {isHost && !player.id && (
+                <button
+                  onClick={() => game.requestAddBot()}
+                  className="flex items-center gap-2 p-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors text-sm"
+                >
+                  <Bot className="w-4 h-4" />
+                  {ti({ en: "Add Bot", vi: "Thêm Bot" })}
+                </button>
+              )}
             </div>
-            {player.isBot && isHost && state.gamePhase === "waiting" && (
-              <button
-                onClick={() => game.requestRemoveBot()}
-                className="text-xs px-2 py-1 bg-red-600 hover:bg-red-500 text-white rounded transition-colors"
-              >
-                {ti({ en: "Remove", vi: "Xóa" })}
-              </button>
-            )}
-          </div>
-        ))}
+          );
+        })}
       </div>
 
-      {/* Turn Indicator */}
-      {state.gamePhase === "playing" && (
-        <div className="text-lg text-gray-400">
+      {/* Actions */}
+      <div className="flex gap-3">
+        {state.gamePhase === Connect4GamePhase.WAITING && (
+          <>
+            {isHost && game.canStartGame() && (
+              <button
+                onClick={() => game.requestStartGame()}
+                className="flex items-center gap-2 px-6 py-3 bg-green-600 hover:bg-green-500 text-white rounded-xl font-bold transition-all shadow-lg shadow-green-600/20 active:scale-95"
+              >
+                <Play className="w-5 h-5 text-white" />{" "}
+                {ti({ en: "Start Game", vi: "Bắt đầu" })}
+              </button>
+            )}
+            {!isHost && (
+              <div className="text-gray-500 font-medium italic">
+                {ti({
+                  en: "Waiting for host to start...",
+                  vi: "Đang chờ chủ phòng bắt đầu...",
+                })}
+              </div>
+            )}
+          </>
+        )}
+
+        {state.gamePhase === Connect4GamePhase.PLAYING && (
+          <>
+            {/* Show undo if we are in local history on host OR it's a regular game */}
+            {!state.undoRequest && (
+              <button
+                onClick={() => game.requestUndo()}
+                className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors font-medium text-sm border border-slate-600"
+              >
+                <RotateCcw className="w-4 h-4 text-gray-400" />{" "}
+                {ti({ en: "Undo", vi: "Hoàn tác" })}
+              </button>
+            )}
+
+            {isHost && (
+              <button
+                onClick={async () => {
+                  if (
+                    await showConfirm(
+                      ts({
+                        en: "Reset the game?",
+                        vi: "Chơi lại từ đầu?",
+                      }),
+                      ts({
+                        en: "Reset",
+                        vi: "Reset",
+                      }),
+                    )
+                  )
+                    game.requestNewGame();
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors font-medium text-sm border border-slate-600"
+              >
+                <RefreshCw className="w-4 h-4 text-gray-400" />{" "}
+                {ti({ en: "New Game", vi: "Ván mới" })}
+              </button>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Status */}
+      {state.gamePhase === Connect4GamePhase.PLAYING && (
+        <div className="text-lg font-semibold tracking-tight">
           {isMyTurn ? (
-            <span className="text-green-400">
-              {ti({
-                en: "Your turn! Click a column.",
-                vi: "Lượt của bạn! Chọn một cột.",
-              })}
+            <span className="text-blue-400 animate-pulse">
+              {ti({ en: "Your Turn!", vi: "Lượt của bạn!" })}
             </span>
           ) : (
-            <span>
+            <span className="text-gray-500">
               {ti({ en: "Waiting for", vi: "Đang chờ" })}{" "}
-              {currentPlayer?.username}...
+              {state.players[state.currentPlayerIndex].username}...
             </span>
           )}
         </div>
@@ -262,29 +325,31 @@ export default function Connect4UI({
 
       {/* Undo Request Modal */}
       {state.undoRequest && state.undoRequest.fromId !== currentUserId && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-slate-800 rounded-xl p-6 shadow-xl max-w-sm mx-4">
-            <h3 className="text-lg font-semibold text-white mb-2">
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm">
+          <div className="bg-slate-800 rounded-xl p-6 shadow-2xl max-w-sm mx-4 border border-slate-700">
+            <h3 className="text-lg font-bold text-white mb-2">
               {ti({ en: "Undo Request", vi: "Yêu cầu hoàn tác" })}
             </h3>
-            <p className="text-gray-400 mb-4">
-              {state.undoRequest.fromName}{" "}
+            <p className="text-gray-400 mb-6 leading-relaxed">
+              <span className="text-blue-400 font-semibold">
+                {state.undoRequest.fromName}
+              </span>{" "}
               {ti({
                 en: "wants to undo their last move.",
-                vi: "muốn hoàn tác nước đi cuối.",
+                vi: "muốn hoàn tác nước đi vừa rồi.",
               })}
             </p>
             <div className="flex gap-3">
               <button
                 onClick={() => game.acceptUndo()}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg transition-colors"
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg transition-colors font-semibold"
               >
                 <Check className="w-4 h-4" />{" "}
                 {ti({ en: "Accept", vi: "Đồng ý" })}
               </button>
               <button
                 onClick={() => game.declineUndo()}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg transition-colors"
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg transition-colors font-semibold"
               >
                 <X className="w-4 h-4" /> {ti({ en: "Decline", vi: "Từ chối" })}
               </button>
@@ -295,7 +360,7 @@ export default function Connect4UI({
 
       {/* Waiting for undo response */}
       {state.undoRequest && state.undoRequest.fromId === currentUserId && (
-        <div className="text-yellow-400 text-sm">
+        <div className="text-yellow-400 text-sm font-medium bg-yellow-400/10 px-3 py-1 rounded-full border border-yellow-400/20">
           {ti({
             en: "Waiting for opponent to accept undo...",
             vi: "Đang chờ đối thủ chấp nhận hoàn tác...",
@@ -304,105 +369,52 @@ export default function Connect4UI({
       )}
 
       {/* Game Over */}
-      {state.gamePhase === "ended" && (
-        <div className="text-center p-4 bg-slate-800 rounded-lg">
-          <h3 className="text-xl font-bold text-white mb-2">
+      {state.gamePhase === Connect4GamePhase.ENDED && (
+        <div className="text-center p-6 bg-slate-800 rounded-xl border-2 border-slate-700 shadow-2xl mb-4">
+          <h3 className="text-2xl font-black text-white mb-2 uppercase tracking-tighter">
             {ti({ en: "Game Over!", vi: "Kết thúc!" })}
           </h3>
-          <p className="text-gray-300">
+          <p className="text-gray-300 text-lg mb-4 font-medium">
             {state.winner === "draw"
               ? ti({ en: "It's a draw!", vi: "Hòa!" })
               : state.winner === currentUserId
-                ? ti({ en: "🎉 You won!", vi: "🎉 Bạn thắng!" })
+                ? ti({ en: "🏆 You Won!", vi: "🏆 Bạn đã thắng!" })
                 : `${
                     state.players.find((p) => p.id === state.winner)?.username
                   } ${ti({ en: "wins!", vi: "thắng!" })}`}
           </p>
+          <button
+            onClick={() => game.requestNewGame()}
+            className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl transition-all font-bold shadow-lg shadow-blue-600/20 active:scale-95 mx-auto"
+          >
+            <RefreshCw className="w-5 h-5" />{" "}
+            {ti({ en: "Play Again", vi: "Chơi lại" })}
+          </button>
         </div>
       )}
 
-      {/* Action Buttons */}
-      <div className="flex gap-3 flex-wrap justify-center">
-        {/* Waiting phase buttons */}
-        {state.gamePhase === "waiting" && (
-          <>
-            {isHost && !state.players[1].id && (
-              <button
-                onClick={() => game.requestAddBot()}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors"
-              >
-                <Bot className="w-4 h-4" />{" "}
-                {ti({ en: "Add Bot", vi: "Thêm Bot" })}
-              </button>
-            )}
-            {isHost && game.canStartGame() && (
-              <button
-                onClick={() => game.requestStartGame()}
-                className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg transition-colors"
-              >
-                <Play className="w-4 h-4" />{" "}
-                {ti({ en: "Start Game", vi: "Bắt đầu" })}
-              </button>
-            )}
-          </>
-        )}
-
-        {/* Playing phase buttons */}
-        {state.gamePhase === "playing" && (
-          <>
-            {myIndex >= 0 &&
-              Object.keys(state.moveHistory || {}).length > 0 &&
-              !state.undoRequest && (
-                <button
-                  onClick={() => game.requestUndo()}
-                  className="flex items-center gap-2 px-4 py-2 bg-slate-600 hover:bg-slate-500 text-white rounded-lg transition-colors"
-                >
-                  <RotateCcw className="w-4 h-4" />{" "}
-                  {ti({ en: "Undo", vi: "Hoàn tác" })}
-                </button>
-              )}
-          </>
-        )}
-
-        {/* Game ended buttons */}
-        {state.gamePhase === "ended" && (
-          <button
-            onClick={() => game.requestNewGame()}
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg transition-colors"
-          >
-            <RefreshCw className="w-4 h-4" />{" "}
-            {ti({ en: "Play Again", vi: "Chơi lại" })}
-          </button>
-        )}
-      </div>
-
       {/* Game Board */}
-      <div className="w-full max-w-[400px]">
-        {/* Preview Row */}
-        {state.gamePhase === "playing" && renderPreviewRow()}
-
-        {/* Main Board */}
-        <div
-          className="grid gap-1 p-2 bg-blue-800 rounded-lg shadow-xl"
-          style={{ gridTemplateColumns: `repeat(${COLS}, 1fr)` }}
-          onMouseLeave={() => setHoverCol(null)}
-        >
-          {Array(ROWS)
-            .fill(null)
-            .map((_, row) =>
-              Array(COLS)
-                .fill(null)
-                .map((_, col) => (
-                  <div
-                    key={`${row}-${col}`}
-                    className="cursor-pointer"
-                    onMouseEnter={() => setHoverCol(col)}
-                    onClick={() => handleColumnClick(col)}
-                  >
-                    {renderCell(row, col)}
-                  </div>
-                )),
-            )}
+      <div className="w-full max-w-md bg-blue-700 p-3 rounded-4xl shadow-2xl mx-auto">
+        <div className="grid grid-cols-7 gap-1">
+          {Array.from({ length: COLS }).map((_, col) => (
+            <div
+              key={col}
+              onClick={() => handleColumnClick(col)}
+              className={`flex flex-col gap-1 rounded-2xl transition-all duration-200 group/col relative overflow-hidden ${
+                isMyTurn && !game.isColumnFull(col)
+                  ? "cursor-pointer hover:bg-white/5"
+                  : "cursor-default"
+              }`}
+            >
+              {/* Highlight column on hover */}
+              {isMyTurn && !game.isColumnFull(col) && (
+                <div className="absolute inset-0 bg-white/0 group-hover/col:bg-white/5 rounded-2xl transition-colors pointer-events-none" />
+              )}
+              {Array.from({ length: ROWS }).map((_, row) =>
+                renderCell(row, col),
+              )}
+            </div>
+          ))}
         </div>
       </div>
 
@@ -414,6 +426,7 @@ export default function Connect4UI({
       >
         <BookOpen size={24} />
       </button>
+
       {showRules && createPortal(renderGameRules(), document.body)}
     </div>
   );

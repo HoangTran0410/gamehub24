@@ -481,7 +481,7 @@ export default function CanvasGameUI({
               <p>
                 {ti({
                   en: "Draw & Guess is a multiplayer drawing game where players take turns drawing a secret word while others try to guess it.",
-                  vi: "Vẽ & Đoán là trò chơi vẽ hình nhiều người chơi, trong đó mỗi người sẽ lần lượt vẽ một từ bí mật để những người chươi khác đoán.",
+                  vi: "Vẽ & Đoán là trò chơi vẽ hình nhiều người chơi, trong đó mỗi người sẽ lần lượt vẽ một từ bí mật để những người chơi khác đoán.",
                 })}
               </p>
 

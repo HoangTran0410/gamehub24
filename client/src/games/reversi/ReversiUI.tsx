@@ -1,6 +1,6 @@
 import { useState } from "react";
 import Reversi from "./Reversi";
-import type { Cell } from "./types";
+import { ReversiColor, ReversiGamePhase, ReversiPlayerFlag } from "./types";
 import {
   Bot,
   RotateCcw,
@@ -15,6 +15,7 @@ import useLanguage from "../../stores/languageStore";
 import { useAlertStore } from "../../stores/alertStore";
 import { createPortal } from "react-dom";
 import useGameState from "../../hooks/useGameState";
+import { hasFlag } from "../../utils";
 
 // CSS for flip animation
 const flipStyle = `
@@ -39,7 +40,7 @@ export default function ReversiUI({
   const currentTurn = state.turn;
   const isMyTurn = currentTurn === myColor;
   const validMoves =
-    state.gamePhase === "playing" && isMyTurn
+    state.gamePhase === ReversiGamePhase.PLAYING && myColor !== null && isMyTurn
       ? game.getValidMoves(myColor)
       : [];
   const pieceCount = game.getPieceCount();
@@ -49,19 +50,19 @@ export default function ReversiUI({
     validMoves.some(([r, c]) => r === row && c === col);
 
   const handleCellClick = (row: number, col: number) => {
-    if (state.gamePhase !== "playing") return;
+    if (state.gamePhase !== ReversiGamePhase.PLAYING) return;
     if (!isMyTurn) return;
     if (!isValidMove(row, col)) return;
     game.requestMove(row, col);
   };
 
-  const renderCell = (cell: Cell, row: number, col: number) => {
+  const renderCell = (cellValue: number, row: number, col: number) => {
     const valid = isValidMove(row, col);
-    const isLastMove =
-      state.lastMove?.row === row && state.lastMove?.col === col;
-    const isFlipped = state.flippedCells?.some(
-      (c) => c.row === row && c.col === col,
-    );
+    const pos = row * 8 + col;
+    const isLastMove = state.lastMove === pos;
+    const isFlipped = state.flippedCells?.includes(pos);
+    const cellType =
+      cellValue === 1 ? "black" : cellValue === 2 ? "white" : null;
 
     return (
       <button
@@ -75,11 +76,11 @@ export default function ReversiUI({
         `}
         disabled={!valid}
       >
-        {cell && (
+        {cellType && (
           <div
             className={`
               w-[80%] h-[80%] rounded-full shadow-lg
-              ${cell === "black" ? "bg-gray-900" : "bg-white"}
+              ${cellType === "black" ? "bg-gray-900" : "bg-white"}
               ${isLastMove ? "scale-110" : ""}
               ${isFlipped ? "animate-flip" : ""}
             `}
@@ -92,7 +93,7 @@ export default function ReversiUI({
             }
           />
         )}
-        {!cell && valid && (
+        {!cellType && valid && (
           <div className="w-3 h-3 rounded-full bg-green-500/50" />
         )}
       </button>
@@ -187,6 +188,12 @@ export default function ReversiUI({
     );
   };
 
+  const players = [state.players.black, state.players.white];
+  const currentPlayerInTurn =
+    currentTurn === ReversiColor.BLACK
+      ? state.players.black
+      : state.players.white;
+
   return (
     <div className="flex flex-col items-center gap-4 p-4 w-full max-w-2xl mx-auto pb-16!">
       {/* Inject flip animation CSS */}
@@ -197,9 +204,9 @@ export default function ReversiUI({
         <h3 className="text-sm font-medium text-gray-400 mb-1">
           {ti({ en: "Players", vi: "Người chơi" })}
         </h3>
-        {[state.players.black, state.players.white].map((player, index) => {
-          const c = ["black", "white"];
-          const isCurrentTurn = state.turn === c[index];
+        {players.map((player, index) => {
+          const color = index === 0 ? ReversiColor.BLACK : ReversiColor.WHITE;
+          const isCurrentTurn = state.turn === color;
 
           return (
             <div
@@ -214,24 +221,30 @@ export default function ReversiUI({
               <div className="flex items-center gap-3">
                 <div
                   className={`w-6 h-6 rounded-full text-center ${
-                    c[index] === "black" ? "bg-gray-900" : "bg-white"
-                  } ${c[index] === "black" ? "text-white" : "text-black"}`}
+                    color === ReversiColor.BLACK ? "bg-gray-900" : "bg-white"
+                  } ${color === ReversiColor.BLACK ? "text-white" : "text-black"}`}
                 >
-                  {c[index] === "black" ? pieceCount.black : pieceCount.white}
+                  {color === ReversiColor.BLACK
+                    ? pieceCount.black
+                    : pieceCount.white}
                 </div>
                 <span className="text-white">
                   {player ? player.username : "(waiting...)"}
-                  {player?.isBot && " 🤖"}
+                  {player &&
+                    hasFlag(player.flags, ReversiPlayerFlag.BOT) &&
+                    " 🤖"}
                 </span>
               </div>
-              {player?.isBot && isHost && (
-                <button
-                  onClick={() => game.requestRemoveBot()}
-                  className="text-xs px-2 py-1 bg-red-600 hover:bg-red-500 text-white rounded transition-colors"
-                >
-                  {ti({ en: "Remove", vi: "Xóa" })}
-                </button>
-              )}
+              {player &&
+                hasFlag(player.flags, ReversiPlayerFlag.BOT) &&
+                isHost && (
+                  <button
+                    onClick={() => game.requestRemoveBot()}
+                    className="text-xs px-2 py-1 bg-red-600 hover:bg-red-500 text-white rounded transition-colors"
+                  >
+                    {ti({ en: "Remove", vi: "Xóa" })}
+                  </button>
+                )}
               {isHost && !player && (
                 <button
                   onClick={() => game.requestAddBot()}
@@ -247,7 +260,7 @@ export default function ReversiUI({
       </div>
 
       {/* Turn Indicator */}
-      {state.gamePhase === "playing" && (
+      {state.gamePhase === ReversiGamePhase.PLAYING && (
         <div className="text-lg text-gray-400">
           {isMyTurn ? (
             <span className="text-green-400">
@@ -256,8 +269,7 @@ export default function ReversiUI({
           ) : (
             <span>
               {ti({ en: "Waiting for", vi: "Đang chờ" })}{" "}
-              {state.players[currentTurn]?.username}{" "}
-              {ti({ en: "...", vi: "..." })}
+              {currentPlayerInTurn?.username} {ti({ en: "...", vi: "..." })}
             </span>
           )}
           {validMoves.length === 0 && isMyTurn && (
@@ -315,7 +327,7 @@ export default function ReversiUI({
       )}
 
       {/* Game Over */}
-      {state.gamePhase === "ended" && (
+      {state.gamePhase === ReversiGamePhase.ENDED && (
         <div className="text-center p-4 bg-slate-800 rounded-lg">
           <h3 className="text-xl font-bold text-white mb-2">
             {ti({ en: "Game Over!", vi: "Trò chơi kết thúc!" })}
@@ -325,7 +337,7 @@ export default function ReversiUI({
               ? ti({ en: "It's a draw!", vi: "Hòa!" })
               : state.winner === currentUserId
                 ? ti({ en: "🎉 You won!", vi: "🎉 Bạn đã thắng!" })
-                : `${[state.players.black, state.players.white].find((p) => p?.id === state.winner)?.username}{" "}
+                : `${players.find((p) => p?.id === state.winner)?.username || ti({ en: "Opponent", vi: "Đối thủ" })}{" "}
                   ${ti({ en: "wins!", vi: "thắng!" })}`}
           </p>
           <p className="text-gray-400">
@@ -338,7 +350,7 @@ export default function ReversiUI({
       {/* Action Buttons */}
       <div className="flex gap-3">
         {/* Waiting phase buttons */}
-        {state.gamePhase === "waiting" && (
+        {state.gamePhase === ReversiGamePhase.WAITING && (
           <>
             {isHost && game.canStartGame() && (
               <button
@@ -350,7 +362,7 @@ export default function ReversiUI({
               </button>
             )}
             {!isHost && (
-              <div>
+              <div className="text-gray-400">
                 {ti({
                   en: "Waiting for host to start game...",
                   vi: "Đang chờ chủ phòng bắt đầu trò chơi...",
@@ -361,7 +373,7 @@ export default function ReversiUI({
         )}
 
         {/* Playing phase buttons */}
-        {state.gamePhase === "playing" && (
+        {state.gamePhase === ReversiGamePhase.PLAYING && (
           <>
             {isMyTurn && validMoves.length === 0 && (
               <button
@@ -408,7 +420,7 @@ export default function ReversiUI({
         )}
 
         {/* Game ended buttons */}
-        {state.gamePhase === "ended" && (
+        {state.gamePhase === ReversiGamePhase.ENDED && (
           <button
             onClick={() => game.requestNewGame()}
             className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg transition-colors"
@@ -425,8 +437,8 @@ export default function ReversiUI({
           const ri = Math.floor(i / 8);
           const ci = i % 8;
           const val = state.board[i];
-          const cell = val === "1" ? "black" : val === "2" ? "white" : null;
-          return renderCell(cell, ri, ci);
+          const cellValue = val === "1" ? 1 : val === "2" ? 2 : 0;
+          return renderCell(cellValue, ri, ci);
         })}
       </div>
 

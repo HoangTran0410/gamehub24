@@ -47,3 +47,79 @@ export const CATEGORY_CONFIG: Record<
     color: "bg-orange-500/20 text-orange-400 border-orange-500/30",
   },
 };
+
+export type UpdateType = "new" | "hot" | "fix";
+
+export const UpdateTypeColor: Record<UpdateType, string> = {
+  new: "text-green-500",
+  hot: "text-red-500",
+  fix: "text-yellow-500",
+};
+
+export const updates: {
+  type: UpdateType;
+  en: string;
+  vi: string;
+  timestamp: number;
+  gameId?: string;
+  link?: string;
+}[] = [
+  {
+    type: "new",
+    en: "New game: Gunny Wars",
+    vi: "Game mới: Gunny Wars",
+    gameId: "gunny",
+    timestamp: 1770070617562,
+  },
+  {
+    type: "fix",
+    en: "Fix bug hang web: Uno",
+    vi: "Fix bug đứng web: Uno",
+    gameId: "uno",
+    timestamp: 1769855181340,
+  },
+  {
+    type: "new",
+    en: "New game: Maze Race",
+    vi: "Game mới: Đua Mê Cung",
+    gameId: "maze",
+    timestamp: 1769669794704,
+  },
+  {
+    type: "new",
+    en: "New feature: Global chat",
+    vi: "Chức năng mới: Chat tổng",
+    timestamp: 1769360911300,
+  },
+  {
+    type: "fix",
+    en: "New game: Draw & Guess",
+    vi: "Game mới: Vẽ & Đoán",
+    gameId: "draw",
+    timestamp: 1769331150518,
+  },
+  {
+    type: "new",
+    en: "Emoji in all games",
+    vi: "Thả emoji trong mọi game",
+    timestamp: 1769331150517,
+  },
+  {
+    type: "new",
+    en: "New game: Poker",
+    vi: "Game mới: Xì tố (Poker)",
+    gameId: "poker",
+    timestamp: 1769274000000,
+  },
+  {
+    type: "hot",
+    en: "Welcome to Gamehub24",
+    vi: "Ra mắt Gamehub24",
+    timestamp: 1769101200000,
+    link: "https://www.facebook.com/groups/indiehackervn/posts/2062449634542598",
+  },
+];
+
+export const lastUpdatedTime = updates.reduce((max, update) => {
+  return Math.max(max, update.timestamp);
+}, 0);

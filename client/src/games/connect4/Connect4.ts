@@ -2,45 +2,49 @@ import { BaseGame, type GameAction } from "../BaseGame";
 import {
   type Connect4State,
   type Connect4Action,
-  type Cell,
+  type Connect4Player,
   type MoveHistory,
+  Connect4PlayerFlag,
+  Connect4GamePhase,
   ROWS,
   COLS,
   WIN_LENGTH,
 } from "./types";
+import { hasFlag } from "../../utils";
 
 export default class Connect4 extends BaseGame<Connect4State> {
+  // Host-only move history to keep state synchronized and thin
+  private localMoveHistory: MoveHistory[] = [];
+
   getInitState(): Connect4State {
+    const p1 = this.players[0];
+    const p2 = this.players[1];
+
     return {
-      board: this.createEmptyBoard(),
+      board: "0".repeat(ROWS * COLS),
       players: [
         {
-          id: this.players[0]?.id || null,
-          username: this.players[0]?.username || "Player 1",
-          color: "red",
-          isBot: false,
+          id: p1?.id || null,
+          username: p1?.username || "Player 1",
+          isHost: p1?.isHost || false,
+          isBot: p1?.isBot || false,
+          flags: p1?.isBot ? Connect4PlayerFlag.BOT : 0,
         },
         {
-          id: this.players[1]?.id || null,
-          username: this.players[1]?.username || "Player 2",
-          color: "yellow",
-          isBot: false,
+          id: p2?.id || null,
+          username: p2?.username || "Player 2",
+          isHost: p2?.isHost || false,
+          isBot: p2?.isBot || false,
+          flags: p2?.isBot ? Connect4PlayerFlag.BOT : 0,
         },
-      ],
-      currentPlayerIndex: 0, // Red goes first
+      ] as [Connect4Player, Connect4Player],
+      currentPlayerIndex: 0,
       winner: null,
-      gamePhase: "waiting",
+      gamePhase: Connect4GamePhase.WAITING,
       undoRequest: null,
-      moveHistory: {},
       lastMove: null,
       winningCells: [],
     };
-  }
-
-  private createEmptyBoard(): Cell[][] {
-    return Array(ROWS)
-      .fill(null)
-      .map(() => Array(COLS).fill(null));
   }
 
   onSocketGameAction(data: { action: GameAction }): void {
@@ -78,13 +82,13 @@ export default class Connect4 extends BaseGame<Connect4State> {
   // ============== Game Logic ==============
 
   private handleStartGame(): void {
-    if (this.state.gamePhase !== "waiting") return;
+    if (this.state.gamePhase !== Connect4GamePhase.WAITING) return;
     if (!this.state.players[0].id || !this.state.players[1].id) return;
 
-    this.state.gamePhase = "playing";
+    this.state.gamePhase = Connect4GamePhase.PLAYING;
     this.state.currentPlayerIndex = 0;
-    this.state.board = this.createEmptyBoard();
-    this.state.moveHistory = {};
+    this.state.board = "0".repeat(ROWS * COLS);
+    this.localMoveHistory = [];
     this.state.winner = null;
     this.state.lastMove = null;
     this.state.winningCells = [];
@@ -93,33 +97,35 @@ export default class Connect4 extends BaseGame<Connect4State> {
   }
 
   private handleMakeMove(playerId: string, col: number): void {
-    if (this.state.gamePhase !== "playing") return;
+    if (this.state.gamePhase !== Connect4GamePhase.PLAYING) return;
 
     const currentPlayer = this.state.players[this.state.currentPlayerIndex];
     if (currentPlayer.id !== playerId) return;
 
     // Find the lowest empty row in this column
     const row = this.getLowestEmptyRow(col);
-    if (row === -1) return; // Column is full
+    if (row === -1) return;
 
-    // Save state for undo
+    // Save state for undo (Host-only)
     this.saveHistory();
 
     // Apply move
-    this.state.board[row][col] = currentPlayer.color;
-    this.state.lastMove = { row, col };
+    const boardArr = this.state.board.split("");
+    const pieceVal = this.state.currentPlayerIndex === 0 ? "1" : "2";
+    boardArr[row * COLS + col] = pieceVal;
+    this.state.board = boardArr.join("");
+    this.state.lastMove = row * COLS + col;
 
     // Check for win
-    const winningCells = this.checkWin(row, col, currentPlayer.color);
+    const winningCells = this.checkWin(row, col, pieceVal);
     if (winningCells.length > 0) {
       this.state.winningCells = winningCells;
       this.state.winner = playerId;
-      this.state.gamePhase = "ended";
+      this.state.gamePhase = Connect4GamePhase.ENDED;
       this.clearSavedState();
     } else if (this.isBoardFull()) {
-      // Draw
       this.state.winner = "draw";
-      this.state.gamePhase = "ended";
+      this.state.gamePhase = Connect4GamePhase.ENDED;
       this.clearSavedState();
     } else {
       // Switch turn
@@ -131,7 +137,7 @@ export default class Connect4 extends BaseGame<Connect4State> {
 
   private getLowestEmptyRow(col: number): number {
     for (let row = ROWS - 1; row >= 0; row--) {
-      if (this.state.board[row][col] === null) {
+      if (this.state.board[row * COLS + col] === "0") {
         return row;
       }
     }
@@ -139,16 +145,14 @@ export default class Connect4 extends BaseGame<Connect4State> {
   }
 
   private isBoardFull(): boolean {
-    return this.state.board[0].every((cell) => cell !== null);
+    // Only check top row
+    for (let col = 0; col < COLS; col++) {
+      if (this.state.board[col] === "0") return false;
+    }
+    return true;
   }
 
-  private checkWin(
-    row: number,
-    col: number,
-    color: Cell,
-  ): { row: number; col: number }[] {
-    if (!color) return [];
-
+  private checkWin(row: number, col: number, pieceVal: string): number[] {
     const directions = [
       [0, 1], // horizontal
       [1, 0], // vertical
@@ -157,7 +161,7 @@ export default class Connect4 extends BaseGame<Connect4State> {
     ];
 
     for (const [dr, dc] of directions) {
-      const cells = this.getConnectedCells(row, col, dr, dc, color);
+      const cells = this.getConnectedCells(row, col, dr, dc, pieceVal);
       if (cells.length >= WIN_LENGTH) {
         return cells;
       }
@@ -171,11 +175,11 @@ export default class Connect4 extends BaseGame<Connect4State> {
     col: number,
     dr: number,
     dc: number,
-    color: Cell,
-  ): { row: number; col: number }[] {
-    const cells: { row: number; col: number }[] = [{ row, col }];
+    pieceVal: string,
+  ): number[] {
+    const cells: number[] = [row * COLS + col];
 
-    // Check in positive direction
+    // Positive
     let r = row + dr;
     let c = col + dc;
     while (
@@ -183,14 +187,14 @@ export default class Connect4 extends BaseGame<Connect4State> {
       r < ROWS &&
       c >= 0 &&
       c < COLS &&
-      this.state.board[r][c] === color
+      this.state.board[r * COLS + c] === pieceVal
     ) {
-      cells.push({ row: r, col: c });
+      cells.push(r * COLS + c);
       r += dr;
       c += dc;
     }
 
-    // Check in negative direction
+    // Negative
     r = row - dr;
     c = col - dc;
     while (
@@ -198,9 +202,9 @@ export default class Connect4 extends BaseGame<Connect4State> {
       r < ROWS &&
       c >= 0 &&
       c < COLS &&
-      this.state.board[r][c] === color
+      this.state.board[r * COLS + c] === pieceVal
     ) {
-      cells.push({ row: r, col: c });
+      cells.push(r * COLS + c);
       r -= dr;
       c -= dc;
     }
@@ -211,34 +215,28 @@ export default class Connect4 extends BaseGame<Connect4State> {
   // ============== Undo System ==============
 
   private saveHistory(): void {
-    const history: MoveHistory = {
-      board: this.state.board.map((row) => [...row]),
-      currentPlayerIndex: this.state.currentPlayerIndex,
-    };
-    const moveKey = `${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
-    this.state.moveHistory[moveKey] = history;
+    if (!this.isHost) return;
 
-    // Prune if > 50
-    const keys = Object.keys(this.state.moveHistory);
-    if (keys.length > 50) {
-      const sortedKeys = keys.sort();
-      const numToRemove = sortedKeys.length - 50;
-      for (let i = 0; i < numToRemove; i++) {
-        delete this.state.moveHistory[sortedKeys[i]];
-      }
+    this.localMoveHistory.push({
+      b: this.state.board,
+      currentPlayerIndex: this.state.currentPlayerIndex,
+    });
+
+    if (this.localMoveHistory.length > 50) {
+      this.localMoveHistory.shift();
     }
   }
 
   private handleRequestUndo(playerId: string, playerName: string): void {
-    if (this.state.gamePhase !== "playing") return;
-    if (Object.keys(this.state.moveHistory).length === 0) return;
+    if (this.state.gamePhase !== Connect4GamePhase.PLAYING) return;
+    if (this.localMoveHistory.length === 0) return;
     if (this.state.undoRequest) return;
 
     const playerIndex = this.state.players.findIndex((p) => p.id === playerId);
     const opponentIndex = 1 - playerIndex;
     const opponent = this.state.players[opponentIndex];
 
-    if (opponent?.isBot) {
+    if (opponent && hasFlag(opponent.flags, Connect4PlayerFlag.BOT)) {
       this.applyUndo();
     } else {
       this.state.undoRequest = { fromId: playerId, fromName: playerName };
@@ -251,15 +249,11 @@ export default class Connect4 extends BaseGame<Connect4State> {
   }
 
   private applyUndo(): void {
-    const keys = Object.keys(this.state.moveHistory).sort();
-    if (keys.length === 0) return;
+    const lastHistory = this.localMoveHistory.pop();
+    if (!lastHistory) return;
 
-    const lastKey = keys[keys.length - 1];
-    const lastState = this.state.moveHistory[lastKey];
-    delete this.state.moveHistory[lastKey];
-
-    this.state.board = lastState.board;
-    this.state.currentPlayerIndex = lastState.currentPlayerIndex;
+    this.state.board = lastHistory.b;
+    this.state.currentPlayerIndex = lastHistory.currentPlayerIndex;
     this.state.undoRequest = null;
     this.state.lastMove = null;
     this.state.winningCells = [];
@@ -269,47 +263,50 @@ export default class Connect4 extends BaseGame<Connect4State> {
     this.state.undoRequest = null;
   }
 
-  // ============== Bot AI (Minimax with Alpha-Beta) ==============
+  // ============== Bot AI ==============
 
   private handleAddBot(): void {
-    if (this.state.gamePhase !== "waiting") return;
+    if (this.state.gamePhase !== Connect4GamePhase.WAITING) return;
     if (this.state.players[1].id) return;
 
     this.state.players[1] = {
       id: `BOT_${Date.now()}`,
       username: "Bot",
-      color: "yellow",
+      isHost: false,
       isBot: true,
-    };
+      flags: Connect4PlayerFlag.BOT,
+    } as Connect4Player;
   }
 
   private handleRemoveBot(): void {
-    if (this.state.gamePhase !== "waiting") return;
-    if (!this.state.players[1].isBot) return;
+    if (this.state.gamePhase !== Connect4GamePhase.WAITING) return;
+    if (!hasFlag(this.state.players[1].flags, Connect4PlayerFlag.BOT)) return;
 
     this.state.players[1] = {
       id: null,
       username: "Player 2",
-      color: "yellow",
+      isHost: false,
       isBot: false,
-    };
+      flags: 0,
+    } as Connect4Player;
   }
 
   private checkBotTurn(): void {
     if (!this.isHost) return;
-    if (this.state.gamePhase !== "playing") return;
+    if (this.state.gamePhase !== Connect4GamePhase.PLAYING) return;
 
     const currentPlayer = this.state.players[this.state.currentPlayerIndex];
-    if (currentPlayer.isBot && currentPlayer.id) {
+    if (
+      hasFlag(currentPlayer.flags, Connect4PlayerFlag.BOT) &&
+      currentPlayer.id
+    ) {
       setTimeout(() => this.makeBotMove(currentPlayer.id!), 600);
     }
   }
 
   private makeBotMove(botId: string): void {
-    if (this.state.gamePhase !== "playing") return;
-
-    const currentPlayer = this.state.players[this.state.currentPlayerIndex];
-    if (currentPlayer.id !== botId) return;
+    if (this.state.gamePhase !== Connect4GamePhase.PLAYING) return;
+    if (this.state.players[this.state.currentPlayerIndex].id !== botId) return;
 
     const bestCol = this.findBestMove();
     if (bestCol !== -1) {
@@ -318,283 +315,49 @@ export default class Connect4 extends BaseGame<Connect4State> {
   }
 
   private findBestMove(): number {
-    const botColor = this.state.players[this.state.currentPlayerIndex].color;
-    const opponentColor = botColor === "red" ? "yellow" : "red";
+    const isFirstPlayer = this.state.currentPlayerIndex === 0;
+    const botPiece = isFirstPlayer ? "1" : "2";
+    const opponentPiece = isFirstPlayer ? "2" : "1";
 
-    // Check for immediate win
+    // Immediate win
     for (let col = 0; col < COLS; col++) {
-      const row = this.getLowestEmptyRowForBoard(this.state.board, col);
+      const row = this.getLowestEmptyRow(col);
       if (row === -1) continue;
+      if (this.checkWinForBot(this.state.board, row, col, botPiece)) return col;
+    }
 
-      const testBoard = this.state.board.map((r) => [...r]);
-      testBoard[row][col] = botColor;
-      if (this.checkWinForBoard(testBoard, row, col, botColor)) {
+    // Block opponent
+    for (let col = 0; col < COLS; col++) {
+      const row = this.getLowestEmptyRow(col);
+      if (row === -1) continue;
+      if (this.checkWinForBot(this.state.board, row, col, opponentPiece))
         return col;
-      }
     }
 
-    // Block opponent win
-    for (let col = 0; col < COLS; col++) {
-      const row = this.getLowestEmptyRowForBoard(this.state.board, col);
-      if (row === -1) continue;
-
-      const testBoard = this.state.board.map((r) => [...r]);
-      testBoard[row][col] = opponentColor;
-      if (this.checkWinForBoard(testBoard, row, col, opponentColor)) {
-        return col;
-      }
+    // Preferred columns (center-out)
+    const preferredCols = [3, 2, 4, 1, 5, 0, 6];
+    for (const col of preferredCols) {
+      if (this.getLowestEmptyRow(col) !== -1) return col;
     }
 
-    // Use minimax for smart move
-    let bestScore = -Infinity;
-    let bestCol = -1;
-    const depth = 5;
-
-    for (let col = 0; col < COLS; col++) {
-      const row = this.getLowestEmptyRowForBoard(this.state.board, col);
-      if (row === -1) continue;
-
-      const testBoard = this.state.board.map((r) => [...r]);
-      testBoard[row][col] = botColor;
-
-      const score = this.minimax(
-        testBoard,
-        depth - 1,
-        -Infinity,
-        Infinity,
-        false,
-        botColor,
-        opponentColor,
-      );
-
-      if (score > bestScore) {
-        bestScore = score;
-        bestCol = col;
-      }
-    }
-
-    // Fallback to center or first available
-    if (bestCol === -1) {
-      const preferredCols = [3, 2, 4, 1, 5, 0, 6];
-      for (const col of preferredCols) {
-        if (this.getLowestEmptyRowForBoard(this.state.board, col) !== -1) {
-          return col;
-        }
-      }
-    }
-
-    return bestCol;
-  }
-
-  private minimax(
-    board: Cell[][],
-    depth: number,
-    alpha: number,
-    beta: number,
-    isMaximizing: boolean,
-    botColor: Cell,
-    opponentColor: Cell,
-  ): number {
-    // Terminal conditions
-    if (depth === 0) {
-      return this.evaluateBoard(board, botColor, opponentColor);
-    }
-
-    const currentColor = isMaximizing ? botColor : opponentColor;
-
-    // Check for terminal state
-    for (let col = 0; col < COLS; col++) {
-      for (let row = 0; row < ROWS; row++) {
-        if (board[row][col] !== null) {
-          if (this.checkWinForBoard(board, row, col, board[row][col])) {
-            return board[row][col] === botColor ? 10000 : -10000;
-          }
-        }
-      }
-    }
-
-    if (this.isBoardFullForBoard(board)) {
-      return 0;
-    }
-
-    if (isMaximizing) {
-      let maxScore = -Infinity;
-      for (let col = 0; col < COLS; col++) {
-        const row = this.getLowestEmptyRowForBoard(board, col);
-        if (row === -1) continue;
-
-        board[row][col] = currentColor;
-        const score = this.minimax(
-          board,
-          depth - 1,
-          alpha,
-          beta,
-          false,
-          botColor,
-          opponentColor,
-        );
-        board[row][col] = null;
-
-        maxScore = Math.max(maxScore, score);
-        alpha = Math.max(alpha, score);
-        if (beta <= alpha) break;
-      }
-      return maxScore === -Infinity ? 0 : maxScore;
-    } else {
-      let minScore = Infinity;
-      for (let col = 0; col < COLS; col++) {
-        const row = this.getLowestEmptyRowForBoard(board, col);
-        if (row === -1) continue;
-
-        board[row][col] = currentColor;
-        const score = this.minimax(
-          board,
-          depth - 1,
-          alpha,
-          beta,
-          true,
-          botColor,
-          opponentColor,
-        );
-        board[row][col] = null;
-
-        minScore = Math.min(minScore, score);
-        beta = Math.min(beta, score);
-        if (beta <= alpha) break;
-      }
-      return minScore === Infinity ? 0 : minScore;
-    }
-  }
-
-  private evaluateBoard(
-    board: Cell[][],
-    botColor: Cell,
-    opponentColor: Cell,
-  ): number {
-    let score = 0;
-
-    // Score center column preference
-    const centerCol = Math.floor(COLS / 2);
-    for (let row = 0; row < ROWS; row++) {
-      if (board[row][centerCol] === botColor) score += 3;
-      if (board[row][centerCol] === opponentColor) score -= 3;
-    }
-
-    // Score windows of 4
-    score += this.scoreWindows(board, botColor, opponentColor);
-
-    return score;
-  }
-
-  private scoreWindows(
-    board: Cell[][],
-    botColor: Cell,
-    opponentColor: Cell,
-  ): number {
-    let score = 0;
-
-    // Horizontal
-    for (let row = 0; row < ROWS; row++) {
-      for (let col = 0; col <= COLS - WIN_LENGTH; col++) {
-        const window = [
-          board[row][col],
-          board[row][col + 1],
-          board[row][col + 2],
-          board[row][col + 3],
-        ];
-        score += this.scoreWindow(window, botColor, opponentColor);
-      }
-    }
-
-    // Vertical
-    for (let col = 0; col < COLS; col++) {
-      for (let row = 0; row <= ROWS - WIN_LENGTH; row++) {
-        const window = [
-          board[row][col],
-          board[row + 1][col],
-          board[row + 2][col],
-          board[row + 3][col],
-        ];
-        score += this.scoreWindow(window, botColor, opponentColor);
-      }
-    }
-
-    // Diagonal \
-    for (let row = 0; row <= ROWS - WIN_LENGTH; row++) {
-      for (let col = 0; col <= COLS - WIN_LENGTH; col++) {
-        const window = [
-          board[row][col],
-          board[row + 1][col + 1],
-          board[row + 2][col + 2],
-          board[row + 3][col + 3],
-        ];
-        score += this.scoreWindow(window, botColor, opponentColor);
-      }
-    }
-
-    // Diagonal /
-    for (let row = WIN_LENGTH - 1; row < ROWS; row++) {
-      for (let col = 0; col <= COLS - WIN_LENGTH; col++) {
-        const window = [
-          board[row][col],
-          board[row - 1][col + 1],
-          board[row - 2][col + 2],
-          board[row - 3][col + 3],
-        ];
-        score += this.scoreWindow(window, botColor, opponentColor);
-      }
-    }
-
-    return score;
-  }
-
-  private scoreWindow(
-    window: Cell[],
-    botColor: Cell,
-    opponentColor: Cell,
-  ): number {
-    const botCount = window.filter((c) => c === botColor).length;
-    const opponentCount = window.filter((c) => c === opponentColor).length;
-    const emptyCount = window.filter((c) => c === null).length;
-
-    if (botCount === 4) return 100;
-    if (botCount === 3 && emptyCount === 1) return 5;
-    if (botCount === 2 && emptyCount === 2) return 2;
-    if (opponentCount === 3 && emptyCount === 1) return -4;
-
-    return 0;
-  }
-
-  private getLowestEmptyRowForBoard(board: Cell[][], col: number): number {
-    for (let row = ROWS - 1; row >= 0; row--) {
-      if (board[row][col] === null) return row;
-    }
     return -1;
   }
 
-  private isBoardFullForBoard(board: Cell[][]): boolean {
-    return board[0].every((cell) => cell !== null);
-  }
-
-  private checkWinForBoard(
-    board: Cell[][],
+  private checkWinForBot(
+    board: string,
     row: number,
     col: number,
-    color: Cell,
+    piece: string,
   ): boolean {
-    if (!color) return false;
-
     const directions = [
       [0, 1],
       [1, 0],
       [1, 1],
       [1, -1],
     ];
-
     for (const [dr, dc] of directions) {
       let count = 1;
-
-      // Positive direction
+      // Pos
       let r = row + dr;
       let c = col + dc;
       while (
@@ -602,14 +365,13 @@ export default class Connect4 extends BaseGame<Connect4State> {
         r < ROWS &&
         c >= 0 &&
         c < COLS &&
-        board[r][c] === color
+        board[r * COLS + c] === piece
       ) {
         count++;
         r += dr;
         c += dc;
       }
-
-      // Negative direction
+      // Neg
       r = row - dr;
       c = col - dc;
       while (
@@ -617,16 +379,14 @@ export default class Connect4 extends BaseGame<Connect4State> {
         r < ROWS &&
         c >= 0 &&
         c < COLS &&
-        board[r][c] === color
+        board[r * COLS + c] === piece
       ) {
         count++;
         r -= dr;
         c -= dc;
       }
-
       if (count >= WIN_LENGTH) return true;
     }
-
     return false;
   }
 
@@ -682,40 +442,44 @@ export default class Connect4 extends BaseGame<Connect4State> {
   }
 
   reset(): void {
-    this.state.board = this.createEmptyBoard();
+    this.state.board = "0".repeat(ROWS * COLS);
     this.state.currentPlayerIndex = 0;
     this.state.winner = null;
-    this.state.gamePhase = "waiting";
+    this.state.gamePhase = Connect4GamePhase.WAITING;
     this.state.undoRequest = null;
-    this.state.moveHistory = {};
+    this.localMoveHistory = [];
     this.state.lastMove = null;
     this.state.winningCells = [];
   }
 
-  updatePlayers(players: { id: string; username: string }[]): void {
-    if (this.state.gamePhase !== "waiting") {
-      return;
-    }
+  updatePlayers(players: any[]): void {
+    if (this.state.gamePhase !== Connect4GamePhase.WAITING) return;
+
+    const p0 = players[0];
+    const p1 = players[1];
 
     // Slot 0 (Host)
-    this.state.players[0].id = players[0]?.id || null;
-    this.state.players[0].username = players[0]?.username || "Player 1";
+    this.state.players[0].id = p0?.id || null;
+    this.state.players[0].username = p0?.username || "Player 1";
+    this.state.players[0].isHost = p0?.isHost || false;
+    this.state.players[0].isBot = p0?.isBot || false;
 
     // Slot 1 (Guest or Bot)
-    if (players[1]) {
-      this.state.players[1].id = players[1].id;
-      this.state.players[1].username = players[1].username;
-      this.state.players[1].isBot = false;
+    if (p1) {
+      this.state.players[1].id = p1.id;
+      this.state.players[1].username = p1.username;
+      this.state.players[1].isHost = p1.isHost || false;
+      this.state.players[1].isBot = p1.isBot || false;
+      this.state.players[1].flags &= ~Connect4PlayerFlag.BOT;
     } else {
-      // No guest. Clear if human. Keep if Bot.
-      if (!this.state.players[1].isBot) {
+      if (!hasFlag(this.state.players[1].flags, Connect4PlayerFlag.BOT)) {
         this.state.players[1].id = null;
         this.state.players[1].username = "Player 2";
+        this.state.players[1].isHost = false;
+        this.state.players[1].isBot = false;
       }
     }
   }
-
-  // ============== Helper Methods ==============
 
   getMyPlayerIndex(): number {
     return this.state.players.findIndex((p) => p.id === this.userId);
@@ -728,6 +492,7 @@ export default class Connect4 extends BaseGame<Connect4State> {
   }
 
   isColumnFull(col: number): boolean {
-    return this.state.board[0][col] !== null;
+    const pos = col; // Top row check
+    return this.state.board[pos] !== "0";
   }
 }

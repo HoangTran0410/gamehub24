@@ -2,24 +2,27 @@ import { BaseGame, type GameAction } from "../BaseGame";
 import {
   type ReversiState,
   type ReversiAction,
-  type Cell,
   type MoveHistory,
+  ReversiColor,
+  ReversiGamePhase,
+  ReversiPlayerFlag,
   DIRECTIONS,
 } from "./types";
 import { runMCTS } from "./mcts";
 import type { Player } from "../../stores/roomStore";
+import { hasFlag } from "../../utils";
 
 export default class Reversi extends BaseGame<ReversiState> {
   getInitState(): ReversiState {
     return {
-      board: this.encodeBoard(this.createInitialBoard()),
+      board: this.encodeInitialBoard(),
       players: {
-        black: this.players[0],
-        white: this.players[1],
+        black: this.preparePlayer(this.players[0]),
+        white: this.preparePlayer(this.players[1]),
       },
-      turn: "black", // Black goes first
+      turn: ReversiColor.BLACK,
       winner: null,
-      gamePhase: "waiting",
+      gamePhase: ReversiGamePhase.WAITING,
       undoRequest: null,
       moveHistory: [],
       lastMove: null,
@@ -27,44 +30,22 @@ export default class Reversi extends BaseGame<ReversiState> {
     };
   }
 
-  private encodeBoard(board: Cell[][]): string {
-    let encoded = "";
-    for (let r = 0; r < 8; r++) {
-      for (let c = 0; c < 8; c++) {
-        const cell = board[r][c];
-        if (cell === "black") encoded += "1";
-        else if (cell === "white") encoded += "2";
-        else encoded += "0";
-      }
-    }
-    return encoded;
+  private preparePlayer(player: Player | null) {
+    if (!player) return null;
+    return {
+      ...player,
+      flags: player.isBot ? ReversiPlayerFlag.BOT : 0,
+    };
   }
 
-  private decodeBoard(encoded: string): Cell[][] {
-    const board: Cell[][] = Array(8)
-      .fill(null)
-      .map(() => Array(8).fill(null));
-    for (let i = 0; i < 64; i++) {
-      const r = Math.floor(i / 8);
-      const c = i % 8;
-      const val = encoded[i];
-      if (val === "1") board[r][c] = "black";
-      else if (val === "2") board[r][c] = "white";
-      else board[r][c] = null;
-    }
-    return board;
-  }
-
-  private createInitialBoard(): Cell[][] {
-    const board: Cell[][] = Array(8)
-      .fill(null)
-      .map(() => Array(8).fill(null));
-    // Center 4 pieces
-    board[3][3] = "white";
-    board[3][4] = "black";
-    board[4][3] = "black";
-    board[4][4] = "white";
-    return board;
+  private encodeInitialBoard(): string {
+    const board = Array(64).fill("0");
+    // Center 4 pieces: (3,3)=W, (3,4)=B, (4,3)=B, (4,4)=W
+    board[3 * 8 + 3] = "2"; // White
+    board[3 * 8 + 4] = "1"; // Black
+    board[4 * 8 + 3] = "1"; // Black
+    board[4 * 8 + 4] = "2"; // White
+    return board.join("");
   }
 
   onSocketGameAction(data: { action: GameAction }): void {
@@ -105,28 +86,33 @@ export default class Reversi extends BaseGame<ReversiState> {
   // ============== Game Logic ==============
 
   private handleStartGame(): void {
-    if (this.state.gamePhase !== "waiting") return;
+    if (this.state.gamePhase !== ReversiGamePhase.WAITING) return;
     // Need both players
     if (!this.state.players.black?.id || !this.state.players.white?.id) return;
 
-    this.state.gamePhase = "playing";
-    this.state.turn = "black";
-    this.state.board = this.encodeBoard(this.createInitialBoard());
+    this.state.gamePhase = ReversiGamePhase.PLAYING;
+    this.state.turn = ReversiColor.BLACK;
+    this.state.board = this.encodeInitialBoard();
     this.state.moveHistory = [];
     this.state.winner = null;
     this.state.lastMove = null;
+    this.state.flippedCells = [];
 
     this.checkBotTurn();
   }
 
   private handleMakeMove(playerId: string, row: number, col: number): void {
-    if (this.state.gamePhase !== "playing") return;
+    if (this.state.gamePhase !== ReversiGamePhase.PLAYING) return;
 
-    const currentPlayer = this.state.players[this.state.turn];
-    if (!currentPlayer || currentPlayer.id != playerId) return;
+    const currentTurn = this.state.turn;
+    const currentPlayer =
+      currentTurn === ReversiColor.BLACK
+        ? this.state.players.black
+        : this.state.players.white;
+
+    if (!currentPlayer || currentPlayer.id !== playerId) return;
 
     // Validate move
-    const currentTurn = this.state.turn;
     const flips = this.getFlips(row, col, currentTurn);
     if (flips.length === 0) return;
 
@@ -134,21 +120,27 @@ export default class Reversi extends BaseGame<ReversiState> {
     this.saveHistory();
 
     // Apply move
-    const board = this.decodeBoard(this.state.board);
-    board[row][col] = currentTurn;
+    const boardArr = this.state.board.split("");
+    const pieceVal = currentTurn === ReversiColor.BLACK ? "1" : "2";
+
+    boardArr[row * 8 + col] = pieceVal;
     for (const [r, c] of flips) {
-      board[r][c] = currentTurn;
+      boardArr[r * 8 + c] = pieceVal;
     }
-    this.state.board = this.encodeBoard(board);
-    this.state.lastMove = { row, col };
-    // Track flipped cells for animation
-    this.state.flippedCells = flips.map(([r, c]) => ({ row: r, col: c }));
+
+    this.state.board = boardArr.join("");
+    this.state.lastMove = row * 8 + col;
+    this.state.flippedCells = flips.map(([r, c]) => r * 8 + c);
 
     // Switch turn
-    this.state.turn = currentTurn === "black" ? "white" : "black";
+    const nextTurn =
+      currentTurn === ReversiColor.BLACK
+        ? ReversiColor.WHITE
+        : ReversiColor.BLACK;
+    this.state.turn = nextTurn;
 
     // Check if next player has valid moves
-    const nextMoves = this.getValidMoves(this.state.turn);
+    const nextMoves = this.getValidMoves(nextTurn);
     if (nextMoves.length === 0) {
       // Next player has no moves, check if current player has moves
       const currentMoves = this.getValidMoves(currentTurn);
@@ -165,29 +157,37 @@ export default class Reversi extends BaseGame<ReversiState> {
   }
 
   private handlePass(playerId: string): void {
-    if (this.state.gamePhase !== "playing") return;
+    if (this.state.gamePhase !== ReversiGamePhase.PLAYING) return;
 
-    const currentPlayer = this.state.players[this.state.turn];
-    if (!currentPlayer || currentPlayer.id != playerId) return;
+    const currentTurn = this.state.turn;
+    const currentPlayer =
+      currentTurn === ReversiColor.BLACK
+        ? this.state.players.black
+        : this.state.players.white;
+
+    if (!currentPlayer || currentPlayer.id !== playerId) return;
 
     // Can only pass if no valid moves
-    const validMoves = this.getValidMoves(this.state.turn);
+    const validMoves = this.getValidMoves(currentTurn);
     if (validMoves.length > 0) return;
 
-    this.state.turn = this.state.turn === "black" ? "white" : "black";
+    this.state.turn =
+      currentTurn === ReversiColor.BLACK
+        ? ReversiColor.WHITE
+        : ReversiColor.BLACK;
 
     this.checkBotTurn();
   }
 
   private endGame(): void {
-    this.state.gamePhase = "ended";
+    this.state.gamePhase = ReversiGamePhase.ENDED;
 
     // Count pieces
     let blackCount = 0;
     let whiteCount = 0;
     for (let i = 0; i < 64; i++) {
       if (this.state.board[i] === "1") blackCount++;
-      if (this.state.board[i] === "2") whiteCount++;
+      else if (this.state.board[i] === "2") whiteCount++;
     }
 
     if (blackCount > whiteCount) {
@@ -203,7 +203,7 @@ export default class Reversi extends BaseGame<ReversiState> {
 
   // ============== Move Validation ==============
 
-  public getValidMoves(color: Cell): [number, number][] {
+  public getValidMoves(color: ReversiColor): [number, number][] {
     const moves: [number, number][] = [];
     for (let r = 0; r < 8; r++) {
       for (let c = 0; c < 8; c++) {
@@ -215,11 +215,15 @@ export default class Reversi extends BaseGame<ReversiState> {
     return moves;
   }
 
-  private getFlips(row: number, col: number, color: Cell): [number, number][] {
-    const board = this.decodeBoard(this.state.board);
-    if (!color || board[row][col] != null) return [];
+  private getFlips(
+    row: number,
+    col: number,
+    color: ReversiColor,
+  ): [number, number][] {
+    if (this.state.board[row * 8 + col] !== "0") return [];
 
-    const opponent = color === "black" ? "white" : "black";
+    const pieceVal = color === ReversiColor.BLACK ? "1" : "2";
+    const opponentVal = color === ReversiColor.BLACK ? "2" : "1";
     const allFlips: [number, number][] = [];
 
     for (const [dr, dc] of DIRECTIONS) {
@@ -228,7 +232,13 @@ export default class Reversi extends BaseGame<ReversiState> {
       let c = col + dc;
 
       // Move in direction while finding opponent pieces
-      while (r >= 0 && r < 8 && c >= 0 && c < 8 && board[r][c] === opponent) {
+      while (
+        r >= 0 &&
+        r < 8 &&
+        c >= 0 &&
+        c < 8 &&
+        this.state.board[r * 8 + c] === opponentVal
+      ) {
         flips.push([r, c]);
         r += dr;
         c += dc;
@@ -240,7 +250,7 @@ export default class Reversi extends BaseGame<ReversiState> {
         r < 8 &&
         c >= 0 &&
         c < 8 &&
-        board[r][c] === color &&
+        this.state.board[r * 8 + c] === pieceVal &&
         flips.length > 0
       ) {
         allFlips.push(...flips);
@@ -266,16 +276,22 @@ export default class Reversi extends BaseGame<ReversiState> {
   }
 
   private handleRequestUndo(playerId: string, playerName: string): void {
-    if (this.state.gamePhase !== "playing") return;
-    if (Object.keys(this.state.moveHistory).length === 0) return;
+    if (this.state.gamePhase !== ReversiGamePhase.PLAYING) return;
+    if (this.state.moveHistory.length === 0) return;
     if (this.state.undoRequest) return;
 
     // Find opponent - if bot, apply undo directly
     const playerColor = this.state.turn;
-    const opponentColor = playerColor === "black" ? "white" : "black";
-    const opponent = this.state.players[opponentColor];
+    const opponentColor =
+      playerColor === ReversiColor.BLACK
+        ? ReversiColor.WHITE
+        : ReversiColor.BLACK;
+    const opponent =
+      opponentColor === ReversiColor.BLACK
+        ? this.state.players.black
+        : this.state.players.white;
 
-    if (opponent?.isBot) {
+    if (opponent && hasFlag(opponent.flags, ReversiPlayerFlag.BOT)) {
       // Direct undo when playing against bot
       this.applyUndo();
     } else {
@@ -297,6 +313,7 @@ export default class Reversi extends BaseGame<ReversiState> {
     this.state.turn = lastState.t;
     this.state.undoRequest = null;
     this.state.lastMove = null;
+    this.state.flippedCells = [];
   }
 
   private handleDeclineUndo(): void {
@@ -306,7 +323,6 @@ export default class Reversi extends BaseGame<ReversiState> {
   // ============== Bot AI ==============
 
   private handleAddBot(): void {
-    // if (this.state.gamePhase !== "waiting") return;
     if (this.state.players.white?.id) return; // Slot taken
 
     this.state.players.white = {
@@ -314,41 +330,66 @@ export default class Reversi extends BaseGame<ReversiState> {
       username: "Bot",
       isHost: false,
       isBot: true,
+      flags: ReversiPlayerFlag.BOT,
     };
   }
 
   private handleRemoveBot(): void {
-    // if (this.state.gamePhase !== "waiting") return;
-    if (!this.state.players.white?.isBot) return;
+    if (
+      !this.state.players.white ||
+      !hasFlag(this.state.players.white.flags, ReversiPlayerFlag.BOT)
+    )
+      return;
 
     this.state.players.white = null;
   }
 
   private checkBotTurn(): void {
     if (!this.isHost) return;
-    if (this.state.gamePhase !== "playing") return;
+    if (this.state.gamePhase !== ReversiGamePhase.PLAYING) return;
 
-    const currentPlayer = this.state.players[this.state.turn];
-    if (currentPlayer?.isBot && currentPlayer.id) {
+    const currentPlayer =
+      this.state.turn === ReversiColor.BLACK
+        ? this.state.players.black
+        : this.state.players.white;
+    if (
+      currentPlayer &&
+      hasFlag(currentPlayer.flags, ReversiPlayerFlag.BOT) &&
+      currentPlayer.id
+    ) {
       setTimeout(() => this.makeBotMove(currentPlayer.id!), 800);
     }
   }
 
   private makeBotMove(botId: string): void {
-    if (this.state.gamePhase !== "playing") return;
+    if (this.state.gamePhase !== ReversiGamePhase.PLAYING) return;
 
-    const currentPlayer = this.state.players[this.state.turn];
+    const turn = this.state.turn;
+    const currentPlayer =
+      turn === ReversiColor.BLACK
+        ? this.state.players.black
+        : this.state.players.white;
     if (currentPlayer?.id != botId) return;
 
-    const validMoves = this.getValidMoves(this.state.turn);
+    const validMoves = this.getValidMoves(turn);
     if (validMoves.length === 0) {
       this.handlePass(botId);
       return;
     }
 
     // Use MCTS to find best move (500ms timeout)
-    const playerIndex = this.state.turn === "black" ? 0 : 1;
-    const board = this.decodeBoard(this.state.board);
+    const playerIndex = turn === ReversiColor.BLACK ? 0 : 1;
+    // Decode board for MCTS
+    const board: (null | "black" | "white")[][] = Array(8)
+      .fill(null)
+      .map(() => Array(8).fill(null));
+    for (let i = 0; i < 64; i++) {
+      const r = Math.floor(i / 8);
+      const c = i % 8;
+      if (this.state.board[i] === "1") board[r][c] = "black";
+      else if (this.state.board[i] === "2") board[r][c] = "white";
+    }
+
     const mctsMove = runMCTS(board, playerIndex as 0 | 1, 500);
 
     if (mctsMove) {
@@ -422,36 +463,47 @@ export default class Reversi extends BaseGame<ReversiState> {
   }
 
   reset(): void {
-    this.state.board = this.encodeBoard(this.createInitialBoard());
-    this.state.turn = "black";
+    this.state.board = this.encodeInitialBoard();
+    this.state.turn = ReversiColor.BLACK;
     this.state.winner = null;
-    this.state.gamePhase = "waiting";
+    this.state.gamePhase = ReversiGamePhase.WAITING;
     this.state.undoRequest = null;
     this.state.moveHistory = [];
     this.state.lastMove = null;
+    this.state.flippedCells = [];
   }
 
   updatePlayers(players: Player[]): void {
-    if (this.state.gamePhase !== "waiting") {
+    if (this.state.gamePhase !== ReversiGamePhase.WAITING) {
       return;
     }
 
-    // Slot 0 (Host)
-    this.state.players.black = players[0];
-    // Slot 1 (Guest or Bot)
-    this.state.players.white = players[1];
+    // Slot 0 (Black/Host)
+    this.state.players.black = this.preparePlayer(players[0]);
+    // Slot 1 (White/Guest or Bot)
+    if (
+      !this.state.players.white ||
+      !hasFlag(this.state.players.white.flags, ReversiPlayerFlag.BOT)
+    ) {
+      this.state.players.white = this.preparePlayer(players[1]);
+    }
   }
 
   // ============== Helper Methods ==============
 
-  getMyColor(): "black" | "white" | null {
-    if (this.state.players.black?.id === this.userId) return "black";
-    if (this.state.players.white?.id === this.userId) return "white";
+  getMyColor(): ReversiColor | null {
+    if (this.state.players.black?.id === this.userId) return ReversiColor.BLACK;
+    if (this.state.players.white?.id === this.userId) return ReversiColor.WHITE;
     return null;
   }
 
   getMyPlayerIndex(): number {
-    return this.getMyColor() === "black" ? 0 : 1;
+    const color = this.getMyColor();
+    return color === ReversiColor.BLACK
+      ? 0
+      : color === ReversiColor.WHITE
+        ? 1
+        : -1;
   }
 
   canStartGame(): boolean {
@@ -463,7 +515,7 @@ export default class Reversi extends BaseGame<ReversiState> {
     let white = 0;
     for (let i = 0; i < 64; i++) {
       if (this.state.board[i] === "1") black++;
-      if (this.state.board[i] === "2") white++;
+      else if (this.state.board[i] === "2") white++;
     }
     return { black, white };
   }
