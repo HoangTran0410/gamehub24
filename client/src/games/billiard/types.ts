@@ -1,5 +1,20 @@
-// Ball type enum for 8-ball pool
-export type BallType = "cue" | "solid" | "stripe" | "eight";
+// Numeric Constants for Optimization
+export const BALL_TYPE = {
+  CUE: 0,
+  SOLID: 1,
+  STRIPE: 2,
+  EIGHT: 3,
+} as const;
+
+export type BallType = (typeof BALL_TYPE)[keyof typeof BALL_TYPE];
+
+export const GAME_PHASE = {
+  WAITING: 0,
+  PLAYING: 1,
+  FINISHED: 2,
+} as const;
+
+export type GamePhase = (typeof GAME_PHASE)[keyof typeof GAME_PHASE];
 
 // Ball interface
 export interface Ball {
@@ -15,14 +30,11 @@ export interface Ball {
 // Player type
 export type PlayerSlot = 1 | 2;
 
-// Game phase
-export type GamePhase = "waiting" | "playing" | "finished";
-
 // Player info in state
 export interface PlayerInfo {
   id: string | null;
   username: string | null;
-  ballType: BallType | null; // 'solid' or 'stripe', assigned after first pocket
+  ballType: BallType | null; // BALL_TYPE.SOLID or BALL_TYPE.STRIPE, assigned after first pocket
 }
 
 // Main game state
@@ -118,10 +130,10 @@ export const BALL_COLORS: Record<number, string> = {
 
 // Get ball type from id
 export function getBallType(id: number): BallType {
-  if (id === 0) return "cue";
-  if (id === 8) return "eight";
-  if (id >= 1 && id <= 7) return "solid";
-  return "stripe";
+  if (id === 0) return BALL_TYPE.CUE;
+  if (id === 8) return BALL_TYPE.EIGHT;
+  if (id >= 1 && id <= 7) return BALL_TYPE.SOLID;
+  return BALL_TYPE.STRIPE;
 }
 
 // Initial ball setup (triangle rack)
@@ -135,7 +147,7 @@ export function createInitialBalls(): Ball[] {
     y: TABLE_HEIGHT / 2,
     vx: 0,
     vy: 0,
-    type: "cue",
+    type: BALL_TYPE.CUE,
     pocketed: false,
   });
 

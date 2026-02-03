@@ -15,6 +15,8 @@ import {
   MIN_VELOCITY,
   MAX_POWER,
   getBallType,
+  BALL_TYPE,
+  GAME_PHASE,
 } from "./types";
 
 export default class Billiard extends BaseGame<BilliardState> {
@@ -39,7 +41,7 @@ export default class Billiard extends BaseGame<BilliardState> {
         },
       },
       currentTurn: 1,
-      gamePhase: "waiting",
+      gamePhase: GAME_PHASE.WAITING,
       winner: null,
       lastShot: null,
       isSimulating: false,
@@ -58,9 +60,10 @@ export default class Billiard extends BaseGame<BilliardState> {
       // Periodic sync every 5 seconds during simulation
       this.syncIntervalId = setInterval(() => {
         if (this.state.isSimulating) {
+          this.roundBalls();
           this.broadcastState(true);
         }
-      }, 5000);
+      }, 10000);
     }
   }
 
@@ -116,7 +119,7 @@ export default class Billiard extends BaseGame<BilliardState> {
   }
 
   private handleShoot(angle: number, power: number, playerId: string): void {
-    if (this.state.gamePhase !== "playing") return;
+    if (this.state.gamePhase !== GAME_PHASE.PLAYING) return;
     if (this.state.isSimulating) return;
 
     // Validate it's the player's turn
@@ -380,7 +383,7 @@ export default class Billiard extends BaseGame<BilliardState> {
   }
 
   private assignBallType(ball: Ball): void {
-    if (ball.type === "eight" || ball.type === "cue") return;
+    if (ball.type === BALL_TYPE.EIGHT || ball.type === BALL_TYPE.CUE) return;
 
     const currentPlayer = this.state.players[this.state.currentTurn];
     const otherSlot: PlayerSlot = this.state.currentTurn === 1 ? 2 : 1;
@@ -389,7 +392,8 @@ export default class Billiard extends BaseGame<BilliardState> {
     // First pocketed ball assigns types
     if (!currentPlayer.ballType && !otherPlayer.ballType) {
       currentPlayer.ballType = ball.type;
-      otherPlayer.ballType = ball.type === "solid" ? "stripe" : "solid";
+      otherPlayer.ballType =
+        ball.type === BALL_TYPE.SOLID ? BALL_TYPE.STRIPE : BALL_TYPE.SOLID;
     }
   }
 
@@ -410,7 +414,7 @@ export default class Billiard extends BaseGame<BilliardState> {
     // Check for game end conditions
     const result = this.checkGameEnd();
     if (result) {
-      this.state.gamePhase = "finished";
+      this.state.gamePhase = GAME_PHASE.FINISHED;
       if (result.winner) {
         this.state.winner = parseInt(result.winner) as PlayerSlot;
       }
@@ -437,8 +441,19 @@ export default class Billiard extends BaseGame<BilliardState> {
     }
 
     // Broadcast authoritative state to all clients
+    this.roundBalls();
     this.syncState();
     this.checkBotTurn();
+  }
+
+  private roundBalls(): void {
+    const round = (val: number) => Math.round(val * 100) / 100;
+    for (const ball of this.state.balls) {
+      ball.x = round(ball.x);
+      ball.y = round(ball.y);
+      ball.vx = round(ball.vx);
+      ball.vy = round(ball.vy);
+    }
   }
 
   private checkContinueTurn(): boolean {
@@ -524,7 +539,7 @@ export default class Billiard extends BaseGame<BilliardState> {
     this.state.players[1].ballType = null;
     this.state.players[2].ballType = null;
     this.state.currentTurn = initState.currentTurn;
-    this.state.gamePhase = "waiting";
+    this.state.gamePhase = GAME_PHASE.WAITING;
     this.state.winner = null;
     this.state.lastShot = null;
     this.state.isSimulating = false;
@@ -558,7 +573,7 @@ export default class Billiard extends BaseGame<BilliardState> {
 
   shoot(angle: number, power: number): void {
     if (this.state.isSimulating) return;
-    if (this.state.gamePhase !== "playing") return;
+    if (this.state.gamePhase !== GAME_PHASE.PLAYING) return;
 
     const action: BilliardAction = {
       type: "SHOOT",
@@ -585,7 +600,7 @@ export default class Billiard extends BaseGame<BilliardState> {
   // Bot management
   addBot(): void {
     if (!this.isHost) return;
-    if (this.state.gamePhase !== "waiting") return;
+    if (this.state.gamePhase !== GAME_PHASE.WAITING) return;
 
     this.state.players[2].id = "BOT";
     this.state.players[2].username = "Bot";
@@ -595,7 +610,7 @@ export default class Billiard extends BaseGame<BilliardState> {
 
   removeBot(): void {
     if (!this.isHost) return;
-    if (this.state.gamePhase !== "waiting") return;
+    if (this.state.gamePhase !== GAME_PHASE.WAITING) return;
     if (this.state.players[2].id !== "BOT") return;
 
     this.state.players[2].id = null;
@@ -622,10 +637,10 @@ export default class Billiard extends BaseGame<BilliardState> {
   }
 
   private handleStartGame(): void {
-    if (this.state.gamePhase !== "waiting") return;
+    if (this.state.gamePhase !== GAME_PHASE.WAITING) return;
     if (!this.state.players[1].id || !this.state.players[2].id) return;
 
-    this.state.gamePhase = "playing";
+    this.state.gamePhase = GAME_PHASE.PLAYING;
     this.state.balls = createInitialBalls();
     this.syncState();
 
@@ -636,14 +651,14 @@ export default class Billiard extends BaseGame<BilliardState> {
     return (
       !!this.state.players[1].id &&
       !!this.state.players[2].id &&
-      this.state.gamePhase === "waiting"
+      this.state.gamePhase === GAME_PHASE.WAITING
     );
   }
 
   // Bot AI
   private checkBotTurn(): void {
     if (!this.isHost) return;
-    if (this.state.gamePhase !== "playing") return;
+    if (this.state.gamePhase !== GAME_PHASE.PLAYING) return;
     if (this.state.isSimulating) return;
 
     const currentPlayerId = this.state.players[this.state.currentTurn].id;
@@ -654,7 +669,7 @@ export default class Billiard extends BaseGame<BilliardState> {
   }
 
   private makeBotMove(): void {
-    if (this.state.gamePhase !== "playing") return;
+    if (this.state.gamePhase !== GAME_PHASE.PLAYING) return;
     if (this.state.isSimulating) return;
 
     const cueBall = this.state.balls.find((b) => b.id === 0);
@@ -689,7 +704,8 @@ export default class Billiard extends BaseGame<BilliardState> {
   isMyTurn(): boolean {
     const mySlot = this.getMySlot();
     return (
-      mySlot === this.state.currentTurn && this.state.gamePhase === "playing"
+      mySlot === this.state.currentTurn &&
+      this.state.gamePhase === GAME_PHASE.PLAYING
     );
   }
 

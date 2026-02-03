@@ -237,7 +237,7 @@ export default function Lobby() {
             </div>
 
             <div
-              className={`grid grid-cols-2 md:grid-cols-3 md:gap-6 gap-3 transition-opacity duration-150 ${
+              className={`grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 md:gap-4 gap-2 transition-opacity duration-150 ${
                 isAnimating ? "opacity-0" : "opacity-100"
               }`}
             >
@@ -346,45 +346,41 @@ const GameCard = memo(
     onToggleFavorite: (gameId: string, e: React.MouseEvent) => void;
     onSelect: (gameId: string) => void;
   }) => {
-    const { ti, ts } = useLanguage();
+    const { ti } = useLanguage();
     const Icon = game.icon;
 
     return (
       <div
-        className={`glass-card rounded-2xl p-4 md:p-6 hover:border-primary/30 transition-all duration-200 ${
+        className={`glass-card rounded-2xl py-4 px-2 transition-all duration-200 ${
           !game.isAvailable ? "opacity-50" : ""
-        } relative group flex flex-col will-change-transform hover:scale-[1.02] cursor-pointer`}
-        onClick={() => onSelect(game.id)}
+        } relative group flex flex-col will-change-transform cursor-pointer hover:scale-[1.02]`}
+        onClick={() => game.isAvailable && onSelect(game.id)}
       >
         <button
           onClick={(e) => onToggleFavorite(game.id, e)}
-          className={`absolute top-2 right-2 md:top-4 md:right-4 p-2 rounded-full transition-all duration-200 z-10 ${
+          className={`absolute top-2 right-2 md:top-4 md:right-4 p-2 rounded-full transition-all duration-200 z-10 cursor-pointer ${
             isFavorite
               ? "text-yellow-500 bg-yellow-500/10 hover:bg-yellow-500/20"
-              : "text-text-muted hover:text-yellow-500 hover:bg-white/5 md:opacity-0 group-hover:opacity-100"
+              : "text-text-muted hover:text-yellow-500 hover:bg-white/5 opacity-50 md:opacity-0 group-hover:opacity-100"
           }`}
-          title={ts({
-            en: "Toggle Favorite",
-            vi: "Đánh dấu yêu thích",
-          })}
         >
           <Star className={`w-5 h-5 ${isFavorite ? "fill-current" : ""}`} />
         </button>
 
         <div className="mb-3 md:mb-4 flex items-center justify-center">
-          <Icon className="w-10 h-10 md:w-12 md:h-12 text-primary" />
+          <Icon className="w-12 h-12 md:w-14 md:h-14 text-primary" />
         </div>
         <h4 className="font-display text-lg md:text-xl text-text-primary mb-2 text-center leading-tight">
           {ti(game.name)}
         </h4>
-        <p className="text-sm text-text-secondary mb-3 hidden md:block text-center flex-1">
+        <p className="text-sm text-slate-400/60 mb-3 hidden md:block text-center flex-1">
           {ti(game.description)}
         </p>
         <div className="flex flex-wrap gap-1.5 mb-3 justify-center">
           {game.categories.map((cat: string) => (
             <span
               key={cat}
-              className={`px-2 py-0.5 text-[11px] md:text-[10px] font-medium rounded-full border ${CATEGORY_CONFIG[cat as keyof typeof CATEGORY_CONFIG].color}`}
+              className={`px-2 py-0.5 text-[11px] md:text-[10px] font-medium rounded-full border opacity-70 group-hover:opacity-100 ${CATEGORY_CONFIG[cat as keyof typeof CATEGORY_CONFIG].color}`}
             >
               {ti(CATEGORY_CONFIG[cat as keyof typeof CATEGORY_CONFIG].label)}
             </span>
@@ -405,14 +401,13 @@ const GameCard = memo(
           </span>
         </div>
         <div className="mt-auto">
-          {game.isAvailable ? (
-            <button
-              onClick={() => onSelect(game.id)}
-              className="w-full px-4 py-2 bg-white/5 hover:bg-white/10 text-white text-sm md:text-base font-semibold rounded-lg transition-colors cursor-pointer"
-            >
-              {ti({ en: "Play", vi: "Chơi" })}
-            </button>
-          ) : (
+          {game.isAvailable ? null : (
+            // <button
+            //   onClick={() => onSelect(game.id)}
+            //   className="w-full px-4 py-2 bg-white/5 hover:bg-white/10 text-white text-sm md:text-base font-semibold rounded-lg transition-colors cursor-pointer"
+            // >
+            //   {ti({ en: "Play", vi: "Chơi" })}
+            // </button>
             <button
               disabled
               className="w-full px-4 py-2 bg-white/5 text-text-muted text-sm md:text-base font-semibold rounded-lg cursor-not-allowed"

@@ -1,3 +1,4 @@
+import { uuidShort } from "../../utils";
 import { calculateSimilarity } from "../../utils/stringUtils";
 import { BaseGame, type GameAction } from "../BaseGame";
 import {
@@ -486,7 +487,7 @@ export default class CanvasGame extends BaseGame<CanvasState> {
     similarity?: number,
   ) {
     const msg: GameMessage = {
-      id: Date.now().toString() + Math.random(),
+      id: uuidShort(),
       senderId: playerId,
       content,
       type: MESSAGE_TYPE.CHAT,
@@ -504,7 +505,7 @@ export default class CanvasGame extends BaseGame<CanvasState> {
     subType: (typeof MESSAGE_SUBTYPE)[keyof typeof MESSAGE_SUBTYPE] = MESSAGE_SUBTYPE.INFO,
   ) {
     const msg: GameMessage = {
-      id: Date.now().toString() + Math.random(),
+      id: uuidShort(),
       senderId: "SYSTEM",
       content,
       type: MESSAGE_TYPE.SYSTEM,

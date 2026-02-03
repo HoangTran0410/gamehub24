@@ -56,8 +56,8 @@ games.set("tictactoe", {
   id: "tictactoe",
   name: { en: "Tic Tac Toe", vi: "Cờ Ca-rô 3x3" },
   description: {
-    en: "Classic 3x3 grid game. Get three in a row to win!",
-    vi: "Trò chơi lưới 3x3 cổ điển. Xếp 3 ô liên tiếp để thắng!",
+    en: "Get 3 in a row to win!",
+    vi: "Xếp 3 ô liên tiếp để thắng!",
   },
   icon: Grid2X2,
   categories: ["board", "puzzle"],
@@ -76,8 +76,8 @@ games.set("caro", {
   id: "caro",
   name: { en: "Caro (Gomoku)", vi: "Cờ Ca-rô" },
   description: {
-    en: "Get 5 in a row on a larger board. More strategic!",
-    vi: "Xếp 5 ô liên tiếp trên bàn cờ lớn. Chiến thuật hơn!",
+    en: "Get 5 in a row to win!",
+    vi: "Xếp 5 ô liên tiếp để thắng!",
   },
   icon: Grid3x3,
   categories: ["board", "strategy", "puzzle"],
@@ -96,7 +96,7 @@ games.set("connect4", {
   id: "connect4",
   name: { en: "Connect 4", vi: "Nối 4" },
   description: {
-    en: "Classic 4-in-a-row! Drop discs and connect four to win.",
+    en: "Drop discs and connect four to win.",
     vi: "Thả đĩa và nối 4 ô liên tiếp để thắng!",
   },
   icon: Columns3,
@@ -116,7 +116,7 @@ games.set("ludo", {
   id: "ludo",
   name: { en: "Ludo", vi: "Cờ Cá Ngựa" },
   description: {
-    en: "Classic board game! Roll dice and race your tokens home.",
+    en: "Roll dice and race your tokens home.",
     vi: "Lắc xúc xắc và đua các quân cờ về đích!",
   },
   icon: ChessKnight,
@@ -136,8 +136,8 @@ games.set("reversi", {
   id: "reversi",
   name: { en: "Reversi (Othello)", vi: "Cờ Lật" },
   description: {
-    en: "Classic strategy game. Flip your opponent's pieces!",
-    vi: "Trò chơi chiến thuật cổ điển. Lật quân của đối thủ!",
+    en: "Flip your opponent's pieces!",
+    vi: "Lật quân của đối thủ!",
   },
   icon: Circle,
   categories: ["board", "strategy"],
@@ -156,8 +156,8 @@ games.set("chess", {
   id: "chess",
   name: { en: "Chess", vi: "Cờ Vua" },
   description: {
-    en: "Strategic board game. Checkmate your opponent!",
-    vi: "Trò chơi chiến thuật. Chiếu hết đối thủ!",
+    en: "Checkmate your opponent!",
+    vi: "Chiếu hết đối thủ!",
   },
   icon: ChessRook,
   categories: ["board", "strategy"],
@@ -173,10 +173,10 @@ games.set("chess", {
 
 games.set("youtube", {
   id: "youtube",
-  name: { en: "YouTube Watch Party", vi: "Xem YouTube Cùng Nhau" },
+  name: { en: "YouTube Party", vi: "YouTube Cùng Nhau" },
   description: {
-    en: "Watch YouTube videos together with friends!",
-    vi: "Xem video YouTube cùng bạn bè!",
+    en: "Watch YouTube with friends!",
+    vi: "Xem YouTube cùng bạn bè!",
   },
   icon: Tv,
   categories: ["party", "relax"],
@@ -234,7 +234,7 @@ games.set("dotsandboxes", {
   id: "dotsandboxes",
   name: { en: "Dots & Boxes", vi: "Nối Điểm" },
   description: {
-    en: "Classic strategy game. Connect dots to close boxes!",
+    en: "Connect dots to close boxes!",
     vi: "Nối các điểm để đóng ô vuông!",
   },
   icon: SquareDashedBottom,
@@ -255,8 +255,8 @@ games.set("uno", {
   id: "uno",
   name: { en: "UNO", vi: "UNO" },
   description: {
-    en: "Classic card game! Match colors or numbers to win.",
-    vi: "Trò chơi bài cổ điển! Ghép màu hoặc số để thắng.",
+    en: "Match colors or numbers to win.",
+    vi: "Ghép màu hoặc số để thắng.",
   },
   icon: Layers,
   categories: ["card", "party"],
@@ -275,8 +275,8 @@ games.set("billiard", {
   id: "billiard",
   name: { en: "Billiard (8-Ball)", vi: "Bi-a (8 Bóng)" },
   description: {
-    en: "Classic pool game! Pocket your balls and sink the 8-ball to win.",
-    vi: "Đánh bóng vào lỗ và ghi bàn bóng 8 để thắng!",
+    en: "Pocket balls and win.",
+    vi: "Đánh bóng vào lỗ để thắng!",
   },
   icon: CircleDot,
   categories: ["strategy"],
@@ -295,8 +295,8 @@ games.set("monopoly", {
   id: "monopoly",
   name: { en: "Monopoly", vi: "Cờ Tỷ Phú" },
   description: {
-    en: "Buy properties, build houses, bankrupt your opponents!",
-    vi: "Mua bất động sản, xây nhà, phá sản đối thủ!",
+    en: "Buy, build, bankrupt your opponents!",
+    vi: "Mua, xây, phá sản đối thủ!",
   },
   icon: Landmark,
   categories: ["board", "strategy", "party"],
@@ -316,7 +316,7 @@ games.set("oanquan", {
   name: { en: "O An Quan", vi: "Ô Ăn Quan" },
   description: {
     en: "Traditional Vietnamese simplified strategy game.",
-    vi: "Trò chơi dân gian Việt Nam. Tính toán nước đi để ăn nhiều quân nhất!",
+    vi: "Trò chơi dân gian Việt Nam.",
   },
   icon: Component,
   categories: ["board", "strategy"],
@@ -355,8 +355,8 @@ games.set("baucua", {
   id: "baucua",
   name: { en: "Bầu Cua", vi: "Bầu Cua" },
   description: {
-    en: "Traditional Vietnamese Tet dice game. Choose symbols and roll the dice!",
-    vi: "Trò chơi xúc xắc Tết truyền thống Việt Nam. Chọn linh vật và lắc xúc xắc!",
+    en: "Choose symbols and roll the dice!",
+    vi: "Chọn linh vật và lắc xúc xắc!",
   },
   icon: Shrimp,
   categories: ["party", "relax"],
@@ -375,8 +375,8 @@ games.set("poker", {
   id: "poker",
   name: { en: "Poker (Texas Hold'em)", vi: "Xì tố (Poker)" },
   description: {
-    en: "Classic Texas Hold'em Poker. Play, bluff, and win!",
-    vi: "Game bài Poker Texas cổ điển. Chơi, chiến thuật và giành chiến thắng!",
+    en: "Classic Texas Hold'em Poker.",
+    vi: "Game bài Poker Texas cổ điển.",
   },
   icon: Coins,
   categories: ["card", "strategy", "party"],
@@ -393,10 +393,10 @@ games.set("poker", {
 // Register Maze
 games.set("maze", {
   id: "maze",
-  name: { en: "Maze Race", vi: "Đua Mê Cung" },
+  name: { en: "Maze", vi: "Mê Cung" },
   description: {
-    en: "Race to the finish line in a procedurally generated maze!",
-    vi: "Đua về đích trong mê cung được tạo ngẫu nhiên!",
+    en: "Race to the finish line in a maze!",
+    vi: "Đua về đích trong mê cung!",
   },
   icon: Accessibility,
   categories: ["puzzle", "party"],
@@ -413,10 +413,10 @@ games.set("maze", {
 // Register GunnyWars
 games.set("gunnywars", {
   id: "gunnywars",
-  name: { en: "GunnyWars", vi: "Gunny Wars" },
+  name: { en: "Gunny Wars", vi: "Bắn Gunny" },
   description: {
-    en: "Turn-based artillery game. Adjust angle and power to defeat opponents!",
-    vi: "Game bắn súng tọa độ. Căn góc và lực trúng mục tiêu!",
+    en: "Large world, many guns!",
+    vi: "Thế giới rộng lớn, súng đa dạng!",
   },
   icon: Crosshair,
   categories: ["gun", "strategy", "party"],

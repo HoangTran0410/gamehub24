@@ -10,6 +10,8 @@ import {
   POCKETS,
   BALL_COLORS,
   MIN_POWER,
+  GAME_PHASE,
+  BALL_TYPE,
 } from "./types";
 import {
   Hand,
@@ -354,7 +356,7 @@ export default function BilliardUI({ game: baseGame }: GameUIProps) {
     const mySlot = game.getMySlot();
     const canAct =
       mySlot === currentState.currentTurn &&
-      currentState.gamePhase === "playing" &&
+      currentState.gamePhase === GAME_PHASE.PLAYING &&
       !currentState.isSimulating;
 
     // Determine target ball type for highlighting
@@ -741,9 +743,9 @@ export default function BilliardUI({ game: baseGame }: GameUIProps) {
       ballsRef.current = newState.balls;
 
       if (
-        newState.gamePhase === "waiting" ||
+        newState.gamePhase === GAME_PHASE.WAITING ||
         (newState.currentTurn === 1 &&
-          newState.gamePhase === "playing" &&
+          newState.gamePhase === GAME_PHASE.PLAYING &&
           !newState.lastShot)
       ) {
         trailsRef.current.clear();
@@ -1109,8 +1111,8 @@ export default function BilliardUI({ game: baseGame }: GameUIProps) {
 
   const getBallTypeLabel = (slot: 1 | 2): string => {
     const ballType = state.players[slot].ballType;
-    if (!ballType) return "";
-    return ballType === "solid"
+    if (ballType === null) return "";
+    return ballType === BALL_TYPE.SOLID
       ? (ti({ en: "(Solids 1-7)", vi: "(Trơn 1-7)" }) as string)
       : (ti({ en: "(Stripes 9-15)", vi: "(Sọc 9-15)" }) as string);
   };
@@ -1233,7 +1235,8 @@ export default function BilliardUI({ game: baseGame }: GameUIProps) {
         {([1, 2] as const).map((slot) => {
           const player = state.players[slot];
           const isCurrentTurn =
-            state.currentTurn === slot && state.gamePhase === "playing";
+            state.currentTurn === slot &&
+            state.gamePhase === GAME_PHASE.PLAYING;
           const isMe = player.id === game["userId"];
           const isBot = player.id === "BOT";
 
@@ -1265,18 +1268,20 @@ export default function BilliardUI({ game: baseGame }: GameUIProps) {
                   </span>
                 </div>
               </div>
-              {isBot && game.isHost && state.gamePhase === "waiting" && (
-                <button
-                  onClick={() => game.removeBot()}
-                  className="text-xs px-2 py-1 bg-red-600 hover:bg-red-500 text-white rounded transition-colors"
-                >
-                  {ti({ en: "Remove", vi: "Xóa" })}
-                </button>
-              )}
+              {isBot &&
+                game.isHost &&
+                state.gamePhase === GAME_PHASE.WAITING && (
+                  <button
+                    onClick={() => game.removeBot()}
+                    className="text-xs px-2 py-1 bg-red-600 hover:bg-red-500 text-white rounded transition-colors"
+                  >
+                    {ti({ en: "Remove", vi: "Xóa" })}
+                  </button>
+                )}
               {!player.id &&
                 game.isHost &&
                 slot === 2 &&
-                state.gamePhase === "waiting" && (
+                state.gamePhase === GAME_PHASE.WAITING && (
                   <button
                     onClick={() => game.addBot()}
                     className="text-xs px-2 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded transition-colors flex items-center gap-1"
@@ -1330,7 +1335,7 @@ export default function BilliardUI({ game: baseGame }: GameUIProps) {
       </div>
 
       {/* Turn Indicator */}
-      {state.gamePhase === "playing" && !state.winner && (
+      {state.gamePhase === GAME_PHASE.PLAYING && !state.winner && (
         <div className="text-lg text-gray-400">
           {state.isSimulating ? (
             <span className="text-yellow-400">
@@ -1375,7 +1380,7 @@ export default function BilliardUI({ game: baseGame }: GameUIProps) {
         />
 
         {/* Unified Overlay: Waiting or Winner */}
-        {(state.winner || state.gamePhase === "waiting") && (
+        {(state.winner || state.gamePhase === GAME_PHASE.WAITING) && (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/60 glass-blur rounded-lg animate-fade-in">
             {/* WINNER STATE */}
             {state.winner && (
@@ -1404,7 +1409,7 @@ export default function BilliardUI({ game: baseGame }: GameUIProps) {
             )}
 
             {/* WAITING STATE */}
-            {!state.winner && state.gamePhase === "waiting" && (
+            {!state.winner && state.gamePhase === GAME_PHASE.WAITING && (
               <>
                 {game.isHost ? (
                   game.canStartGame() ? (
@@ -1507,7 +1512,7 @@ export default function BilliardUI({ game: baseGame }: GameUIProps) {
       )}
 
       {/* new game button */}
-      {game.isHost && state.gamePhase !== "waiting" && (
+      {game.isHost && state.gamePhase !== GAME_PHASE.WAITING && (
         <button
           onClick={async () => {
             if (
