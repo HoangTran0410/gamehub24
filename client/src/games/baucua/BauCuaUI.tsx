@@ -6,6 +6,7 @@ import type {
   PlayerBalance,
   PowerUpType,
   HotStreak,
+  Bet,
 } from "./types";
 import {
   ALL_SYMBOLS,
@@ -16,6 +17,10 @@ import {
   MEGA_ROUND_INTERVAL,
   MAX_SYMBOLS_PER_PLAYER,
   RICH_MODE_TARGETS,
+  BAU_CUA_SYMBOL,
+  GAME_PHASE,
+  POWERUP_TYPE,
+  POWERUP_TIMING,
 } from "./types";
 import { useAlertStore } from "../../stores/alertStore";
 import useLanguage from "../../stores/languageStore";
@@ -40,10 +45,10 @@ import useGameState from "../../hooks/useGameState";
 // Get power-up icon
 const getPowerUpIcon = (type: PowerUpType) => {
   const iconMap = {
-    double_down: <Zap className="w-5 h-5" />,
-    insurance: <Shield className="w-5 h-5" />,
-    reveal_one: <Eye className="w-5 h-5" />,
-    lucky_star: <Star className="w-5 h-5" />,
+    [POWERUP_TYPE.DOUBLE_DOWN]: <Zap className="w-5 h-5" />,
+    [POWERUP_TYPE.INSURANCE]: <Shield className="w-5 h-5" />,
+    [POWERUP_TYPE.REVEAL_ONE]: <Eye className="w-5 h-5" />,
+    [POWERUP_TYPE.LUCKY_STAR]: <Star className="w-5 h-5" />,
   };
   return iconMap[type];
 };
@@ -61,9 +66,7 @@ export default function BauCuaUI({
 
   // Local bets for guests (before syncing to host)
   const [showGameOverModal, setShowGameOverModal] = useState(true);
-  const [localBets, setLocalBets] = useState<
-    { symbol: BauCuaSymbol; amount: number }[]
-  >([]);
+  const [localBets, setLocalBets] = useState<Bet[]>([]);
   const [betError, setBetError] = useState<string | null>(null);
   const [selectedPowerUpType, setSelectedPowerUpType] =
     useState<PowerUpType | null>(null);
@@ -110,13 +113,13 @@ export default function BauCuaUI({
           state.currentBets[userId] || []
         : localBets
       : []
-  ).filter((bet) => bet.amount > 0);
+  ).filter((bet) => bet[1] > 0);
   const myBetOnSelectedSymbol = selectedSymbolForBet
     ? myBets
-        .filter((bet) => bet.symbol === selectedSymbolForBet)
-        .reduce((sum, bet) => sum + bet.amount, 0)
+        .filter((bet) => bet[0] === selectedSymbolForBet)
+        .reduce((sum, bet) => sum + bet[1], 0)
     : 0;
-  const myTotalBet = myBets.reduce((sum, bet) => sum + bet.amount, 0);
+  const myTotalBet = myBets.reduce((sum, bet) => sum + bet[1], 0);
   const myLastProfit = myBalance
     ? myBalance.currentBalance -
       myBalance.balanceHistory[myBalance.balanceHistory.length - 2]
@@ -129,7 +132,10 @@ export default function BauCuaUI({
   useEffect(() => {
     const unsubscribe = game.onUpdate((newState) => {
       // Detect dice roll - when gamePhase changes to "rolling"
-      if (newState.gamePhase === "rolling" && state.gamePhase === "betting") {
+      if (
+        newState.gamePhase === GAME_PHASE.ROLLING &&
+        state.gamePhase === GAME_PHASE.BETTING
+      ) {
         // Start slot machine animation
         setIsRolling(true);
 
@@ -186,7 +192,7 @@ export default function BauCuaUI({
 
       // Clear local bets and selected power-up when new round starts
       if (
-        newState.gamePhase === "betting" &&
+        newState.gamePhase === GAME_PHASE.BETTING &&
         newState.currentRound !== state.currentRound
       ) {
         setLocalBets([]);
@@ -194,7 +200,10 @@ export default function BauCuaUI({
       }
 
       // // Clear selected power-up when phase changes away from betting
-      if (newState.gamePhase !== "betting" && state.gamePhase === "betting") {
+      if (
+        newState.gamePhase !== GAME_PHASE.BETTING &&
+        state.gamePhase === GAME_PHASE.BETTING
+      ) {
         setSelectedPowerUpType(null);
       }
 
@@ -224,12 +233,12 @@ export default function BauCuaUI({
     if (rolls.length === 0) return [];
 
     const counts: Record<BauCuaSymbol, number> = {
-      gourd: 0,
-      crab: 0,
-      shrimp: 0,
-      fish: 0,
-      chicken: 0,
-      deer: 0,
+      [BAU_CUA_SYMBOL.GOURD]: 0,
+      [BAU_CUA_SYMBOL.CRAB]: 0,
+      [BAU_CUA_SYMBOL.SHRIMP]: 0,
+      [BAU_CUA_SYMBOL.FISH]: 0,
+      [BAU_CUA_SYMBOL.CHICKEN]: 0,
+      [BAU_CUA_SYMBOL.DEER]: 0,
     };
 
     rolls.forEach((roll) => {
@@ -248,24 +257,19 @@ export default function BauCuaUI({
 
   // Get bet amount for a symbol
   const getBetOnSymbol = (symbol: BauCuaSymbol): number => {
-    const bet = myBets.find(
-      (b: { symbol: BauCuaSymbol; amount: number }) => b.symbol === symbol,
-    );
-    return bet?.amount || 0;
+    const bet = myBets.find((b) => b[0] === symbol);
+    return bet ? bet[1] : 0;
   };
 
   // Handle bet button click (Open modal)
   const handleSymbolClick = (symbol: BauCuaSymbol) => {
-    if (state.gamePhase !== "betting") return;
+    if (state.gamePhase !== GAME_PHASE.BETTING) return;
     if (!myBalance) return;
 
     // Check if user has enough money to place a minimum bet
     const availableBalance = myBalance.currentBalance - myTotalBet;
 
-    if (
-      availableBalance < MIN_BET &&
-      !myBets.find((b) => b.symbol === symbol)
-    ) {
+    if (availableBalance < MIN_BET && !myBets.find((b) => b[0] === symbol)) {
       showAlert(
         ts({
           vi:
@@ -287,7 +291,7 @@ export default function BauCuaUI({
     if (!selectedSymbolForBet) return;
     const symbol = selectedSymbolForBet;
 
-    if (state.gamePhase !== "betting") return;
+    if (state.gamePhase !== GAME_PHASE.BETTING) return;
     if (!myBalance) return;
 
     const finalBetAmount = Math.min(
@@ -317,13 +321,13 @@ export default function BauCuaUI({
         return;
       }
 
-      const existingBetIndex = localBets.findIndex((b) => b.symbol === symbol);
+      const existingBetIndex = localBets.findIndex((b) => b[0] === symbol);
       const newLocalBets = [...localBets];
 
       if (existingBetIndex >= 0) {
-        newLocalBets[existingBetIndex].amount = finalBetAmount;
+        newLocalBets[existingBetIndex][1] = finalBetAmount;
       } else {
-        newLocalBets.push({ symbol, amount: finalBetAmount });
+        newLocalBets.push([symbol, finalBetAmount]);
       }
 
       setLocalBets(newLocalBets);
@@ -363,14 +367,14 @@ export default function BauCuaUI({
     }[] = [];
 
     Object.entries(state.currentBets).forEach(([playerId, playerBets]) => {
-      const betOnSymbol = playerBets.find((b) => b.symbol === symbol);
+      const betOnSymbol = playerBets.find((b) => b[0] === symbol);
       if (betOnSymbol) {
         const player = state.playerBalances[playerId];
         if (player) {
           bets.push({
             playerId,
             username: player.username,
-            amount: betOnSymbol.amount,
+            amount: betOnSymbol[1],
             isBot: player.isBot,
           });
         }
@@ -657,15 +661,18 @@ export default function BauCuaUI({
               })}
             </p>
             <ul className="list-disc pl-4">
-              {Object.keys(POWERUP_CONFIG).map((key) => (
-                <li key={key}>
-                  <strong>
-                    {ti(POWERUP_CONFIG[key as PowerUpType].emoji)}{" "}
-                    {ti(POWERUP_CONFIG[key as PowerUpType].name)}:
-                  </strong>{" "}
-                  {ti(POWERUP_CONFIG[key as PowerUpType].description)}
-                </li>
-              ))}
+              {Object.keys(POWERUP_CONFIG).map((key) => {
+                const type = Number(key) as PowerUpType;
+                return (
+                  <li key={key}>
+                    <strong>
+                      {ti(POWERUP_CONFIG[type].emoji)}{" "}
+                      {ti(POWERUP_CONFIG[type].name)}:
+                    </strong>{" "}
+                    {ti(POWERUP_CONFIG[type].description)}
+                  </li>
+                );
+              })}
             </ul>
           </section>
 
@@ -717,7 +724,7 @@ export default function BauCuaUI({
               const isCorrectBet =
                 !isRolling &&
                 state.diceRoll &&
-                myBets.some((bet) => bet.symbol === finalSymbol);
+                myBets.some((bet) => bet[0] === finalSymbol);
 
               return (
                 <div
@@ -779,7 +786,7 @@ export default function BauCuaUI({
           )}
         </div>
 
-        {game.isHost && state.gamePhase === "betting" && (
+        {game.isHost && state.gamePhase === GAME_PHASE.BETTING && (
           <button
             onClick={handleRollDice}
             className="w-full px-6 py-3 bg-linear-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 rounded-lg font-bold text-lg transition-all transform hover:scale-105"
@@ -789,7 +796,7 @@ export default function BauCuaUI({
           </button>
         )}
 
-        {game.isHost && state.gamePhase === "results" && (
+        {game.isHost && state.gamePhase === GAME_PHASE.RESULTS && (
           <button
             onClick={() => game.requestStartNewRound()}
             className="w-full px-6 py-3 bg-green-600 hover:bg-green-700 rounded-lg font-bold transition-colors"
@@ -970,7 +977,7 @@ export default function BauCuaUI({
     return (
       <div className="grid grid-cols-3 @md:gap-3 gap-1 relative">
         {/* overlay to show waiting for host to roll */}
-        {isReady && state.gamePhase === "betting" && (
+        {isReady && state.gamePhase === GAME_PHASE.BETTING && (
           <div className="absolute inset-0 bg-black/50 z-10 flex items-center justify-center">
             <p className="text-md text-orange-500 pt-2 animate-bounce">
               {ti({
@@ -985,7 +992,8 @@ export default function BauCuaUI({
           const betsOnSymbol = getBetsOnSymbol(symbol);
           const totalBets = getTotalBetsOnSymbol(symbol);
           const isWinning =
-            state.diceRoll?.includes(symbol) && state.gamePhase === "results";
+            state.diceRoll?.includes(symbol) &&
+            state.gamePhase === GAME_PHASE.RESULTS;
 
           // Get hot streak count for this symbol
           const hotStreaks = getHotStreaks();
@@ -1017,7 +1025,7 @@ export default function BauCuaUI({
             <button
               key={symbol}
               onClick={() => handleSymbolClick(symbol)}
-              disabled={state.gamePhase !== "betting"}
+              disabled={state.gamePhase !== GAME_PHASE.BETTING}
               className={`relative p-4 rounded-xl border-2 transition-all transform active:scale-95 ${
                 isWinning
                   ? "bg-linear-to-br from-yellow-500 to-orange-500 border-yellow-400 animate-pulse"
@@ -1025,11 +1033,11 @@ export default function BauCuaUI({
                     ? "bg-linear-to-br from-blue-600 to-purple-600 border-blue-400"
                     : "bg-slate-800/50 border-slate-700 hover:border-slate-500"
               } ${
-                state.gamePhase === "betting"
+                state.gamePhase === GAME_PHASE.BETTING
                   ? "cursor-pointer"
                   : "cursor-not-allowed opacity-75"
               } ${
-                hasAllIn && state.gamePhase === "betting"
+                hasAllIn && state.gamePhase === GAME_PHASE.BETTING
                   ? "ring-4 ring-red-500 ring-opacity-75 shadow-lg shadow-red-500/50 animate-pulse"
                   : ""
               }`}
@@ -1057,7 +1065,7 @@ export default function BauCuaUI({
               )}
 
               {/* All-in indicator */}
-              {hasAllIn && state.gamePhase === "betting" && (
+              {hasAllIn && state.gamePhase === GAME_PHASE.BETTING && (
                 <div className="absolute @md:top-2 @md:left-2 top-1 left-1 bg-red-600 text-white px-2 py-1 rounded-full text-xs font-bold animate-bounce flex items-center gap-1">
                   🔥 ALL-IN
                 </div>
@@ -1205,7 +1213,7 @@ export default function BauCuaUI({
                 </div>
               </div>
 
-              {state.gamePhase === "betting" && (
+              {state.gamePhase === GAME_PHASE.BETTING && (
                 <>
                   <div className="flex gap-2">
                     {!isReady && (
@@ -1300,9 +1308,8 @@ export default function BauCuaUI({
                 {ti({ vi: "Kỹ năng", en: "Power-ups" })}
               </h3>
               <div className="flex flex-wrap gap-2 justify-center">
-                {(
-                  Object.keys(state.playerPowerUps[userId]) as PowerUpType[]
-                ).map((powerUpType) => {
+                {Object.keys(state.playerPowerUps[userId]).map((key) => {
+                  const powerUpType = Number(key) as PowerUpType;
                   const powerUp = state.playerPowerUps[userId][powerUpType];
                   const isSelected = selectedPowerUpType === powerUpType;
                   const isActive = state.activePowerUps[userId] === powerUpType;
@@ -1363,7 +1370,7 @@ export default function BauCuaUI({
               {/* Activate button */}
               {selectedPowerUpType &&
                 !state.activePowerUps[userId] &&
-                state.gamePhase === "betting" && (
+                state.gamePhase === GAME_PHASE.BETTING && (
                   <button
                     onClick={() => {
                       game.requestActivatePowerUp(selectedPowerUpType);
@@ -1390,7 +1397,7 @@ export default function BauCuaUI({
               {state.activePowerUps[userId] &&
                 state.playerPowerUps[userId] &&
                 POWERUP_CONFIG[state.activePowerUps[userId]]?.timing ===
-                  "post_roll" && (
+                  POWERUP_TIMING.POST_ROLL && (
                   <button
                     onClick={() => {
                       game.requestDeactivatePowerUp();
@@ -1441,10 +1448,11 @@ export default function BauCuaUI({
                 </div>
               )}
               {/* Show result for Lucky Star */}
-              {state.playerPowerUps[userId]?.lucky_star?.lastMultiplier &&
-                state.gamePhase === "results" &&
-                state.playerPowerUps[userId].lucky_star.lastUsedRound ===
-                  state.currentRound && (
+              {state.playerPowerUps[userId]?.[POWERUP_TYPE.LUCKY_STAR]
+                ?.lastMultiplier &&
+                state.gamePhase === GAME_PHASE.RESULTS &&
+                state.playerPowerUps[userId][POWERUP_TYPE.LUCKY_STAR]
+                  .lastUsedRound === state.currentRound && (
                   <div className="p-3 bg-yellow-600/20 border border-yellow-500 rounded-lg mt-2">
                     <p className="text-xs text-yellow-300 font-semibold mb-2">
                       🌟{" "}
@@ -1456,9 +1464,9 @@ export default function BauCuaUI({
                     <div className="text-center">
                       <p className="text-2xl font-bold text-yellow-300">
                         x
-                        {state.playerPowerUps[
-                          userId
-                        ].lucky_star.lastMultiplier?.toFixed(1)}
+                        {state.playerPowerUps[userId][
+                          POWERUP_TYPE.LUCKY_STAR
+                        ].lastMultiplier?.toFixed(1)}
                       </p>
                     </div>
                   </div>
@@ -1499,7 +1507,7 @@ export default function BauCuaUI({
         onConfirm={handlePlaceBet}
         onClear={() => {
           setLocalBets((prev) =>
-            prev.filter((bet) => bet.symbol !== selectedSymbolForBet),
+            prev.filter((bet) => bet[0] !== selectedSymbolForBet),
           );
           setSelectedSymbolForBet(null);
         }}
@@ -1513,9 +1521,9 @@ export default function BauCuaUI({
       >
         {/* Header */}
         {state.isMegaRound &&
-        (state.gamePhase === "betting" ||
-          state.gamePhase === "rolling" ||
-          state.gamePhase === "results") ? (
+        (state.gamePhase === GAME_PHASE.BETTING ||
+          state.gamePhase === GAME_PHASE.ROLLING ||
+          state.gamePhase === GAME_PHASE.RESULTS) ? (
           <div className="bg-linear-to-r from-yellow-600 via-orange-500 to-yellow-600 rounded-xl p-4 text-white border-4 border-yellow-400 shadow-lg shadow-yellow-500/50 animate-pulse">
             <h2 className="text-3xl font-bold text-center flex items-center justify-center gap-2">
               <span className="animate-bounce">🌟</span>
@@ -1564,16 +1572,16 @@ export default function BauCuaUI({
         )}
 
         {/* Waiting Phase */}
-        {state.gamePhase === "waiting" && renderWaitingPhase()}
+        {state.gamePhase === GAME_PHASE.WAITING && renderWaitingPhase()}
 
         {/* Main Game Area */}
-        {state.gamePhase !== "waiting" && renderMainGameArea()}
+        {state.gamePhase !== GAME_PHASE.WAITING && renderMainGameArea()}
 
         {/* Game Over Screen */}
-        {state.gamePhase === "ended" && renderGameOver()}
+        {state.gamePhase === GAME_PHASE.ENDED && renderGameOver()}
 
         {/* Host Controls */}
-        {game.isHost && state.gamePhase !== "waiting" && (
+        {game.isHost && state.gamePhase !== GAME_PHASE.WAITING && (
           <div className="flex gap-2 w-full items-center justify-center">
             <button
               onClick={async () => {

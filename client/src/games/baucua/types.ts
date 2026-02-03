@@ -7,44 +7,45 @@ export const MAX_SYMBOLS_PER_PLAYER = 3;
 export const RICH_MODE_TARGETS = [
   10000, 100000, 1000000, 100000000, 500000000, 1000000000, 2000000000,
 ];
+export const MAX_HISTORY_LENGTH = 50;
 
 // The 6 traditional Bầu Cua symbols
-export type BauCuaSymbol =
-  | "gourd"
-  | "crab"
-  | "shrimp"
-  | "fish"
-  | "chicken"
-  | "deer";
+export const BAU_CUA_SYMBOL = {
+  GOURD: 0,
+  CRAB: 1,
+  SHRIMP: 2,
+  FISH: 3,
+  CHICKEN: 4,
+  DEER: 5,
+} as const;
+
+export type BauCuaSymbol = (typeof BAU_CUA_SYMBOL)[keyof typeof BAU_CUA_SYMBOL];
 
 // Symbol display names
 export const SYMBOL_NAMES: Record<
   BauCuaSymbol,
   { en: string; vi: string; emoji: string }
 > = {
-  gourd: { en: "Gourd", vi: "Bầu", emoji: "🎃" },
-  crab: { en: "Crab", vi: "Cua", emoji: "🦀" },
-  shrimp: { en: "Shrimp", vi: "Tôm", emoji: "🦐" },
-  fish: { en: "Fish", vi: "Cá", emoji: "🐟" },
-  chicken: { en: "Chicken", vi: "Gà", emoji: "🐔" },
-  deer: { en: "Deer", vi: "Nai", emoji: "🦌" },
+  [BAU_CUA_SYMBOL.GOURD]: { en: "Gourd", vi: "Bầu", emoji: "🎃" },
+  [BAU_CUA_SYMBOL.CRAB]: { en: "Crab", vi: "Cua", emoji: "🦀" },
+  [BAU_CUA_SYMBOL.SHRIMP]: { en: "Shrimp", vi: "Tôm", emoji: "🦐" },
+  [BAU_CUA_SYMBOL.FISH]: { en: "Fish", vi: "Cá", emoji: "🐟" },
+  [BAU_CUA_SYMBOL.CHICKEN]: { en: "Chicken", vi: "Gà", emoji: "🐔" },
+  [BAU_CUA_SYMBOL.DEER]: { en: "Deer", vi: "Nai", emoji: "🦌" },
 };
 
 // All symbols in order
 export const ALL_SYMBOLS: BauCuaSymbol[] = [
-  "gourd",
-  "crab",
-  "shrimp",
-  "fish",
-  "chicken",
-  "deer",
+  BAU_CUA_SYMBOL.GOURD,
+  BAU_CUA_SYMBOL.CRAB,
+  BAU_CUA_SYMBOL.SHRIMP,
+  BAU_CUA_SYMBOL.FISH,
+  BAU_CUA_SYMBOL.CHICKEN,
+  BAU_CUA_SYMBOL.DEER,
 ];
 
-// Player's bet on a symbol
-export interface Bet {
-  symbol: BauCuaSymbol;
-  amount: number;
-}
+// Player's bet on a symbol: [symbol, amount]
+export type Bet = [BauCuaSymbol, number];
 
 // Player balance with history for graphing
 export interface PlayerBalance {
@@ -60,14 +61,25 @@ export interface PlayerBalance {
 export type DiceRoll = [BauCuaSymbol, BauCuaSymbol, BauCuaSymbol];
 
 // Game phases
-export type GamePhase = "waiting" | "betting" | "rolling" | "results" | "ended";
+export const GAME_PHASE = {
+  WAITING: 0,
+  BETTING: 1,
+  ROLLING: 2,
+  RESULTS: 3,
+  ENDED: 4,
+} as const;
+
+export type GamePhase = (typeof GAME_PHASE)[keyof typeof GAME_PHASE];
 
 // Power-up types
-export type PowerUpType =
-  | "double_down"
-  | "insurance"
-  | "reveal_one"
-  | "lucky_star";
+export const POWERUP_TYPE = {
+  DOUBLE_DOWN: 0,
+  INSURANCE: 1,
+  REVEAL_ONE: 2,
+  LUCKY_STAR: 3,
+} as const;
+
+export type PowerUpType = (typeof POWERUP_TYPE)[keyof typeof POWERUP_TYPE];
 
 export interface PowerUp {
   type: PowerUpType;
@@ -77,7 +89,13 @@ export interface PowerUp {
 }
 
 // Power-up activation timing
-export type PowerUpTiming = "pre_roll" | "post_roll";
+export const POWERUP_TIMING = {
+  PRE_ROLL: 0,
+  POST_ROLL: 1,
+} as const;
+
+export type PowerUpTiming =
+  (typeof POWERUP_TIMING)[keyof typeof POWERUP_TIMING];
 
 // Power-up prediction (for pre-roll powers like reveal_one)
 export interface PowerUpPrediction {
@@ -100,9 +118,9 @@ export interface PowerUpConfig {
 
 // Power-up configuration (centralized)
 export const POWERUP_CONFIG: Record<PowerUpType, PowerUpConfig> = {
-  double_down: {
+  [POWERUP_TYPE.DOUBLE_DOWN]: {
     cooldown: 3,
-    timing: "post_roll",
+    timing: POWERUP_TIMING.POST_ROLL,
     emoji: "2️⃣",
     name: { en: "Double Down", vi: "Nhân Đôi" },
     description: {
@@ -110,9 +128,9 @@ export const POWERUP_CONFIG: Record<PowerUpType, PowerUpConfig> = {
       vi: "Thắng x2 tiền thưởng, thua x2 tiền phạt. Hồi chiêu: 3 vòng",
     },
   },
-  insurance: {
+  [POWERUP_TYPE.INSURANCE]: {
     cooldown: 2,
-    timing: "post_roll",
+    timing: POWERUP_TIMING.POST_ROLL,
     emoji: "🛡️",
     name: { en: "Insurance", vi: "Bảo Hiểm" },
     description: {
@@ -120,9 +138,9 @@ export const POWERUP_CONFIG: Record<PowerUpType, PowerUpConfig> = {
       vi: "Hoàn 50% nếu thua, nhưng mất 50% nếu thắng. Hồi chiêu: 2 vòng",
     },
   },
-  reveal_one: {
+  [POWERUP_TYPE.REVEAL_ONE]: {
     cooldown: 3,
-    timing: "pre_roll",
+    timing: POWERUP_TIMING.PRE_ROLL,
     accuracy: [0.6, 0.9],
     emoji: "👁️",
     name: { en: "God Eyes", vi: "Mắt Thần" },
@@ -131,9 +149,9 @@ export const POWERUP_CONFIG: Record<PowerUpType, PowerUpConfig> = {
       vi: "Dự đoán kết quả (60-90% chính xác). Hồi chiêu: 3 vòng",
     },
   },
-  lucky_star: {
+  [POWERUP_TYPE.LUCKY_STAR]: {
     cooldown: 4,
-    timing: "post_roll",
+    timing: POWERUP_TIMING.POST_ROLL,
     luckyMultiplier: [0.5, 3],
     emoji: "⭐️",
     name: { en: "Lucky Star", vi: "Sao May Mắn" },
@@ -176,10 +194,10 @@ export interface BauCuaState {
   playerPowerUps: Record<
     string,
     {
-      double_down: PowerUp;
-      insurance: PowerUp;
-      reveal_one: PowerUp;
-      lucky_star: PowerUp;
+      [POWERUP_TYPE.DOUBLE_DOWN]: PowerUp;
+      [POWERUP_TYPE.INSURANCE]: PowerUp;
+      [POWERUP_TYPE.REVEAL_ONE]: PowerUp;
+      [POWERUP_TYPE.LUCKY_STAR]: PowerUp;
     }
   >;
 

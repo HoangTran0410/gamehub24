@@ -63,3 +63,9 @@ export default class MyGame extends BaseGame<MyGameState> {
 3. **Always Mutate**: Không gán lại `this.state = ...`, hãy mutate trực tiếp hoặc `Object.assign` để Proxy hoạt động.
 4. **Persistence**: Gọi `this.setGameName("name")` để tự động lưu/load game khi refresh trang.
 5. **Bot AI & Side Effects**: Hạn chế dùng `setTimeout` rời rạc. Nếu cần trì hoãn hành động của Bot, phải quản lý timer chặt chẽ và luôn dọn dẹp (clear) trong hàm `destroy()` để tránh memory leak hoặc lỗi khi nhảy sang game mới.
+6. **Minimal Game State 📉**: Luôn giữ state nhỏ nhất có thể để tối ưu băng thông (vì game đồng bộ qua JSON patch):
+    - **Numeric Constants**: Dùng số thay vì chuỗi cho Game Phase, Symbol, Power-up type (vd: `0` thay vì `"betting"`).
+    - **Tuples over Objects**: Dùng mảng cố định `[id, amount]` thay vì object `{id, amount}` cho các dữ liệu lặp lại nhiều.
+    - **History Limits**: Luôn giới hạn độ dài mảng lịch sử (vd: `balanceHistory`, `recentRolls`) bằng `shift()` hoặc `delete` key cũ.
+    - **Precision**: Làm tròn số thập phân (vd: `Math.round(val * 10) / 10`) trước khi lưu vào state.
+    - **Short IDs**: Dùng `uuidShort()` hoặc Round ID (`R1`, `R2`) thay vì `Date.now()` làm key trong Object.

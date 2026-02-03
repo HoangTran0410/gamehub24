@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { X, Check } from "lucide-react";
 import { formatNumber } from "../../utils";
-import type { BauCuaSymbol } from "./types";
+import type { BauCuaSymbol, Bet } from "./types";
 import { SYMBOL_NAMES, MIN_BET, MAX_SYMBOLS_PER_PLAYER } from "./types";
 import useLanguage from "../../stores/languageStore";
 
@@ -14,10 +14,7 @@ interface BettingModalProps {
   symbol: BauCuaSymbol | null;
   currentBalance: number;
   currentBet: number;
-  currentBets: {
-    symbol: BauCuaSymbol;
-    amount: number;
-  }[];
+  currentBets: Bet[];
 }
 
 export default function BettingModal({
@@ -84,7 +81,7 @@ export default function BettingModal({
 
         <div className="relative">
           {currentBets.length >= MAX_SYMBOLS_PER_PLAYER &&
-            !currentBets.find((b) => b.symbol === symbol) && (
+            !currentBets.find((b) => b[0] === symbol) && (
               <div className="absolute inset-0 bg-black/50 z-10 flex items-center justify-center text-red-500">
                 {ti({
                   en: `Can only have max ${MAX_SYMBOLS_PER_PLAYER} bets`,

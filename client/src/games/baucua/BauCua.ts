@@ -14,9 +14,15 @@ import {
   MIN_BET,
   JACKPOT_PERCENTAGE,
   MEGA_ROUND_INTERVAL,
+  BAU_CUA_SYMBOL,
+  GAME_PHASE,
+  POWERUP_TYPE,
+  POWERUP_TIMING,
+  MAX_HISTORY_LENGTH,
 } from "./types";
+import type { Bet } from "./types";
 import type { Player } from "../../stores/roomStore";
-import { randInRange } from "../../utils";
+import { randInRange, uuidShort } from "../../utils";
 
 export default class BauCua extends BaseGame<BauCuaState> {
   private botMoveTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -39,7 +45,7 @@ export default class BauCua extends BaseGame<BauCuaState> {
     });
 
     return {
-      gamePhase: "waiting",
+      gamePhase: GAME_PHASE.WAITING,
       playerBalances,
       currentBets: {},
       diceRoll: null,
@@ -59,9 +65,10 @@ export default class BauCua extends BaseGame<BauCuaState> {
   // Initialize power-ups for a player
   private initializePowerUps(): Record<PowerUpType, PowerUp> {
     const powerUps = {} as Record<PowerUpType, PowerUp>;
-    for (const [type, _config] of Object.entries(POWERUP_CONFIG)) {
-      powerUps[type as PowerUpType] = {
-        type: type as PowerUpType,
+    for (const typeKey of Object.keys(POWERUP_CONFIG)) {
+      const type = Number(typeKey) as PowerUpType;
+      powerUps[type] = {
+        type: type,
         cooldown: 0,
         lastUsedRound: -1,
       };
@@ -121,17 +128,14 @@ export default class BauCua extends BaseGame<BauCuaState> {
     symbol: BauCuaSymbol,
     amount: number,
   ): void {
-    if (this.state.gamePhase !== "betting") return;
+    if (this.state.gamePhase !== GAME_PHASE.BETTING) return;
 
     const playerBalance = this.state.playerBalances[playerId];
     if (!playerBalance) return;
 
     // Get current total bet
     const currentBets = this.state.currentBets[playerId] || [];
-    const totalCurrentBet = currentBets.reduce(
-      (sum, bet) => sum + bet.amount,
-      0,
-    );
+    const totalCurrentBet = currentBets.reduce((sum, bet) => sum + bet[1], 0);
 
     // Auto-cap to available balance
     const availableBalance = playerBalance.currentBalance - totalCurrentBet;
@@ -142,16 +146,14 @@ export default class BauCua extends BaseGame<BauCuaState> {
     // if (actualAmount > MAX_BET) return;
 
     // Find existing bet on this symbol
-    const existingBetIndex = currentBets.findIndex(
-      (bet) => bet.symbol === symbol,
-    );
+    const existingBetIndex = currentBets.findIndex((bet) => bet[0] === symbol);
 
     if (existingBetIndex >= 0) {
       // Update existing bet
-      currentBets[existingBetIndex].amount += actualAmount;
+      currentBets[existingBetIndex][1] += actualAmount;
     } else {
       // Add new bet
-      currentBets.push({ symbol, amount: actualAmount });
+      currentBets.push([symbol, actualAmount]);
     }
 
     this.state.currentBets[playerId] = currentBets;
@@ -161,7 +163,7 @@ export default class BauCua extends BaseGame<BauCuaState> {
 
   // Clear all bets for a player
   private handleClearBets(playerId: string): void {
-    if (this.state.gamePhase !== "betting") return;
+    if (this.state.gamePhase !== GAME_PHASE.BETTING) return;
 
     this.state.currentBets[playerId] = [];
     this.state.playerBalances[playerId].totalBet = 0;
@@ -171,15 +173,15 @@ export default class BauCua extends BaseGame<BauCuaState> {
   // Sync all bets from guest (when they click ready)
   private handleSyncBets(
     playerId: string,
-    bets: { symbol: BauCuaSymbol; amount: number }[],
+    bets: [BauCuaSymbol, number][],
   ): void {
-    if (this.state.gamePhase !== "betting") return;
+    if (this.state.gamePhase !== GAME_PHASE.BETTING) return;
 
     const playerBalance = this.state.playerBalances[playerId];
     if (!playerBalance) return;
 
     // Calculate total bet amount
-    const totalBet = bets.reduce((sum, bet) => sum + bet.amount, 0);
+    const totalBet = bets.reduce((sum, bet) => sum + bet[1], 0);
 
     // Validate total doesn't exceed balance
     if (totalBet > playerBalance.currentBalance) return;
@@ -191,7 +193,7 @@ export default class BauCua extends BaseGame<BauCuaState> {
 
   // Toggle ready status
   private handleToggleReady(playerId: string): void {
-    if (this.state.gamePhase !== "betting") return;
+    if (this.state.gamePhase !== GAME_PHASE.BETTING) return;
 
     const currentBets = this.state.currentBets[playerId] || [];
     const hasPlacedBets = currentBets.length > 0;
@@ -204,7 +206,7 @@ export default class BauCua extends BaseGame<BauCuaState> {
 
   // Roll the dice (host only)
   private handleRollDice(): void {
-    if (this.state.gamePhase !== "betting") return;
+    if (this.state.gamePhase !== GAME_PHASE.BETTING) return;
 
     // Check if all players with bets are ready
     const playersWithBets = Object.keys(this.state.currentBets).filter(
@@ -217,7 +219,7 @@ export default class BauCua extends BaseGame<BauCuaState> {
       return;
     }
 
-    this.state.gamePhase = "rolling";
+    this.state.gamePhase = GAME_PHASE.ROLLING;
 
     // Generate random dice roll
     let dice1 = ALL_SYMBOLS[Math.floor(Math.random() * ALL_SYMBOLS.length)];
@@ -230,7 +232,7 @@ export default class BauCua extends BaseGame<BauCuaState> {
       const prediction = this.state.powerUpPredictions[playerId];
       const powerUpType = this.state.activePowerUps[playerId];
 
-      if (powerUpType === "reveal_one") {
+      if (powerUpType === POWERUP_TYPE.REVEAL_ONE) {
         // Check if prediction matches reality
         const hasMatch = dice.includes(prediction.symbol);
         const willBeCorrect = Math.random() < prediction.accuracy;
@@ -264,16 +266,18 @@ export default class BauCua extends BaseGame<BauCuaState> {
 
     this.state.diceRoll = [dice[0], dice[1], dice[2]];
 
-    // Track recent rolls for hot streaks (keep last 100)
+    // Track recent rolls for hot streaks (keep last MAX_HISTORY_LENGTH)
     // Use object to avoid shifting large arrays in patches
-    const rollId = `${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+    const rollId = `R${this.state.currentRound}`;
     this.state.recentRolls[rollId] = [dice[0], dice[1], dice[2]];
 
-    // Prune if > 100
+    // Prune if > MAX_HISTORY_LENGTH
     const rollKeys = Object.keys(this.state.recentRolls);
-    if (rollKeys.length > 100) {
-      const sortedKeys = rollKeys.sort(); // Sort by timestamp (in key)
-      const numToRemove = sortedKeys.length - 100;
+    if (rollKeys.length > MAX_HISTORY_LENGTH) {
+      const sortedKeys = rollKeys.sort((a, b) => {
+        return parseInt(a.substring(1)) - parseInt(b.substring(1));
+      });
+      const numToRemove = sortedKeys.length - MAX_HISTORY_LENGTH;
       for (let i = 0; i < numToRemove; i++) {
         delete this.state.recentRolls[sortedKeys[i]];
       }
@@ -293,12 +297,12 @@ export default class BauCua extends BaseGame<BauCuaState> {
 
     // Count occurrences of each symbol in dice roll
     const symbolCounts: Record<BauCuaSymbol, number> = {
-      gourd: 0,
-      crab: 0,
-      shrimp: 0,
-      fish: 0,
-      chicken: 0,
-      deer: 0,
+      [BAU_CUA_SYMBOL.GOURD]: 0,
+      [BAU_CUA_SYMBOL.CRAB]: 0,
+      [BAU_CUA_SYMBOL.SHRIMP]: 0,
+      [BAU_CUA_SYMBOL.FISH]: 0,
+      [BAU_CUA_SYMBOL.CHICKEN]: 0,
+      [BAU_CUA_SYMBOL.DEER]: 0,
     };
 
     diceRoll.forEach((symbol) => {
@@ -314,7 +318,7 @@ export default class BauCua extends BaseGame<BauCuaState> {
     let jackpotWinnersCount = 0;
     if (this.state.isMegaRound && jackpotSymbol) {
       jackpotWinnersCount = Object.values(this.state.currentBets).filter(
-        (bets) => bets.some((b) => b.symbol === jackpotSymbol),
+        (bets) => bets.some((b) => b[0] === jackpotSymbol),
       ).length;
     }
 
@@ -334,22 +338,24 @@ export default class BauCua extends BaseGame<BauCuaState> {
       const activePowerUp = this.state.activePowerUps[playerId];
 
       bets.forEach((bet) => {
-        totalBetAmount += bet.amount;
-        const matches = symbolCounts[bet.symbol];
+        const symbol = bet[0];
+        const amount = bet[1];
+        totalBetAmount += amount;
+        const matches = symbolCounts[symbol];
 
         if (matches > 0) {
           // 1. Return Capital
-          let returnAmount = bet.amount;
+          let returnAmount = amount;
 
           // 2. Profit = Bet * Matches
-          let profit = bet.amount * matches;
+          let profit = amount * matches;
 
           // Power-up: Double Profit
-          if (activePowerUp === "double_down") {
+          if (activePowerUp === POWERUP_TYPE.DOUBLE_DOWN) {
             profit *= 2;
           }
           // Insurance: 50% Profit
-          else if (activePowerUp === "insurance") {
+          else if (activePowerUp === POWERUP_TYPE.INSURANCE) {
             profit = Math.floor(profit * 0.5);
           }
 
@@ -359,7 +365,7 @@ export default class BauCua extends BaseGame<BauCuaState> {
           // 3. Jackpot bonus
           if (
             this.state.isMegaRound &&
-            jackpotSymbol === bet.symbol &&
+            jackpotSymbol === symbol &&
             jackpotWinnersCount > 0
           ) {
             totalReturnFromBets += Math.floor(
@@ -367,10 +373,10 @@ export default class BauCua extends BaseGame<BauCuaState> {
             );
           }
         } else {
-          totalLosses += bet.amount;
+          totalLosses += amount;
           // Double Down: x2 loss (deduct extra bet amount)
-          if (activePowerUp === "double_down") {
-            totalBetAmount += bet.amount;
+          if (activePowerUp === POWERUP_TYPE.DOUBLE_DOWN) {
+            totalBetAmount += amount;
           }
         }
       });
@@ -378,22 +384,26 @@ export default class BauCua extends BaseGame<BauCuaState> {
       totalAllBetsAcrossPlayers += totalBetAmount;
 
       // Insurance: Refund 50% of losses
-      if (activePowerUp === "insurance" && totalLosses > 0) {
+      if (activePowerUp === POWERUP_TYPE.INSURANCE && totalLosses > 0) {
         totalReturnFromBets += Math.floor(totalLosses * 0.5);
       }
 
       // Lucky Star: Random multiplier for total winnings
-      if (activePowerUp === "lucky_star" && totalReturnFromBets > 0) {
+      if (
+        activePowerUp === POWERUP_TYPE.LUCKY_STAR &&
+        totalReturnFromBets > 0
+      ) {
         const multiplier = randInRange(
-          POWERUP_CONFIG.lucky_star?.luckyMultiplier?.[0] || 1,
-          POWERUP_CONFIG.lucky_star?.luckyMultiplier?.[1] || 1,
+          POWERUP_CONFIG[POWERUP_TYPE.LUCKY_STAR]?.luckyMultiplier?.[0] || 1,
+          POWERUP_CONFIG[POWERUP_TYPE.LUCKY_STAR]?.luckyMultiplier?.[1] || 1,
         );
         totalReturnFromBets = Math.floor(totalReturnFromBets * multiplier);
 
         // Save multiplier for display
-        if (this.state.playerPowerUps[playerId]?.lucky_star) {
-          this.state.playerPowerUps[playerId].lucky_star.lastMultiplier =
-            multiplier;
+        if (this.state.playerPowerUps[playerId]?.[POWERUP_TYPE.LUCKY_STAR]) {
+          this.state.playerPowerUps[playerId][
+            POWERUP_TYPE.LUCKY_STAR
+          ].lastMultiplier = Math.round(multiplier * 10) / 10;
         }
       }
 
@@ -403,6 +413,9 @@ export default class BauCua extends BaseGame<BauCuaState> {
         playerBalance.currentBalance - totalBetAmount + totalReturnFromBets;
       playerBalance.currentBalance = Math.max(0, newBalance);
       playerBalance.balanceHistory.push(playerBalance.currentBalance);
+      if (playerBalance.balanceHistory.length > MAX_HISTORY_LENGTH) {
+        playerBalance.balanceHistory.shift();
+      }
       // playerBalance.totalBet = 0;
     });
 
@@ -432,7 +445,7 @@ export default class BauCua extends BaseGame<BauCuaState> {
     this.state.activePowerUps = {};
     this.state.powerUpPredictions = {};
 
-    this.state.gamePhase = "results";
+    this.state.gamePhase = GAME_PHASE.RESULTS;
     // this.state.currentRound++;
 
     // Check if any player is out of money
@@ -451,14 +464,14 @@ export default class BauCua extends BaseGame<BauCuaState> {
         activePlayers.length === 1 &&
         Object.keys(this.state.playerBalances).length > 1
       ) {
-        this.state.gamePhase = "ended";
+        this.state.gamePhase = GAME_PHASE.ENDED;
         this.state.winners = [activePlayers[0].playerId];
       } else if (
         activePlayers.length === 0 &&
         Object.keys(this.state.playerBalances).length > 0
       ) {
         // Everyone died simultaneously -> No winner
-        this.state.gamePhase = "ended";
+        this.state.gamePhase = GAME_PHASE.ENDED;
         this.state.winners = [];
       }
     }
@@ -478,7 +491,7 @@ export default class BauCua extends BaseGame<BauCuaState> {
           (p) => p.currentBalance === maxBalance,
         );
 
-        this.state.gamePhase = "ended";
+        this.state.gamePhase = GAME_PHASE.ENDED;
         this.state.winners = topWinners.map((p) => p.playerId);
         return;
       }
@@ -488,14 +501,14 @@ export default class BauCua extends BaseGame<BauCuaState> {
         activePlayers.length === 1 &&
         Object.keys(this.state.playerBalances).length > 1
       ) {
-        this.state.gamePhase = "ended";
+        this.state.gamePhase = GAME_PHASE.ENDED;
         this.state.winners = [activePlayers[0].playerId];
       } else if (
         activePlayers.length === 0 &&
         Object.keys(this.state.playerBalances).length > 0
       ) {
         // Everyone died case in Rich Mode -> No winner
-        this.state.gamePhase = "ended";
+        this.state.gamePhase = GAME_PHASE.ENDED;
         this.state.winners = [];
       }
     }
@@ -503,7 +516,7 @@ export default class BauCua extends BaseGame<BauCuaState> {
 
   // Start a new betting round
   private handleStartNewRound(): void {
-    this.state.gamePhase = "betting";
+    this.state.gamePhase = GAME_PHASE.BETTING;
     this.state.currentBets = {};
     this.state.diceRoll = null;
     this.state.playersReady = {};
@@ -534,7 +547,7 @@ export default class BauCua extends BaseGame<BauCuaState> {
       this.state.playerPowerUps[playerId] = this.initializePowerUps();
     });
 
-    this.state.gamePhase = "waiting";
+    this.state.gamePhase = GAME_PHASE.WAITING;
     this.state.currentBets = {};
     this.state.diceRoll = null;
     this.state.currentRound = 0;
@@ -552,13 +565,13 @@ export default class BauCua extends BaseGame<BauCuaState> {
 
   // Set game mode (Survival or Rich)
   private handleSetGameMode(minBalance: number): void {
-    if (this.state.gamePhase !== "waiting") return;
+    if (this.state.gamePhase !== GAME_PHASE.WAITING) return;
     this.state.minBalanceToWin = minBalance;
   }
 
   // Add a bot player
   private handleAddBot(): void {
-    const botId = `BOT_${Date.now()}`;
+    const botId = `BOT_${uuidShort()}`;
     const botUsername = `Bot ${Object.keys(this.state.playerBalances).length + 1}`;
 
     this.state.playerBalances[botId] = {
@@ -590,7 +603,7 @@ export default class BauCua extends BaseGame<BauCuaState> {
   // Check if it's bot's turn and make them act
   private checkBotTurn(): void {
     if (!this.isHost) return;
-    if (this.state.gamePhase !== "betting") return;
+    if (this.state.gamePhase !== GAME_PHASE.BETTING) return;
 
     // Clear previous timeout
     if (this.botMoveTimeout) {
@@ -616,18 +629,18 @@ export default class BauCua extends BaseGame<BauCuaState> {
       const botPowerUps = this.state.playerPowerUps[bot.playerId];
       if (botPowerUps && Math.random() < 0.3) {
         const availablePowerUps: PowerUpType[] = [];
-        if (botPowerUps.double_down.cooldown === 0)
-          availablePowerUps.push("double_down");
-        if (botPowerUps.insurance.cooldown === 0)
-          availablePowerUps.push("insurance");
+        if (botPowerUps[POWERUP_TYPE.DOUBLE_DOWN].cooldown === 0)
+          availablePowerUps.push(POWERUP_TYPE.DOUBLE_DOWN);
+        if (botPowerUps[POWERUP_TYPE.INSURANCE].cooldown === 0)
+          availablePowerUps.push(POWERUP_TYPE.INSURANCE);
         // Bots don't use reveal_one (too complex)
 
         if (availablePowerUps.length > 0) {
           // Prefer double_down if balance is high
           const powerUpToUse =
             bot.currentBalance > 500 &&
-            availablePowerUps.includes("double_down")
-              ? "double_down"
+            availablePowerUps.includes(POWERUP_TYPE.DOUBLE_DOWN)
+              ? POWERUP_TYPE.DOUBLE_DOWN
               : availablePowerUps[
                   Math.floor(Math.random() * availablePowerUps.length)
                 ];
@@ -690,9 +703,7 @@ export default class BauCua extends BaseGame<BauCuaState> {
     });
   }
 
-  public requestSyncBets(
-    bets: { symbol: BauCuaSymbol; amount: number }[],
-  ): void {
+  public requestSyncBets(bets: Bet[]): void {
     this.makeAction({
       type: "SYNC_BETS",
       playerId: this.userId,
@@ -751,7 +762,7 @@ export default class BauCua extends BaseGame<BauCuaState> {
     playerId: string,
     powerUpType: PowerUpType,
   ): void {
-    if (this.state.gamePhase !== "betting") return;
+    if (this.state.gamePhase !== GAME_PHASE.BETTING) return;
 
     const powerUps = this.state.playerPowerUps[playerId];
     if (!powerUps) return;
@@ -762,8 +773,8 @@ export default class BauCua extends BaseGame<BauCuaState> {
     const config = POWERUP_CONFIG[powerUpType];
 
     // Handle pre-roll powers (generate prediction)
-    if (config.timing === "pre_roll") {
-      if (powerUpType === "reveal_one") {
+    if (config.timing === POWERUP_TIMING.PRE_ROLL) {
+      if (powerUpType === POWERUP_TYPE.REVEAL_ONE) {
         // Generate prediction with configured accuracy
         const randomSymbol = ALL_SYMBOLS[randInRange(0, 5, true)];
         const accuracy = randInRange(
@@ -786,7 +797,7 @@ export default class BauCua extends BaseGame<BauCuaState> {
 
   // Deactivate power-up (only for post_roll types before dice roll)
   private handleDeactivatePowerUp(playerId: string): void {
-    if (this.state.gamePhase !== "betting") return;
+    if (this.state.gamePhase !== GAME_PHASE.BETTING) return;
 
     const activePowerUp = this.state.activePowerUps[playerId];
     if (!activePowerUp) return;
@@ -794,7 +805,7 @@ export default class BauCua extends BaseGame<BauCuaState> {
     const config = POWERUP_CONFIG[activePowerUp];
 
     // Only allow deactivation for post_roll power-ups
-    if (config.timing !== "post_roll") return;
+    if (config.timing !== POWERUP_TIMING.POST_ROLL) return;
 
     const powerUps = this.state.playerPowerUps[playerId];
     if (!powerUps) return;
