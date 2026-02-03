@@ -1,148 +1,80 @@
 /**
- * Monte Carlo Tree Search for Reversi
- * Based on the 4 phases: Selection, Expansion, Simulation, Backpropagation
+ * Monte Carlo Tree Search for Reversi using Bitboards
  */
 
-import type { Cell } from "./types";
-import { DIRECTIONS } from "./types";
+import {
+  getValidMovesBB,
+  getFlipsBB,
+  countBitsBB,
+  FULL_MASK,
+} from "./bitboard";
 
 // Game state for MCTS (lightweight copy)
 interface MCTSState {
-  board: Cell[][];
-  currentPlayer: 0 | 1; // 0 = black, 1 = white
+  bb: bigint; // black bitboard
+  wb: bigint; // white bitboard
+  turn: 0 | 1; // 0 = black, 1 = white
 }
 
 // Tree node
 interface MCTSNode {
   state: MCTSState;
   parent: MCTSNode | null;
-  move: [number, number] | null; // The move that led to this state
+  move: number | null; // bit index (0-63)
   children: MCTSNode[];
-  untriedMoves: [number, number][];
+  untriedMoves: number[];
   visits: number;
   wins: number;
 }
 
-// UCB1 exploration constant
-const C = 1.414; // sqrt(2)
+const C = 1.414;
 
-// Clone board state
-function cloneState(state: MCTSState): MCTSState {
+function applyMoveBB(state: MCTSState, pos: number): MCTSState {
+  const moveBit = 1n << BigInt(pos);
+  const p = state.turn === 0 ? state.bb : state.wb;
+  const o = state.turn === 0 ? state.wb : state.bb;
+
+  const flips = getFlipsBB(moveBit, p, o);
+  const newP = p | moveBit | flips;
+  const newO = o & ~flips & FULL_MASK;
+
   return {
-    board: state.board.map((row) => [...row]),
-    currentPlayer: state.currentPlayer,
+    bb: state.turn === 0 ? newP : newO,
+    wb: state.turn === 0 ? newO : newP,
+    turn: (1 - state.turn) as 0 | 1,
   };
 }
 
-// Get valid moves for a player
-function getValidMoves(board: Cell[][], player: 0 | 1): [number, number][] {
-  const color = player === 0 ? "black" : "white";
-  const moves: [number, number][] = [];
-
-  for (let r = 0; r < 8; r++) {
-    for (let c = 0; c < 8; c++) {
-      if (getFlips(board, r, c, color).length > 0) {
-        moves.push([r, c]);
-      }
-    }
-  }
-  return moves;
+function getWinnerBB(bb: bigint, wb: bigint): 0 | 1 | -1 {
+  const bc = countBitsBB(bb);
+  const wc = countBitsBB(wb);
+  return bc > wc ? 0 : wc > bc ? 1 : -1;
 }
 
-// Get pieces that would be flipped
-function getFlips(
-  board: Cell[][],
-  row: number,
-  col: number,
-  color: Cell
-): [number, number][] {
-  if (!color || board[row][col] !== null) return [];
-
-  const opponent = color === "black" ? "white" : "black";
-  const allFlips: [number, number][] = [];
-
-  for (const [dr, dc] of DIRECTIONS) {
-    const flips: [number, number][] = [];
-    let r = row + dr;
-    let c = col + dc;
-
-    while (r >= 0 && r < 8 && c >= 0 && c < 8 && board[r][c] === opponent) {
-      flips.push([r, c]);
-      r += dr;
-      c += dc;
-    }
-
-    if (
-      r >= 0 &&
-      r < 8 &&
-      c >= 0 &&
-      c < 8 &&
-      board[r][c] === color &&
-      flips.length > 0
-    ) {
-      allFlips.push(...flips);
-    }
-  }
-
-  return allFlips;
-}
-
-// Apply a move to the board
-function applyMove(state: MCTSState, move: [number, number]): MCTSState {
-  const newState = cloneState(state);
-  const color = state.currentPlayer === 0 ? "black" : "white";
-  const [row, col] = move;
-
-  const flips = getFlips(newState.board, row, col, color);
-  newState.board[row][col] = color;
-  for (const [r, c] of flips) {
-    newState.board[r][c] = color;
-  }
-
-  newState.currentPlayer = (1 - state.currentPlayer) as 0 | 1;
-  return newState;
-}
-
-// Check if game is over
-function isTerminal(board: Cell[][]): boolean {
-  const blackMoves = getValidMoves(board, 0);
-  const whiteMoves = getValidMoves(board, 1);
-  return blackMoves.length === 0 && whiteMoves.length === 0;
-}
-
-// Get winner: 0 = black, 1 = white, -1 = draw
-function getWinner(board: Cell[][]): 0 | 1 | -1 {
-  let black = 0;
-  let white = 0;
-  for (let r = 0; r < 8; r++) {
-    for (let c = 0; c < 8; c++) {
-      if (board[r][c] === "black") black++;
-      if (board[r][c] === "white") white++;
-    }
-  }
-  if (black > white) return 0;
-  if (white > black) return 1;
-  return -1;
-}
-
-// Create a new node
 function createNode(
   state: MCTSState,
   parent: MCTSNode | null,
-  move: [number, number] | null
+  move: number | null,
 ): MCTSNode {
+  const p = state.turn === 0 ? state.bb : state.wb;
+  const o = state.turn === 0 ? state.wb : state.bb;
+  const movesBB = getValidMovesBB(p, o);
+  const untriedMoves: number[] = [];
+  for (let i = 0; i < 64; i++) {
+    if ((movesBB >> BigInt(i)) & 1n) untriedMoves.push(i);
+  }
+
   return {
     state,
     parent,
     move,
     children: [],
-    untriedMoves: getValidMoves(state.board, state.currentPlayer),
+    untriedMoves,
     visits: 0,
     wins: 0,
   };
 }
 
-// UCB1 formula for child selection
 function ucb1(node: MCTSNode, isRootPlayer: boolean): number {
   if (node.visits === 0) return Infinity;
   const wins = isRootPlayer ? node.wins : node.visits - node.wins;
@@ -152,9 +84,8 @@ function ucb1(node: MCTSNode, isRootPlayer: boolean): number {
   );
 }
 
-// Phase 1: Selection - select best child using UCB1
 function selectChild(node: MCTSNode, rootPlayer: 0 | 1): MCTSNode {
-  const isRootPlayer = node.state.currentPlayer === rootPlayer;
+  const isRootPlayer = node.state.turn === rootPlayer;
   let bestChild = node.children[0];
   let bestUcb = -Infinity;
 
@@ -168,40 +99,55 @@ function selectChild(node: MCTSNode, rootPlayer: 0 | 1): MCTSNode {
   return bestChild;
 }
 
-// Phase 2: Expansion - expand a random untried move
 function expandChild(node: MCTSNode): MCTSNode {
   const idx = Math.floor(Math.random() * node.untriedMoves.length);
   const move = node.untriedMoves[idx];
   node.untriedMoves.splice(idx, 1);
 
-  const newState = applyMove(node.state, move);
+  const newState = applyMoveBB(node.state, move);
   const child = createNode(newState, node, move);
   node.children.push(child);
-
   return child;
 }
 
-// Phase 3: Simulation - random playout until terminal
-function simulate(node: MCTSNode, rootPlayer: 0 | 1): number {
-  let state = cloneState(node.state);
+function simulateBB(state: MCTSState, rootPlayer: 0 | 1): number {
+  let bb = state.bb;
+  let wb = state.wb;
+  let turn = state.turn;
 
-  while (!isTerminal(state.board)) {
-    const moves = getValidMoves(state.board, state.currentPlayer);
-    if (moves.length === 0) {
-      // Pass
-      state.currentPlayer = (1 - state.currentPlayer) as 0 | 1;
+  for (let i = 0; i < 60; i++) {
+    const p = turn === 0 ? bb : wb;
+    const o = turn === 0 ? wb : bb;
+    const movesBB = getValidMovesBB(p, o);
+
+    if (movesBB === 0n) {
+      if (getValidMovesBB(o, p) === 0n) break;
+      turn = (1 - turn) as 0 | 1;
       continue;
     }
+
+    // Pick random move from bitboard
+    const moves: number[] = [];
+    for (let j = 0; j < 64; j++) {
+      if ((movesBB >> BigInt(j)) & 1n) moves.push(j);
+    }
     const move = moves[Math.floor(Math.random() * moves.length)];
-    state = applyMove(state, move);
+    if (move === undefined) break; // Should not happen with movesBB !== 0n
+    const moveBit = 1n << BigInt(move);
+    const flips = getFlipsBB(moveBit, p, o);
+    const newP = p | moveBit | flips;
+    const newO = o & ~flips & FULL_MASK;
+
+    bb = turn === 0 ? newP : newO;
+    wb = turn === 0 ? newO : newP;
+    turn = (1 - turn) as 0 | 1;
   }
 
-  const winner = getWinner(state.board);
-  if (winner === -1) return 0.5; // Draw
+  const winner = getWinnerBB(bb, wb);
+  if (winner === -1) return 0.5;
   return winner === rootPlayer ? 1 : 0;
 }
 
-// Phase 4: Backpropagation - update wins/visits up the tree
 function backpropagate(node: MCTSNode | null, reward: number): void {
   while (node !== null) {
     node.visits++;
@@ -210,47 +156,43 @@ function backpropagate(node: MCTSNode | null, reward: number): void {
   }
 }
 
-// Main MCTS search
 export function runMCTS(
-  board: Cell[][],
+  bbn: bigint,
+  wbn: bigint,
   currentPlayer: 0 | 1,
-  timeoutMs: number = 500
+  timeoutMs: number = 500,
 ): [number, number] | null {
-  const rootState: MCTSState = {
-    board: board.map((row) => [...row]),
-    currentPlayer,
-  };
+  const rootState: MCTSState = { bb: bbn, wb: wbn, turn: currentPlayer };
+  const p = currentPlayer === 0 ? bbn : wbn;
+  const o = currentPlayer === 0 ? wbn : bbn;
+  const movesBB = getValidMovesBB(p, o);
 
-  const validMoves = getValidMoves(rootState.board, currentPlayer);
-  if (validMoves.length === 0) return null;
-  if (validMoves.length === 1) return validMoves[0];
+  if (movesBB === 0n) return null;
+
+  const moves: number[] = [];
+  for (let i = 0; i < 64; i++) {
+    if ((movesBB >> BigInt(i)) & 1n) moves.push(i);
+  }
+  if (moves.length === 1) return [Math.floor(moves[0] / 8), moves[0] % 8];
 
   const root = createNode(rootState, null, null);
   const startTime = performance.now();
 
-  // Run iterations until timeout
   while (performance.now() - startTime < timeoutMs) {
     let node = root;
-
-    // Phase 1: Selection
     while (node.untriedMoves.length === 0 && node.children.length > 0) {
       node = selectChild(node, currentPlayer);
     }
 
-    // Phase 2: Expansion
     if (node.untriedMoves.length > 0) {
       node = expandChild(node);
     }
 
-    // Phase 3: Simulation
-    const reward = simulate(node, currentPlayer);
-
-    // Phase 4: Backpropagation
+    const reward = simulateBB(node.state, currentPlayer);
     backpropagate(node, reward);
   }
 
-  // Select best move (most visited child)
-  let bestMove: [number, number] | null = null;
+  let bestMove: number | null = null;
   let maxVisits = -1;
 
   for (const child of root.children) {
@@ -260,5 +202,5 @@ export function runMCTS(
     }
   }
 
-  return bestMove;
+  return bestMove !== null ? [Math.floor(bestMove / 8), bestMove % 8] : null;
 }

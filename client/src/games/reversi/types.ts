@@ -8,7 +8,8 @@ export const ReversiColor = {
 export type ReversiColor = (typeof ReversiColor)[keyof typeof ReversiColor];
 
 export type Turn = ReversiColor;
-export type CellValue = number; // 0: empty, 1: black, 2: white
+export type Cell = 0 | 1 | 2; // 0: empty, 1: black, 2: white
+export type CellValue = Cell;
 
 export const ReversiGamePhase = {
   WAITING: 0,
@@ -26,7 +27,8 @@ export type ReversiPlayerFlag =
 
 // Move history for undo
 export interface MoveHistory {
-  b: string; // encoded board
+  bb: string; // black bitboard (hex)
+  wb: string; // white bitboard (hex)
   t: Turn; // turn
 }
 
@@ -42,7 +44,8 @@ export interface ReversiPlayer extends Player {
 
 // Main game state
 export interface ReversiState {
-  board: string; // 8x8 encoded as string of 64 chars (0: empty, 1: black, 2: white)
+  blackBoard: string; // 64-bit hex string
+  whiteBoard: string; // 64-bit hex string
   players: {
     black: ReversiPlayer | null;
     white: ReversiPlayer | null;

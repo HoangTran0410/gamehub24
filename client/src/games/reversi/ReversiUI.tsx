@@ -433,13 +433,18 @@ export default function ReversiUI({
 
       {/* Game Board */}
       <div className="grid grid-cols-8 gap-0 rounded-lg overflow-hidden shadow-xl border-4 border-green-900 w-full max-w-[500px]">
-        {Array.from({ length: 64 }).map((_, i) => {
-          const ri = Math.floor(i / 8);
-          const ci = i % 8;
-          const val = state.board[i];
-          const cellValue = val === "1" ? 1 : val === "2" ? 2 : 0;
-          return renderCell(cellValue, ri, ci);
-        })}
+        {(() => {
+          const bb = BigInt("0x" + (state.blackBoard || "0"));
+          const wb = BigInt("0x" + (state.whiteBoard || "0"));
+          return Array.from({ length: 64 }).map((_, i) => {
+            const ri = Math.floor(i / 8);
+            const ci = i % 8;
+            const isBlack = (bb >> BigInt(i)) & 1n;
+            const isWhite = (wb >> BigInt(i)) & 1n;
+            const cellValue = isBlack ? 1 : isWhite ? 2 : 0;
+            return renderCell(cellValue, ri, ci);
+          });
+        })()}
       </div>
 
       {/* Rules Button */}
