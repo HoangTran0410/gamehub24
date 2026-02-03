@@ -4,7 +4,7 @@ import {
   BIOME_SCALE,
   type BiomeType,
 } from "./constants";
-import type { TerrainModification } from "./types";
+import { TerrainMod, TerrainModType, type TerrainModification } from "./types";
 
 // ============================================================================
 // Noise utilities for procedural generation
@@ -125,6 +125,43 @@ export function calculateBaseHeight(x: number, seed: number): number {
   return y;
 }
 
+/**
+ * Capsule collision check for tunnel/carve modifications
+ */
+function checkPointInTunnel(
+  px: number,
+  py: number,
+  mod: TerrainModification,
+  derived: { nx?: number; ny?: number; radiusSq: number },
+): boolean {
+  const nx = derived.nx;
+  const ny = derived.ny;
+  if (nx === undefined || ny === undefined) return false;
+
+  const mx = TerrainMod.getX(mod);
+  const my = TerrainMod.getY(mod);
+  const length = TerrainMod.getLength(mod) || 100;
+  const radiusSq = derived.radiusSq;
+
+  const dx = nx * length;
+  const dy = ny * length;
+  const len2 = length * length;
+
+  if (len2 === 0) {
+    const dist2 = (px - mx) ** 2 + (py - my) ** 2;
+    return dist2 <= radiusSq;
+  }
+
+  let t = ((px - mx) * dx + (py - my) * dy) / len2;
+  t = Math.max(0, Math.min(1, t));
+
+  const closestX = mx + t * dx;
+  const closestY = my + t * dy;
+
+  const dist2 = (px - closestX) ** 2 + (py - closestY) ** 2;
+  return dist2 <= radiusSq;
+}
+
 // ============================================================================
 // QuadTree for spatial partitioning of terrain modifications
 // ============================================================================
@@ -140,6 +177,7 @@ interface ModificationEntry {
   modification: TerrainModification;
   bounds: Bounds;
   timestamp: number; // For ordering modifications
+  derived: { nx?: number; ny?: number; radiusSq: number };
 }
 
 /**
@@ -314,66 +352,19 @@ class QuadTreeNode {
     entry: ModificationEntry,
   ): boolean {
     const mod = entry.modification;
+    const type = TerrainMod.getType(mod);
+    const mx = TerrainMod.getX(mod);
+    const my = TerrainMod.getY(mod);
+    const derived = entry.derived;
 
-    if (mod.type === "carve" && mod.vx !== undefined && mod.vy !== undefined) {
-      // Check if point is in tunnel (capsule shape)
-      return this.pointInCapsule(
-        x,
-        y,
-        mod.x,
-        mod.y,
-        mod.vx,
-        mod.vy,
-        mod.radius,
-        mod.length || 100,
-      );
+    if (type === TerrainModType.CARVE) {
+      return checkPointInTunnel(x, y, mod, derived);
     }
 
     // Circle check for destroy/add
-    const dx = x - mod.x;
-    const dy = y - mod.y;
-    return dx * dx + dy * dy <= mod.radius * mod.radius;
-  }
-
-  private pointInCapsule(
-    px: number,
-    py: number,
-    startX: number,
-    startY: number,
-    vx: number,
-    vy: number,
-    radius: number,
-    length: number,
-  ): boolean {
-    // Normalize direction
-    const mag = Math.sqrt(vx * vx + vy * vy);
-    if (mag === 0) return false;
-
-    const nx = vx / mag;
-    const ny = vy / mag;
-
-    const endX = startX + nx * length;
-    const endY = startY + ny * length;
-
-    // Project point onto line segment
-    const dx = endX - startX;
-    const dy = endY - startY;
-    const len2 = dx * dx + dy * dy;
-
-    if (len2 === 0) {
-      // Degenerate case: start == end
-      const dist2 = (px - startX) ** 2 + (py - startY) ** 2;
-      return dist2 <= radius * radius;
-    }
-
-    let t = ((px - startX) * dx + (py - startY) * dy) / len2;
-    t = Math.max(0, Math.min(1, t));
-
-    const closestX = startX + t * dx;
-    const closestY = startY + t * dy;
-
-    const dist2 = (px - closestX) ** 2 + (py - closestY) ** 2;
-    return dist2 <= radius * radius;
+    const dx = x - mx;
+    const dy = y - my;
+    return dx * dx + dy * dy <= derived.radiusSq;
   }
 }
 
@@ -458,8 +449,10 @@ export class TerrainMap {
     // Find the highest possible "add" modification
     let searchStart = baseHeight;
     for (const entry of columnEntries) {
-      if (entry.modification.type === "add") {
-        const topY = entry.modification.y - entry.modification.radius;
+      if (TerrainMod.getType(entry.modification) === TerrainModType.ADD) {
+        const topY =
+          TerrainMod.getY(entry.modification) -
+          TerrainMod.getRadius(entry.modification);
         if (topY < searchStart) {
           searchStart = topY;
         }
@@ -520,26 +513,31 @@ export class TerrainMap {
       entries.sort((a, b) => a.timestamp - b.timestamp);
     }
 
-    // Apply each modification - uses precomputed _radiusSq
+    // Apply each modification
     for (let i = 0; i < entries.length; i++) {
-      const mod = entries[i].modification;
-      const dx = x - mod.x;
-      const dy = y - mod.y;
+      const entry = entries[i];
+      const mod = entry.modification;
+      const type = TerrainMod.getType(mod);
+      const mx = TerrainMod.getX(mod);
+      const my = TerrainMod.getY(mod);
+      const dx = x - mx;
+      const dy = y - my;
       const distSq = dx * dx + dy * dy;
-      // Use precomputed radiusSq (optimization 2)
-      const radiusSq = mod._radiusSq!;
 
-      if (mod.type === "destroy") {
-        if (distSq <= radiusSq) {
+      // Use pre-computed derived data from entry
+      const derived = entry.derived;
+
+      if (type === TerrainModType.DESTROY) {
+        if (distSq <= derived.radiusSq) {
           solid = false;
         }
-      } else if (mod.type === "add") {
-        if (distSq <= radiusSq) {
+      } else if (type === TerrainModType.ADD) {
+        if (distSq <= derived.radiusSq) {
           solid = true;
         }
-      } else if (mod.type === "carve") {
-        // Check if point is in carved tunnel (uses cached _nx, _ny)
-        if (this.isInTunnel(x, y, mod)) {
+      } else if (type === TerrainModType.CARVE) {
+        // Check if point is in carved tunnel
+        if (checkPointInTunnel(x, y, mod, derived)) {
           solid = false;
         }
       }
@@ -552,12 +550,7 @@ export class TerrainMap {
    * Add a destruction (crater) modification
    */
   destroyCircle(x: number, y: number, radius: number): void {
-    const mod: TerrainModification = {
-      type: "destroy",
-      x,
-      y,
-      radius,
-    };
+    const mod = TerrainMod.create(TerrainModType.DESTROY, x, y, radius);
     this.addModification(mod);
   }
 
@@ -565,12 +558,7 @@ export class TerrainMap {
    * Add terrain (builder weapon)
    */
   addCircle(x: number, y: number, radius: number): void {
-    const mod: TerrainModification = {
-      type: "add",
-      x,
-      y,
-      radius,
-    };
+    const mod = TerrainMod.create(TerrainModType.ADD, x, y, radius);
     this.addModification(mod);
   }
 
@@ -585,15 +573,15 @@ export class TerrainMap {
     radius: number,
     length: number = 100,
   ): void {
-    const mod: TerrainModification = {
-      type: "carve",
+    const mod = TerrainMod.create(
+      TerrainModType.CARVE,
       x,
       y,
       radius,
       vx,
       vy,
       length,
-    };
+    );
     this.addModification(mod);
   }
 
@@ -638,87 +626,78 @@ export class TerrainMap {
   }
 
   private addModification(mod: TerrainModification): void {
-    // OPTIMIZATION 2: Precompute derived values once on add
-    mod._radiusSq = mod.radius * mod.radius;
-
-    if (mod.vx !== undefined && mod.vy !== undefined) {
-      const mag = Math.hypot(mod.vx, mod.vy);
-      if (mag > 0) {
-        mod._nx = mod.vx / mag;
-        mod._ny = mod.vy / mag;
-      }
-    }
-
     const bounds = this.getModificationBounds(mod);
     const entry: ModificationEntry = {
       modification: mod,
       bounds,
       timestamp: this.modificationCounter++,
+      derived: this.computeDerivedData(mod),
     };
 
     this.quadtree.insert(entry);
     this.modifications.push(mod);
   }
 
-  private getModificationBounds(mod: TerrainModification): Bounds {
-    if (mod.type === "carve" && mod.vx !== undefined && mod.vy !== undefined) {
-      const mag = Math.sqrt(mod.vx * mod.vx + mod.vy * mod.vy);
+  private computeDerivedData(mod: TerrainModification) {
+    const radius = TerrainMod.getRadius(mod);
+    const vx = TerrainMod.getVx(mod);
+    const vy = TerrainMod.getVy(mod);
+
+    const derived: { nx?: number; ny?: number; radiusSq: number } = {
+      radiusSq: radius * radius,
+    };
+
+    if (vx !== undefined && vy !== undefined) {
+      const mag = Math.hypot(vx, vy);
       if (mag > 0) {
-        const nx = mod.vx / mag;
-        const ny = mod.vy / mag;
-        const length = mod.length || 100;
-        const endX = mod.x + nx * length;
-        const endY = mod.y + ny * length;
+        derived.nx = vx / mag;
+        derived.ny = vy / mag;
+      }
+    }
+    return derived;
+  }
 
-        const minX = Math.min(mod.x, endX) - mod.radius;
-        const maxX = Math.max(mod.x, endX) + mod.radius;
-        const minY = Math.min(mod.y, endY) - mod.radius;
-        const maxY = Math.max(mod.y, endY) + mod.radius;
+  private getModificationBounds(mod: TerrainModification): Bounds {
+    const type = TerrainMod.getType(mod);
+    const mx = TerrainMod.getX(mod);
+    const my = TerrainMod.getY(mod);
+    const radius = TerrainMod.getRadius(mod);
 
-        return {
-          x: minX,
-          y: minY,
-          width: maxX - minX,
-          height: maxY - minY,
-        };
+    if (type === TerrainModType.CARVE) {
+      const vx = TerrainMod.getVx(mod);
+      const vy = TerrainMod.getVy(mod);
+
+      if (vx !== undefined && vy !== undefined) {
+        const mag = Math.sqrt(vx * vx + vy * vy);
+        if (mag > 0) {
+          const nx = vx / mag;
+          const ny = vy / mag;
+          const length = TerrainMod.getLength(mod) || 100;
+          const endX = mx + nx * length;
+          const endY = my + ny * length;
+
+          const minX = Math.min(mx, endX) - radius;
+          const maxX = Math.max(mx, endX) + radius;
+          const minY = Math.min(my, endY) - radius;
+          const maxY = Math.max(my, endY) + radius;
+
+          return {
+            x: minX,
+            y: minY,
+            width: maxX - minX,
+            height: maxY - minY,
+          };
+        }
       }
     }
 
     // Circle bounds
     return {
-      x: mod.x - mod.radius,
-      y: mod.y - mod.radius,
-      width: mod.radius * 2,
-      height: mod.radius * 2,
+      x: mx - radius,
+      y: my - radius,
+      width: radius * 2,
+      height: radius * 2,
     };
-  }
-
-  // OPTIMIZED: Uses precomputed _nx, _ny, _radiusSq from addModification
-  private isInTunnel(x: number, y: number, mod: TerrainModification): boolean {
-    // Use precomputed normalized direction
-    const nx = mod._nx;
-    const ny = mod._ny;
-    if (nx === undefined || ny === undefined) return false;
-
-    const length = mod.length || 100;
-    const dx = nx * length;
-    const dy = ny * length;
-    const len2 = length * length; // dx*dx + dy*dy = length^2 since nx,ny are normalized
-
-    if (len2 === 0) {
-      const dist2 = (x - mod.x) ** 2 + (y - mod.y) ** 2;
-      return dist2 <= mod._radiusSq!;
-    }
-
-    // Project point onto line segment
-    let t = ((x - mod.x) * dx + (y - mod.y) * dy) / len2;
-    t = Math.max(0, Math.min(1, t));
-
-    const closestX = mod.x + t * dx;
-    const closestY = mod.y + t * dy;
-
-    const dist2 = (x - closestX) ** 2 + (y - closestY) ** 2;
-    return dist2 <= mod._radiusSq!;
   }
 
   getSeed(): number {
@@ -783,12 +762,16 @@ export class TerrainRenderer {
     // Also check if there are any "add" modifications that could add terrain in this chunk
     const modifications = terrainMap.getModifications();
     for (const mod of modifications) {
-      if (mod.type === "add") {
+      if (TerrainMod.getType(mod) === TerrainModType.ADD) {
         // Check if the add circle could intersect this chunk
-        const modTop = mod.y - mod.radius;
-        const modBottom = mod.y + mod.radius;
-        const modLeft = mod.x - mod.radius;
-        const modRight = mod.x + mod.radius;
+        const mx = TerrainMod.getX(mod);
+        const my = TerrainMod.getY(mod);
+        const mRadius = TerrainMod.getRadius(mod);
+
+        const modTop = my - mRadius;
+        const modBottom = my + mRadius;
+        const modLeft = mx - mRadius;
+        const modRight = mx + mRadius;
 
         const chunkLeft = worldStartX;
         const chunkRight = worldStartX + CHUNK_SIZE;
@@ -1123,11 +1106,16 @@ export class TerrainRenderer {
     const modifications = terrainMap.getModifications();
 
     for (const mod of modifications) {
-      const localX = mod.x - worldStartX;
-      const localY = mod.y - worldStartY;
+      const type = TerrainMod.getType(mod);
+      const mx = TerrainMod.getX(mod);
+      const my = TerrainMod.getY(mod);
+      const mRadius = TerrainMod.getRadius(mod);
+
+      const localX = mx - worldStartX;
+      const localY = my - worldStartY;
 
       // Check if modification affects this chunk (with margin for radius)
-      const margin = mod.radius + 20;
+      const margin = mRadius + 20;
       if (
         localX < -margin ||
         localX > CHUNK_SIZE + margin ||
@@ -1135,23 +1123,25 @@ export class TerrainRenderer {
         localY > CHUNK_SIZE + margin
       ) {
         // For carve, check the tunnel bounds
+        const vx = TerrainMod.getVx(mod);
+        const vy = TerrainMod.getVy(mod);
         if (
-          mod.type === "carve" &&
-          mod.vx !== undefined &&
-          mod.vy !== undefined
+          type === TerrainModType.CARVE &&
+          vx !== undefined &&
+          vy !== undefined
         ) {
-          const mag = Math.sqrt(mod.vx * mod.vx + mod.vy * mod.vy);
+          const mag = Math.sqrt(vx * vx + vy * vy);
           if (mag > 0) {
-            const nx = mod.vx / mag;
-            const ny = mod.vy / mag;
-            const length = mod.length || 100;
+            const nx = vx / mag;
+            const ny = vy / mag;
+            const length = TerrainMod.getLength(mod) || 100;
             const endLocalX = localX + nx * length;
             const endLocalY = localY + ny * length;
 
-            const minLX = Math.min(localX, endLocalX) - mod.radius;
-            const maxLX = Math.max(localX, endLocalX) + mod.radius;
-            const minLY = Math.min(localY, endLocalY) - mod.radius;
-            const maxLY = Math.max(localY, endLocalY) + mod.radius;
+            const minLX = Math.min(localX, endLocalX) - mRadius;
+            const maxLX = Math.max(localX, endLocalX) + mRadius;
+            const minLY = Math.min(localY, endLocalY) - mRadius;
+            const maxLY = Math.max(localY, endLocalY) + mRadius;
 
             if (
               maxLX < 0 ||
@@ -1167,13 +1157,13 @@ export class TerrainRenderer {
         }
       }
 
-      if (mod.type === "destroy") {
+      if (type === TerrainModType.DESTROY) {
         // Crater with irregular edge
         ctx.save();
         ctx.globalCompositeOperation = "destination-out";
         ctx.beginPath();
         for (let i = 0; i < Math.PI * 2; i += 0.2) {
-          const r = mod.radius * (0.9 + Math.random() * 0.2);
+          const r = mRadius * (0.9 + Math.random() * 0.2);
           const cx = localX + Math.cos(i) * r;
           const cy = localY + Math.sin(i) * r;
           if (i === 0) ctx.moveTo(cx, cy);
@@ -1188,56 +1178,56 @@ export class TerrainRenderer {
         ctx.save();
         ctx.globalCompositeOperation = "source-atop";
         ctx.beginPath();
-        ctx.arc(localX, localY, mod.radius + 10, 0, Math.PI * 2);
+        ctx.arc(localX, localY, mRadius + 10, 0, Math.PI * 2);
         ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
         ctx.fill();
         ctx.restore();
-      } else if (mod.type === "add") {
+      } else if (type === TerrainModType.ADD) {
         // Builder terrain
         ctx.save();
         ctx.globalCompositeOperation = "source-over";
         ctx.beginPath();
-        ctx.arc(localX, localY, mod.radius, 0, Math.PI * 2);
+        ctx.arc(localX, localY, mRadius, 0, Math.PI * 2);
         ctx.fillStyle = "#64748b";
         ctx.fill();
         ctx.lineWidth = 2;
         ctx.strokeStyle = "#94a3b8";
         ctx.stroke();
         ctx.restore();
-      } else if (
-        mod.type === "carve" &&
-        mod.vx !== undefined &&
-        mod.vy !== undefined
-      ) {
-        // Tunnel
-        const mag = Math.sqrt(mod.vx * mod.vx + mod.vy * mod.vy);
-        if (mag === 0) continue;
+      } else if (type === TerrainModType.CARVE) {
+        const vx = TerrainMod.getVx(mod);
+        const vy = TerrainMod.getVy(mod);
+        if (vx !== undefined && vy !== undefined) {
+          // Tunnel
+          const mag = Math.sqrt(vx * vx + vy * vy);
+          if (mag === 0) continue;
 
-        const nx = mod.vx / mag;
-        const ny = mod.vy / mag;
-        const length = mod.length || 100;
+          const nx = vx / mag;
+          const ny = vy / mag;
+          const length = TerrainMod.getLength(mod) || 100;
 
-        ctx.save();
-        ctx.globalCompositeOperation = "destination-out";
-        ctx.lineWidth = mod.radius * 2;
-        ctx.lineCap = "round";
-        ctx.beginPath();
-        ctx.moveTo(localX, localY);
-        ctx.lineTo(localX + nx * length, localY + ny * length);
-        ctx.stroke();
-        ctx.restore();
+          ctx.save();
+          ctx.globalCompositeOperation = "destination-out";
+          ctx.lineWidth = mRadius * 2;
+          ctx.lineCap = "round";
+          ctx.beginPath();
+          ctx.moveTo(localX, localY);
+          ctx.lineTo(localX + nx * length, localY + ny * length);
+          ctx.stroke();
+          ctx.restore();
 
-        // Scorch on tunnel edges
-        ctx.save();
-        ctx.globalCompositeOperation = "source-atop";
-        ctx.lineWidth = mod.radius * 2 + 10;
-        ctx.lineCap = "round";
-        ctx.strokeStyle = "rgba(0,0,0,0.5)";
-        ctx.beginPath();
-        ctx.moveTo(localX, localY);
-        ctx.lineTo(localX + nx * length, localY + ny * length);
-        ctx.stroke();
-        ctx.restore();
+          // Scorch on tunnel edges
+          ctx.save();
+          ctx.globalCompositeOperation = "source-atop";
+          ctx.lineWidth = mRadius * 2 + 10;
+          ctx.lineCap = "round";
+          ctx.strokeStyle = "rgba(0,0,0,0.5)";
+          ctx.beginPath();
+          ctx.moveTo(localX, localY);
+          ctx.lineTo(localX + nx * length, localY + ny * length);
+          ctx.stroke();
+          ctx.restore();
+        }
       }
     }
   }

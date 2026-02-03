@@ -1,43 +1,41 @@
 import type { ParticleType } from "./constants";
 
-// Game Phase Enum
+// Game Phase Enum (Optimized: Numeric)
 export const GamePhase = {
-  WAITING: "WAITING",
-  AIMING: "AIMING",
-  FIRING: "FIRING",
-  PROJECTILE_MOVING: "PROJECTILE_MOVING",
-  IMPACT: "IMPACT",
-  GAME_OVER: "GAME_OVER",
+  WAITING: 0,
+  AIMING: 1,
+  FIRING: 2,
+  PROJECTILE_MOVING: 3,
+  IMPACT: 4,
+  GAME_OVER: 5,
 } as const;
 export type GamePhase = (typeof GamePhase)[keyof typeof GamePhase];
 
 export const GameMode = {
-  TURN_BASED: "TURN_BASED",
-  CHAOS: "CHAOS",
+  TURN_BASED: 0,
+  CHAOS: 1,
 } as const;
 export type GameMode = (typeof GameMode)[keyof typeof GameMode];
 
-// Weapon Types
+// Weapon Types (Optimized: Numeric)
 export const WeaponType = {
-  BASIC: "BASIC",
-  SCATTER: "SCATTER",
-  DRILL: "DRILL",
-  NUKE: "NUKE",
-  BARRAGE: "BARRAGE",
-  AIRSTRIKE: "AIRSTRIKE",
-  BUILDER: "BUILDER",
-  TELEPORT: "TELEPORT",
-  // LANDMINE: "LANDMINE",
-  HEAL: "HEAL",
-  MIRV: "MIRV",
-  BOUNCY: "BOUNCY",
-  VAMPIRE: "VAMPIRE",
-  METEOR: "METEOR",
+  BASIC: 0,
+  SCATTER: 1,
+  DRILL: 2,
+  NUKE: 3,
+  BARRAGE: 4,
+  AIRSTRIKE: 5,
+  BUILDER: 6,
+  TELEPORT: 7,
+  HEAL: 8,
+  MIRV: 9,
+  BOUNCY: 10,
+  VAMPIRE: 11,
+  METEOR: 12,
   // Internal types
-  AIRSTRIKE_BOMB: "AIRSTRIKE_BOMB",
-  MIRV_MINI: "MIRV_MINI",
-  METEOR_STRIKE: "METEOR_STRIKE",
-  // LANDMINE_ARMED: "LANDMINE_ARMED",
+  AIRSTRIKE_BOMB: 13,
+  MIRV_MINI: 14,
+  METEOR_STRIKE: 15,
 } as const;
 export type WeaponType = (typeof WeaponType)[keyof typeof WeaponType];
 
@@ -130,22 +128,59 @@ export interface PlayerInfo {
   isBot?: boolean;
 }
 
-export interface TerrainModification {
-  type: "destroy" | "add" | "carve";
-  x: number;
-  y: number;
-  radius: number;
+// Terrain Modification Types (Optimized: Numeric)
+export const TerrainModType = {
+  DESTROY: 0,
+  ADD: 1,
+  CARVE: 2,
+} as const;
+export type TerrainModType =
+  (typeof TerrainModType)[keyof typeof TerrainModType];
 
-  // For carve
-  vx?: number;
-  vy?: number;
-  length?: number;
+/**
+ * TerrainModification as a compact tuple:
+ * [type, x, y, radius, vx?, vy?, length?]
+ */
+export type TerrainModification = [
+  type: TerrainModType,
+  x: number,
+  y: number,
+  radius: number,
+  vx?: number,
+  vy?: number,
+  length?: number,
+];
 
-  // === Derived cached values (computed once on add, not per-query) ===
-  _nx?: number; // Normalized direction X
-  _ny?: number; // Normalized direction Y
-  _radiusSq?: number; // radius * radius (avoids repeated multiplication)
-}
+/**
+ * Centralized helpers for TerrainModification to avoid direct index access
+ */
+export const TerrainMod = {
+  create: (
+    type: TerrainModType,
+    x: number,
+    y: number,
+    radius: number,
+    vx?: number,
+    vy?: number,
+    length?: number,
+  ): TerrainModification => {
+    // Round to 1 decimal place to save bandwidth
+    const r = (val: number) => Math.round(val * 10) / 10;
+    const mod: TerrainModification = [type, r(x), r(y), r(radius)];
+    if (vx !== undefined) mod.push(r(vx));
+    if (vy !== undefined) mod.push(r(vy));
+    if (length !== undefined) mod.push(r(length));
+    return mod;
+  },
+
+  getType: (mod: TerrainModification) => mod[0],
+  getX: (mod: TerrainModification) => mod[1],
+  getY: (mod: TerrainModification) => mod[2],
+  getRadius: (mod: TerrainModification) => mod[3],
+  getVx: (mod: TerrainModification) => mod[4],
+  getVy: (mod: TerrainModification) => mod[5],
+  getLength: (mod: TerrainModification) => mod[6],
+};
 
 // Main Game State (synced between players)
 // NOTE: projectiles and particles are LOCAL ONLY - simulated from fire events

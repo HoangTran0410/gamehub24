@@ -10,6 +10,8 @@ import {
   type MoveDirection,
   type FireShotData,
   type PlayerInfo,
+  TerrainMod,
+  TerrainModType,
 } from "./types";
 import {
   WORLD_WIDTH,
@@ -171,27 +173,34 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
       // Invalidate visual cache if CPU renderer exists
       if (this.terrainRenderer) {
         for (const mod of newMods) {
-          const radius =
-            mod.type === "destroy"
-              ? mod.radius *
-                (WEAPONS[WeaponType.BASIC].terrainDamageMultiplier || 1.2) // Default to BASIC if not found
-              : mod.radius;
+          const type = TerrainMod.getType(mod);
+          const radius = TerrainMod.getRadius(mod);
+          const mx = TerrainMod.getX(mod);
+          const my = TerrainMod.getY(mod);
+          const vx = TerrainMod.getVx(mod);
+          const vy = TerrainMod.getVy(mod);
+
+          const effectiveRadius =
+            type === TerrainModType.DESTROY
+              ? radius *
+                (WEAPONS[WeaponType.BASIC].terrainDamageMultiplier || 1.2)
+              : radius;
 
           if (
-            mod.type === "carve" &&
-            mod.vx !== undefined &&
-            mod.vy !== undefined
+            type === TerrainModType.CARVE &&
+            vx !== undefined &&
+            vy !== undefined
           ) {
             this.terrainRenderer.invalidateTunnel(
-              mod.x,
-              mod.y,
-              mod.vx,
-              mod.vy,
-              mod.radius,
-              mod.length || 100,
+              mx,
+              my,
+              vx,
+              vy,
+              radius,
+              TerrainMod.getLength(mod) || 100,
             );
           } else {
-            this.terrainRenderer.invalidateArea(mod.x, mod.y, radius);
+            this.terrainRenderer.invalidateArea(mx, my, effectiveRadius);
           }
         }
       }
@@ -657,7 +666,7 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
       }
     } else {
       x = nextX;
-      if (this.state.selectedMode !== "CHAOS") fuel -= FUEL_CONSUMPTION;
+      if (this.state.selectedMode !== GameMode.CHAOS) fuel -= FUEL_CONSUMPTION;
 
       // Downward Slope
       for (let i = 1; i <= 5; i++) {
@@ -991,34 +1000,40 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
     // Terrain effects - Push to state (Host only)
     if (this.isHost) {
       if (weapon.type === WeaponType.BUILDER) {
-        this.state.terrainMods.push({
-          type: "add",
-          x: Math.round(projectile.x),
-          y: Math.round(projectile.y),
-          radius: Math.round(weapon.radius),
-        });
+        this.state.terrainMods.push(
+          TerrainMod.create(
+            TerrainModType.ADD,
+            projectile.x,
+            projectile.y,
+            weapon.radius,
+          ),
+        );
       } else if (weapon.type === WeaponType.DRILL) {
-        this.state.terrainMods.push({
-          type: "carve",
-          x: Math.round(projectile.x),
-          y: Math.round(projectile.y),
-          vx: projectile.vx,
-          vy: projectile.vy,
-          radius: Math.round(weapon.radius),
-          length: 150,
-        });
+        this.state.terrainMods.push(
+          TerrainMod.create(
+            TerrainModType.CARVE,
+            projectile.x,
+            projectile.y,
+            weapon.radius,
+            projectile.vx,
+            projectile.vy,
+            150,
+          ),
+        );
       } else if (
         weapon.type !== WeaponType.TELEPORT &&
         weapon.type !== WeaponType.AIRSTRIKE &&
         weapon.type !== WeaponType.HEAL
       ) {
         const destroyRadius = weapon.radius * weapon.terrainDamageMultiplier;
-        this.state.terrainMods.push({
-          type: "destroy",
-          x: Math.round(projectile.x),
-          y: Math.round(projectile.y),
-          radius: Math.round(destroyRadius),
-        });
+        this.state.terrainMods.push(
+          TerrainMod.create(
+            TerrainModType.DESTROY,
+            projectile.x,
+            projectile.y,
+            destroyRadius,
+          ),
+        );
       }
     }
 

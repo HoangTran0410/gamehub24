@@ -1,7 +1,7 @@
 import { WORLD_WIDTH, WORLD_HEIGHT } from "./constants";
 import { PARTICLE_STRIDE } from "./constants";
 
-const VERTEX_SHADER = `#version 300 es
+const VERTEX_SHADER = /*glsl*/ `#version 300 es
 precision highp float;
 
 layout(location = 0) in vec2 a_pos;
@@ -34,7 +34,7 @@ void main() {
 }
 `;
 
-const FRAGMENT_SHADER = `#version 300 es
+const FRAGMENT_SHADER = /*glsl*/ `#version 300 es
 precision highp float;
 
 uniform int u_pass; // 0 = Alpha Pass (Smoke/Debris), 1 = Additive Pass (Fire/Sparks)

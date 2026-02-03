@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import GunnyWars from "./GunnyWars";
 import type { Tank, Projectile, MoveDirection } from "./types";
-import { GamePhase, GameMode, type GunnyWarsState } from "./types";
+import { GamePhase, GameMode, WeaponType, type GunnyWarsState } from "./types";
 import {
   WORLD_WIDTH,
   WORLD_HEIGHT,
@@ -237,7 +237,7 @@ const WeaponSelectModal = ({
                   <span>
                     {ts({ en: "Dmg", vi: "St" })}:{" "}
                     <b className="text-gray-300">
-                      {w.type === "HEAL" ? `+${w.damage}` : w.damage}
+                      {w.type === WeaponType.HEAL ? `+${w.damage}` : w.damage}
                     </b>
                   </span>
                   <span>
@@ -385,7 +385,7 @@ export default function GunnyWarsUI({ game: baseGame }: GameUIProps) {
   // Initialize WebGL shader renderer
   const callInitShaderRef = useRef(false);
   useEffect(() => {
-    if (state.phase === "WAITING") {
+    if (state.phase === GamePhase.WAITING) {
       callInitShaderRef.current = false;
       return;
     }
@@ -666,8 +666,8 @@ export default function GunnyWarsUI({ game: baseGame }: GameUIProps) {
               existing.life = 1.0;
             } else {
               let col: [number, number, number] = [1.0, 0.9, 0.7];
-              if (p.weapon === "NUKE") col = [0.8, 0.3, 1.0];
-              else if (p.weapon === "HEAL") col = [0.3, 1.0, 0.5];
+              if (p.weapon === WeaponType.NUKE) col = [0.8, 0.3, 1.0];
+              else if (p.weapon === WeaponType.HEAL) col = [0.3, 1.0, 0.5];
               lingering.push({
                 id: p.id,
                 x: p.x,
@@ -2018,24 +2018,27 @@ export default function GunnyWarsUI({ game: baseGame }: GameUIProps) {
                 onClick={() => setShowWeaponModal(true)}
                 className={`flex-1 @md:flex-none @md:w-32 flex flex-col items-center justify-center rounded-lg border-2 transition-all p-1.5 hover:scale-105 active:scale-95 ${!isMyTurn || (state.phase !== GamePhase.AIMING && state.selectedMode !== GameMode.CHAOS) ? "opacity-30 pointer-events-none grayscale" : ""}`}
                 style={{
-                  backgroundColor: `${WEAPONS[currentTank?.weapon || "BASIC"].color}15`,
-                  borderColor: WEAPONS[currentTank?.weapon || "BASIC"].color,
+                  backgroundColor: `${WEAPONS[currentTank?.weapon ?? WeaponType.BASIC].color}15`,
+                  borderColor:
+                    WEAPONS[currentTank?.weapon ?? WeaponType.BASIC].color,
                 }}
               >
                 <Sword
                   size={14}
                   style={{
-                    color: WEAPONS[currentTank?.weapon || "BASIC"].color,
+                    color:
+                      WEAPONS[currentTank?.weapon ?? WeaponType.BASIC].color,
                   }}
                   className="mb-0.5"
                 />
                 <span
                   className="text-[10px] font-black uppercase truncate w-full text-center"
                   style={{
-                    color: WEAPONS[currentTank?.weapon || "BASIC"].color,
+                    color:
+                      WEAPONS[currentTank?.weapon ?? WeaponType.BASIC].color,
                   }}
                 >
-                  {WEAPONS[currentTank?.weapon || "BASIC"].name}
+                  {WEAPONS[currentTank?.weapon ?? WeaponType.BASIC].name}
                 </span>
               </button>
 

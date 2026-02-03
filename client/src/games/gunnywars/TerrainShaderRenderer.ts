@@ -6,7 +6,7 @@ import {
   BIOME_BLEND_WIDTH,
   DAY_NIGHT_CYCLE_DURATION,
 } from "./constants";
-import type { TerrainModification } from "./types";
+import { TerrainMod, TerrainModType, type TerrainModification } from "./types";
 
 // ============================================================================
 // GPU Shader-based Terrain Renderer using WebGL2
@@ -148,20 +148,36 @@ float computeBaseHeight(float x) {
   return clamp(y, 200.0, u_worldSize.y - 100.0);
 }
 
+// === Modification Noise (for organic edges) ===
+float getModificationRadius(float modX, float modY, float modRadius, float px, float py) {
+  float dx = px - modX;
+  float dy = py - modY;
+  float angle = atan(dy, dx);
+  vec2 noisePos = vec2(modX + modY * 0.37, angle * 3.0 + modRadius * 0.1);
+  float edgeNoise = fbm(noisePos * 0.5) * 0.3 + 0.85;
+  float detailNoise = noise(vec2(angle * 8.0 + modX, modY * 0.1)) * 0.15;
+  return modRadius * (edgeNoise + detailNoise);
+}
+
 // === Tunnel check ===
-bool isInTunnel(float px, float py, float sx, float sy, float nx, float ny, float radius, float length) {
-  float dx = nx * length;
-  float dy = ny * length;
-  float len2 = length * length;
+bool isInTunnel(float px, float py, float sx, float sy, float nx, float ny, float radius, float tLen) {
+  float dx = nx * tLen;
+  float dy = ny * tLen;
+  float len2 = tLen * tLen;
+
   if (len2 == 0.0) {
-    float dist2 = (px - sx) * (px - sx) + (py - sy) * (py - sy);
-    return dist2 <= radius * radius;
+    float d = length(vec2(px - sx, py - sy));
+    return d <= getModificationRadius(sx, sy, radius, px, py);
   }
+
   float t = clamp(((px - sx) * dx + (py - sy) * dy) / len2, 0.0, 1.0);
   float closestX = sx + t * dx;
   float closestY = sy + t * dy;
-  float dist2 = (px - closestX) * (px - closestX) + (py - closestY) * (py - closestY);
-  return dist2 <= radius * radius;
+
+  // For the segment ends (caps), use the end points for noise to avoid stretching
+  // For the middle of the tunnel, use the start point for consistent noise seed
+  float d = length(vec2(px - closestX, py - closestY));
+  return d <= getModificationRadius(sx, sy, radius, px, py);
 }
 
 // === Crater check ===
@@ -170,19 +186,14 @@ bool isInCrater(float worldX, float worldY, float modX, float modY, float modRad
   float dy = worldY - modY;
   float distSq = dx * dx + dy * dy;
 
-  // Fast path: if well inside the minimum possible irregular radius, skip noise
-  // Min radius is roughly modRadius * 0.7
+  // Fast path for central solid area
   if (distSq < modRadius * modRadius * 0.49) {
     edgeDist = sqrt(distSq) - modRadius;
     return true;
   }
 
   float dist = sqrt(distSq);
-  float angle = atan(dy, dx);
-  vec2 noisePos = vec2(modX + modY * 0.37, angle * 3.0 + modRadius * 0.1);
-  float edgeNoise = fbm(noisePos * 0.5) * 0.3 + 0.85;
-  float detailNoise = noise(vec2(angle * 8.0 + modX, modY * 0.1)) * 0.15;
-  float irregularRadius = modRadius * (edgeNoise + detailNoise);
+  float irregularRadius = getModificationRadius(modX, modY, modRadius, worldX, worldY);
   edgeDist = dist - irregularRadius;
   return dist <= irregularRadius;
 }
@@ -639,9 +650,14 @@ void main() {
 
     // Early exit for distant modifications (including scorch mark margin)
     float activeRadius = modRadius * 1.5;
+    if (modType > 1.5) { // CARVE
+      vec4 data1 = texelFetch(u_modTexture, ivec2(i, 1), 0);
+      activeRadius = (data1.b + modRadius) * 1.5;
+    }
+
     if (distSq > activeRadius * activeRadius) {
       // Still update nearest crater for scorch marks if applicable
-      if (modType < 0.5) {
+      if (modType < 0.5 || modType > 1.5) {
         if (distSq < nearestCraterDistSq) {
           nearestCraterDistSq = distSq;
           nearestCraterRadius = modRadius;
@@ -667,6 +683,10 @@ void main() {
       if (isInTunnel(worldX, worldY, modX, modY, data1.r, data1.g, modRadius, data1.b)) {
         solid = false;
         masked = true;
+      }
+      if (distSq < nearestCraterDistSq) {
+        nearestCraterDistSq = distSq;
+        nearestCraterRadius = modRadius;
       }
     }
   }
@@ -1012,15 +1032,22 @@ export class TerrainShaderRenderer {
       filteredMods = [];
       for (let i = 0; i < modifications.length; i++) {
         const mod = modifications[i];
-        const radius =
-          mod.type === "carve" ? (mod.length || 100) + mod.radius : mod.radius;
+        const type = TerrainMod.getType(mod);
+        const radius = TerrainMod.getRadius(mod);
+        const mx = TerrainMod.getX(mod);
+        const my = TerrainMod.getY(mod);
+
+        let effectiveRadius = radius;
+        if (type === TerrainModType.CARVE) {
+          effectiveRadius = (TerrainMod.getLength(mod) || 100) + radius;
+        }
 
         // Simple bounding box check
         if (
-          mod.x + radius < viewLeft ||
-          mod.x - radius > viewRight ||
-          mod.y + radius < viewTop ||
-          mod.y - radius > viewBottom
+          mx + effectiveRadius < viewLeft ||
+          mx - effectiveRadius > viewRight ||
+          my + effectiveRadius < viewTop ||
+          my - effectiveRadius > viewBottom
         ) {
           continue;
         }
@@ -1036,23 +1063,37 @@ export class TerrainShaderRenderer {
     // Pack modifications into texture data
     for (let i = 0; i < count; i++) {
       const mod = filteredMods[i];
+      const type = TerrainMod.getType(mod);
+      const mx = TerrainMod.getX(mod);
+      const my = TerrainMod.getY(mod);
+      const radius = TerrainMod.getRadius(mod);
       const baseIdx = i * 4;
 
       // Row 0: type, x, y, radius
-      let modType = 0; // destroy
-      if (mod.type === "add") modType = 1;
-      else if (mod.type === "carve") modType = 2;
-
-      this.modTextureData[baseIdx + 0] = modType;
-      this.modTextureData[baseIdx + 1] = mod.x;
-      this.modTextureData[baseIdx + 2] = mod.y;
-      this.modTextureData[baseIdx + 3] = mod.radius;
+      this.modTextureData[baseIdx + 0] = type;
+      this.modTextureData[baseIdx + 1] = mx;
+      this.modTextureData[baseIdx + 2] = my;
+      this.modTextureData[baseIdx + 3] = radius;
 
       // Row 1: nx, ny, length (for carve)
       const row1Idx = MAX_MODIFICATIONS * 4 + baseIdx;
-      this.modTextureData[row1Idx + 0] = mod._nx ?? 0;
-      this.modTextureData[row1Idx + 1] = mod._ny ?? 0;
-      this.modTextureData[row1Idx + 2] = mod.length ?? 0;
+      let nx = 0;
+      let ny = 0;
+      const length = TerrainMod.getLength(mod) || 0;
+
+      if (type === TerrainModType.CARVE) {
+        const vx = TerrainMod.getVx(mod) || 0;
+        const vy = TerrainMod.getVy(mod) || 0;
+        const mag = Math.hypot(vx, vy);
+        if (mag > 0) {
+          nx = vx / mag;
+          ny = vy / mag;
+        }
+      }
+
+      this.modTextureData[row1Idx + 0] = nx;
+      this.modTextureData[row1Idx + 1] = ny;
+      this.modTextureData[row1Idx + 2] = length;
       this.modTextureData[row1Idx + 3] = 0;
     }
 
