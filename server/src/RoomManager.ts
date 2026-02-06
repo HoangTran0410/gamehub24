@@ -1,4 +1,5 @@
 import type { Room, CreateRoomData } from "./types";
+import { log } from "./utils";
 
 export class RoomManager {
   private readonly DATA_DIR = "data";
@@ -9,8 +10,17 @@ export class RoomManager {
   private roomSettings: Map<string, { gameType: string; name: string }> =
     new Map();
 
+  private stateChanged: boolean = false;
+
   constructor() {
     this.ensureDataDir();
+
+    setInterval(() => {
+      if (this.stateChanged) {
+        this.persistState();
+        this.stateChanged = false;
+      }
+    }, 30000); // Check every 30 seconds
   }
 
   private ensureDataDir() {
@@ -22,17 +32,8 @@ export class RoomManager {
     }
   }
 
-  private saveTimeout: ReturnType<typeof setTimeout> | null = null;
-
   private saveState() {
-    if (this.saveTimeout) {
-      return;
-    }
-
-    this.saveTimeout = setTimeout(() => {
-      this.persistState();
-      this.saveTimeout = null;
-    }, 30000); // Save at most once every 30 seconds
+    this.stateChanged = true;
   }
 
   private persistState() {
@@ -47,7 +48,7 @@ export class RoomManager {
       };
 
       fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
-      console.log("[RoomManager] State saved to disk");
+      log("[RoomManager] State saved to disk");
     } catch (error) {
       console.error("[RoomManager] Error saving state:", error);
     }
@@ -80,9 +81,7 @@ export class RoomManager {
         room.spectators.forEach((p) => this.playerRoomMap.set(p.id, room.id));
       });
 
-      console.log(
-        `[RoomManager] Restored ${this.rooms.size} rooms from ${filePath}`,
-      );
+      log(`[RoomManager] Restored ${this.rooms.size} rooms from ${filePath}`);
     } catch (error) {
       console.error("[RoomManager] Error loading state:", error);
     }
@@ -153,7 +152,7 @@ export class RoomManager {
     });
     this.saveState();
 
-    console.log(
+    log(
       `[RoomManager] Created room ${roomId} for user ${userId} (${username})`,
     );
 
@@ -201,9 +200,7 @@ export class RoomManager {
     this.playerRoomMap.set(userId, roomId);
     this.saveState();
 
-    console.log(
-      `[RoomManager] User ${userId} (${username}) joined room ${roomId}`,
-    );
+    log(`[RoomManager] User ${userId} (${username}) joined room ${roomId}`);
 
     return { success: true, room };
   }
@@ -238,7 +235,7 @@ export class RoomManager {
       room.players.forEach((p) => this.playerRoomMap.delete(p.id));
       room.spectators.forEach((p) => this.playerRoomMap.delete(p.id));
       // Remove all chats from room
-      console.log(
+      log(
         `[RoomManager] Deleted room ${roomId} (Host Left: ${wasHost}, Empty: ${
           room.players.length === 0
         })`,

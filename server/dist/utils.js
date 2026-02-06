@@ -3,6 +3,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.calculateSize = calculateSize;
 exports.log = log;
 exports.formatSize = formatSize;
+exports.uuidShort = uuidShort;
+const uuid_1 = require("uuid");
 function calculateSize(obj) {
     const json = JSON.stringify(obj);
     const size = Buffer.byteLength(json, "utf8");
@@ -25,4 +27,7 @@ function formatSize(size) {
     if (size < 1024 * 1024 * 1024)
         return `${(size / (1024 * 1024)).toFixed(2)} MB`;
     return `${(size / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+function uuidShort() {
+    return (0, uuid_1.v4)().substring(0, 8);
 }

@@ -1,16 +1,24 @@
 import fs from "fs";
 import path from "path";
 import type { ChatMessage } from "./types";
+import { log } from "./utils";
 
 const DATA_DIR = "data/chats";
 
 export class ChatPersistence {
+  private buffer: ChatMessage[] = [];
+
   constructor() {
     // Ensure base data dir exists
     const dirPath = path.resolve(DATA_DIR);
     if (!fs.existsSync(dirPath)) {
       fs.mkdirSync(dirPath, { recursive: true });
     }
+
+    // Flush buffer every 5 seconds
+    setInterval(() => {
+      this.flush();
+    }, 5000);
   }
 
   private getRefDate(timestamp?: number): string {
@@ -33,19 +41,48 @@ export class ChatPersistence {
   }
 
   saveMessage(message: ChatMessage) {
-    try {
-      const dateStr = this.getRefDate(message.timestamp);
-      this.ensureDateDir(dateStr);
+    this.buffer.push(message);
+  }
 
-      const filePath = this.getFilePath(message.roomId, dateStr);
+  private flush() {
+    if (this.buffer.length === 0) return;
 
-      const line = JSON.stringify(message) + "\n";
-      fs.appendFileSync(filePath, line, "utf-8");
-    } catch (error) {
-      console.error(
-        `[ChatPersistence] Error saving message for room ${message.roomId}:`,
-        error,
-      );
+    const messagesToSave = [...this.buffer];
+    this.buffer = [];
+
+    // Group messages by file path to minimize file opens
+    const messagesByFile = new Map<string, string[]>();
+
+    for (const message of messagesToSave) {
+      try {
+        const dateStr = this.getRefDate(message.timestamp);
+        this.ensureDateDir(dateStr);
+        const filePath = this.getFilePath(message.roomId, dateStr);
+
+        if (!messagesByFile.has(filePath)) {
+          messagesByFile.set(filePath, []);
+        }
+        const line = JSON.stringify(message) + "\n";
+        messagesByFile.get(filePath)!.push(line);
+      } catch (error) {
+        console.error(
+          `[ChatPersistence] Error preparing message for room ${message.roomId}:`,
+          error,
+        );
+      }
+    }
+
+    // Write to files
+    for (const [filePath, lines] of messagesByFile.entries()) {
+      try {
+        fs.appendFileSync(filePath, lines.join(""), "utf-8");
+        log(`[ChatPersistence] Wrote ${lines.length} messages to ${filePath}`);
+      } catch (error) {
+        console.error(
+          `[ChatPersistence] Error writing to file ${filePath}:`,
+          error,
+        );
+      }
     }
   }
 

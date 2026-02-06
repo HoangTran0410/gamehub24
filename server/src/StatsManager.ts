@@ -13,9 +13,16 @@ export class StatsManager {
     dataTransfer: {},
   };
 
+  private stateChanged: boolean = false;
+
   constructor() {
     this.loadStats();
-    setInterval(() => this.saveStats(), 15000);
+    setInterval(() => {
+      if (this.stateChanged) {
+        this.saveStats();
+        this.stateChanged = false;
+      }
+    }, 30000); // Check every 30 seconds
   }
 
   private loadStats() {
@@ -47,12 +54,14 @@ export class StatsManager {
   public trackPlay(gameType: string) {
     if (!gameType) return;
     this.gameStats.plays[gameType] = (this.gameStats.plays[gameType] || 0) + 1;
+    this.stateChanged = true;
   }
 
   public trackDataTransfer(gameType: string, size: number) {
     if (!gameType) return;
     this.gameStats.dataTransfer[gameType] =
       (this.gameStats.dataTransfer[gameType] || 0) + size;
+    this.stateChanged = true;
   }
 
   public getStats() {

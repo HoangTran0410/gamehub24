@@ -13,8 +13,14 @@ class StatsManager {
             plays: {},
             dataTransfer: {},
         };
+        this.stateChanged = false;
         this.loadStats();
-        setInterval(() => this.saveStats(), 15000);
+        setInterval(() => {
+            if (this.stateChanged) {
+                this.saveStats();
+                this.stateChanged = false;
+            }
+        }, 30000); // Check every 30 seconds
     }
     loadStats() {
         try {
@@ -43,12 +49,14 @@ class StatsManager {
         if (!gameType)
             return;
         this.gameStats.plays[gameType] = (this.gameStats.plays[gameType] || 0) + 1;
+        this.stateChanged = true;
     }
     trackDataTransfer(gameType, size) {
         if (!gameType)
             return;
         this.gameStats.dataTransfer[gameType] =
             (this.gameStats.dataTransfer[gameType] || 0) + size;
+        this.stateChanged = true;
     }
     getStats() {
         return this.gameStats;
