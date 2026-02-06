@@ -5,6 +5,7 @@ import { getSocket } from "../services/socket";
 import useLanguage from "../stores/languageStore";
 import { useChatStore, type ChatMessage } from "../stores/chatStore";
 import { useRoomStore } from "../stores/roomStore";
+import { formatTimeAgo } from "../utils";
 
 export default function GlobalChat() {
   const { currentRoom } = useRoomStore();
@@ -184,9 +185,13 @@ export default function GlobalChat() {
                   {msg.username}
                 </span>
                 <span className="text-[10px] text-text-muted">
-                  {new Date(msg.timestamp).toLocaleTimeString([], {
+                  {ts(formatTimeAgo(msg.timestamp))} -{" "}
+                  {new Date(msg.timestamp).toLocaleString([], {
                     hour: "2-digit",
                     minute: "2-digit",
+                    day: "2-digit",
+                    month: "2-digit",
+                    year: "2-digit",
                   })}
                 </span>
               </div>

@@ -3,11 +3,11 @@ import { createServer } from "http";
 import { Server, Socket } from "socket.io";
 import cors from "cors";
 import dotenv from "dotenv";
-import { v4 as uuidv4 } from "uuid";
 import { RoomManager } from "./RoomManager";
 import { statsManager } from "./StatsManager";
-import { calculateSize, formatSize, log } from "./utils";
+import { calculateSize, formatSize, log, uuidShort } from "./utils";
 import type { ChatMessage, CreateRoomData, JoinRoomData } from "./types";
+import { chatPersistence } from "./ChatPersistence";
 
 dotenv.config();
 
@@ -40,7 +40,11 @@ const io = new Server(httpServer, {
 const roomManager = new RoomManager();
 roomManager.loadState();
 const chatHistory: Map<string, ChatMessage[]> = new Map();
-const globalChatHistory: ChatMessage[] = [];
+// Load last 20 messages from persistence for GLOBAL chat
+const globalChatHistory: ChatMessage[] = chatPersistence.getRecentMessages(
+  "global",
+  20,
+);
 const spamMap = new Map<string, { count: number; lastMessageTime: number }>();
 const SPAM_WINDOW_MS = 5000;
 const MAX_MESSAGES_PER_WINDOW = 5;
@@ -227,7 +231,7 @@ io.on("connection", (socket: Socket) => {
 
         // Send system message
         const systemMessage: ChatMessage = {
-          id: uuidv4(),
+          id: uuidShort(),
           roomId: data.roomId,
           userId: "system",
           username: "System",
@@ -271,7 +275,7 @@ io.on("connection", (socket: Socket) => {
 
           // Send system message
           const systemMessage: ChatMessage = {
-            id: uuidv4(),
+            id: uuidShort(),
             roomId: result.roomId,
             userId: "system",
             username: "System",
@@ -380,7 +384,7 @@ io.on("connection", (socket: Socket) => {
           // Send system message
           const player = result.room.players.find((p) => p.id === data.userId);
           const systemMessage: ChatMessage = {
-            id: uuidv4(),
+            id: uuidShort(),
             roomId: data.roomId,
             userId: "system",
             username: "System",
@@ -430,7 +434,7 @@ io.on("connection", (socket: Socket) => {
             (p) => p.id === data.userId,
           );
           const systemMessage: ChatMessage = {
-            id: uuidv4(),
+            id: uuidShort(),
             roomId: data.roomId,
             userId: "system",
             username: "System",
@@ -490,7 +494,7 @@ io.on("connection", (socket: Socket) => {
 
           // Send system message
           const systemMessage: ChatMessage = {
-            id: uuidv4(),
+            id: uuidShort(),
             roomId: data.roomId,
             userId: "system",
             username: "System",
@@ -585,7 +589,7 @@ io.on("connection", (socket: Socket) => {
     try {
       const message: ChatMessage = {
         ...data,
-        id: uuidv4(),
+        id: uuidShort(),
         timestamp: Date.now(),
       };
 
@@ -601,6 +605,9 @@ io.on("connection", (socket: Socket) => {
         if (history.length > 50) {
           history.shift();
         }
+
+        // Persist room chat
+        chatPersistence.saveMessage(message);
       }
 
       // Broadcast to room
@@ -664,7 +671,7 @@ io.on("connection", (socket: Socket) => {
 
         const message: ChatMessage = {
           ...data,
-          id: uuidv4(),
+          id: uuidShort(),
           roomId: "global",
           timestamp: now,
         };
@@ -674,6 +681,9 @@ io.on("connection", (socket: Socket) => {
         if (globalChatHistory.length > 20) {
           globalChatHistory.shift();
         }
+
+        // Persist to file
+        chatPersistence.saveMessage(message);
 
         // Broadcast to all
         io.emit("global:chat", message);
@@ -702,7 +712,7 @@ io.on("connection", (socket: Socket) => {
         io.to(result.roomId).emit("room:players", result.room.players);
 
         const systemMessage: ChatMessage = {
-          id: uuidv4(),
+          id: uuidShort(),
           roomId: result.roomId,
           userId: "system",
           username: "System",

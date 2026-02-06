@@ -1,3 +1,5 @@
+import { v4 as uuidv4 } from "uuid";
+
 export function calculateSize(obj: any): { json: string; size: number } {
   const json = JSON.stringify(obj);
   const size = Buffer.byteLength(json, "utf8");
@@ -22,4 +24,8 @@ export function formatSize(size: number) {
   if (size < 1024 * 1024 * 1024)
     return `${(size / (1024 * 1024)).toFixed(2)} MB`;
   return `${(size / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+export function uuidShort(): string {
+  return uuidv4().substring(0, 8);
 }
