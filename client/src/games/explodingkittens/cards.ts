@@ -218,7 +218,7 @@ export const CARD_CONFIG: Record<EKCardType, EKCardConfig> = {
     textColor: "text-white",
   },
   [EKCardType.ALTER_THE_FUTURE_3]: {
-    name: { en: "ALTER FUTURE 3X", vi: "ĐỔI TƯƠNG LAI 3X" },
+    name: { en: "ALTER FUTURE 3X", vi: "SỬA TƯƠNG LAI 3X" },
     description: {
       en: "View and reorder top 3 cards.",
       vi: "Xem và sắp xếp lại 3 lá trên cùng.",
@@ -230,7 +230,7 @@ export const CARD_CONFIG: Record<EKCardType, EKCardConfig> = {
     textColor: "text-white",
   },
   [EKCardType.ALTER_THE_FUTURE_5]: {
-    name: { en: "ALTER FUTURE 5X", vi: "ĐỔI TƯƠNG LAI 5X" },
+    name: { en: "ALTER FUTURE 5X", vi: "SỬA TƯƠNG LAI 5X" },
     description: {
       en: "View and reorder top 5 cards.",
       vi: "Xem và sắp xếp lại 5 lá trên cùng.",

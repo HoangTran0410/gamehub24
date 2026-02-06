@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, memo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import ExplodingKittens, { DEFAULT_DECK_CONFIG } from "./ExplodingKittens";
 import {
   type EKCard,
@@ -43,63 +43,6 @@ import usePrevious from "../../hooks/usePrevious";
 import { useAlertStore } from "../../stores/alertStore";
 import CommonFlyingCard, { isVisible } from "../../components/FlyingCard";
 import { CARD_CONFIG, COMBO_CONFIG } from "./cards";
-
-// Memoized Toast component to prevent animation jank from parent re-renders
-interface ToastItemProps {
-  id: number;
-  message: React.ReactNode;
-  type: "success" | "error";
-  icon: any;
-  isExiting?: boolean;
-}
-
-const ToastItem = memo(
-  ({ message, type, icon: Icon, isExiting }: ToastItemProps) => {
-    const [animPhase, setAnimPhase] = useState<"enter" | "idle" | "exit">(
-      "enter",
-    );
-
-    useEffect(() => {
-      // Enter animation
-      const timer = setTimeout(() => setAnimPhase("idle"), 400);
-      return () => clearTimeout(timer);
-    }, []);
-
-    useEffect(() => {
-      if (isExiting) setAnimPhase("exit");
-    }, [isExiting]);
-
-    return (
-      <div
-        className={`
-        flex items-center gap-3 px-4 py-3 rounded-2xl border-2 shadow-2xl
-        transition-all duration-400 ease-out
-        ${
-          animPhase === "exit"
-            ? "opacity-0 translate-y-8 scale-90"
-            : animPhase === "enter"
-              ? "opacity-0 -translate-y-4 scale-95"
-              : "opacity-100 translate-y-0 scale-100"
-        }
-        ${
-          type === "success"
-            ? "bg-slate-900/90 border-green-500/50 text-green-400 backdrop-blur-md"
-            : "bg-slate-900/90 border-red-500/50 text-red-400 backdrop-blur-md"
-        }
-      `}
-      >
-        <div
-          className={`p-2 rounded-xl ${type === "success" ? "bg-green-500/20" : "bg-red-500/20"}`}
-        >
-          <Icon className="w-5 h-5" />
-        </div>
-        <span className="text-xs font-black uppercase tracking-tight leading-tight">
-          {message}
-        </span>
-      </div>
-    );
-  },
-);
 
 interface NopeWindowOverlayProps {
   state: EKState;
@@ -160,7 +103,7 @@ const NopeWindowOverlay: React.FC<NopeWindowOverlayProps> = ({
   );
 
   return createPortal(
-    <div className="fixed inset-0 z-70 flex items-center justify-center bg-black/70 backdrop-blur-xl">
+    <div className="fixed inset-0 z-70 flex items-center justify-center bg-black/70 backdrop-blur-xl p-2">
       <div className="bg-slate-950 border-4 border-slate-800 rounded-[2.5rem] p-4 shadow-[0_0_50px_rgba(0,0,0,0.5)] max-w-md w-full flex flex-col items-center gap-4 animate-in zoom-in duration-300 relative overflow-hidden">
         {/* Background Accent */}
         <div
@@ -460,16 +403,16 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
     null,
   );
   const [showDiscardHistory, setShowDiscardHistory] = useState(false);
-  const [toasts, setToasts] = useState<
+  const [gameLogs, setGameLogs] = useState<
     {
       id: number;
       message: React.ReactNode;
       type: "success" | "error";
       icon: any;
-      isExiting?: boolean;
     }[]
   >([]);
-  const toastIdRef = useRef(0);
+  const logIdRef = useRef(0);
+  const logContainerRef = useRef<HTMLDivElement>(null);
 
   const players = state.players.filter((p) => p.id);
 
@@ -519,7 +462,7 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
       setLocalFutureCards(state.drawPile.slice(-3).reverse());
     }
 
-    // Toast logic for action results
+    // game logs logic for action results
     if (state.lastAction) {
       const { action, playerId, isNoped, cardType } = state.lastAction;
       const player = state.players.find((p) => p.id === playerId);
@@ -548,28 +491,20 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
         actionName = ts({ en: "Alter the Future", vi: "Đổi Tương Lai" });
         Icon = ArrowUpDown;
       } else if ((action as any).type === "EXPLODE") {
-        // Player exploded - special toast
-        const id = ++toastIdRef.current;
+        // Player exploded - special log
+        const id = ++logIdRef.current;
         const message = ts({
           en: `💥 ${initiatorName} EXPLODED!`,
           vi: `💥 ${initiatorName} đã NỔ TUNG!`,
         });
-        setToasts((prev) => [
+        setGameLogs((prev) => [
           ...prev,
           { id, message, type: "error", icon: Bomb },
         ]);
-        setTimeout(() => {
-          setToasts((prev) =>
-            prev.map((t) => (t.id === id ? { ...t, isExiting: true } : t)),
-          );
-          setTimeout(() => {
-            setToasts((prev) => prev.filter((t) => t.id !== id));
-          }, 500);
-        }, 5000);
-        return; // Don't continue with normal toast flow
+        return; // Don't continue with normal log flow
       }
 
-      const id = ++toastIdRef.current;
+      const id = ++logIdRef.current;
       const message = isNoped
         ? ts({
             en: `${initiatorName}'s ${actionName} was BLOCKED!`,
@@ -585,7 +520,7 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
               vi: `${initiatorName} đã thực hiện ${actionName}`,
             });
 
-      setToasts((prev) => [
+      setGameLogs((prev) => [
         ...prev,
         {
           id,
@@ -594,17 +529,15 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
           icon: Icon,
         },
       ]);
-
-      setTimeout(() => {
-        setToasts((prev) =>
-          prev.map((t) => (t.id === id ? { ...t, isExiting: true } : t)),
-        );
-        setTimeout(() => {
-          setToasts((prev) => prev.filter((t) => t.id !== id));
-        }, 500);
-      }, 5000);
     }
   }, [state.lastAction, game.userId]);
+
+  // Auto-scroll log container to bottom when new logs arrive
+  useEffect(() => {
+    if (logContainerRef.current && gameLogs.length > 0) {
+      logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+    }
+  }, [gameLogs]);
 
   const animationElements = useMemo(() => {
     if (!flyingCard || !containerRef.current) return null;
@@ -662,6 +595,11 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
   useEffect(() => {
     return game.onUpdate((newState) => {
       let _flyingCard: any = null;
+
+      // 0. Detect new game
+      if (newState.gamePhase === EKGamePhase.WAITING) {
+        setGameLogs([]);
+      }
 
       // 1. Detect if a card was played (discard pile grew)
       if (
@@ -2049,19 +1987,29 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
     );
   };
 
-  const renderToasts = () => {
-    if (toasts.length === 0) return null;
+  const renderGameLogs = () => {
     return (
-      <div className="flex flex-col gap-2 pointer-events-none w-full justify-center items-center px-4">
-        {[...toasts].reverse().map((toast) => (
-          <ToastItem
-            key={toast.id}
-            id={toast.id}
-            message={toast.message}
-            type={toast.type}
-            icon={toast.icon}
-            isExiting={toast.isExiting}
-          />
+      <div
+        ref={logContainerRef}
+        className="max-h-20 @md:max-h-24 overflow-y-auto overflow-x-hidden custom-scrollbar w-full flex items-center flex-col"
+      >
+        {gameLogs.map((log) => (
+          <div
+            className={`flex items-center justify-center gap-1.5 px-2 py-1 rounded-lg text-center animate-in fade-in duration-200 ${
+              log.type === "success" ? "text-slate-300" : "text-red-400"
+            }`}
+          >
+            <log.icon
+              className={`w-4 h-4 shrink-0 ${log.type === "success" ? "text-green-500" : "text-red-500"}`}
+            />
+            <span className="text-xs leading-tight">{log.message}</span>
+          </div>
+          // <LogItem
+          //   key={log.id}
+          //   message={log.message}
+          //   type={log.type}
+          //   icon={log.icon}
+          // />
         ))}
       </div>
     );
@@ -2659,6 +2607,7 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
 
   // Use local state for configuration before applying
   const [tempConfig, setTempConfig] = useState(game.getDeckConfig());
+
   // Only host can see this, and state is local to host UI via game
   const renderDeckConfig = () => {
     if (!showDeckConfig || !isHost) return null;
@@ -2685,15 +2634,6 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
       });
       setTempConfig(config);
     };
-
-    const isConfigNotDefault = (() => {
-      return Object.keys(DEFAULT_DECK_CONFIG).some((key) => {
-        return (
-          DEFAULT_DECK_CONFIG[Number(key) as EKCardType] !==
-          tempConfig[Number(key) as EKCardType]
-        );
-      });
-    })();
 
     const isConfigModified = (() => {
       const defaults = game.getDeckConfig();
@@ -2798,16 +2738,13 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
           </div>
 
           <div className="p-4 border-t border-slate-800 bg-slate-900/50 rounded-b-xl flex justify-between items-center gap-4">
-            {isConfigNotDefault ? (
-              <button
-                onClick={handleDefault}
-                className="text-xs text-slate-400 hover:text-white underline decoration-dotted"
-              >
-                {ti({ en: "Reset Default", vi: "Mặc định" })}
-              </button>
-            ) : (
-              <div />
-            )}
+            <button
+              onClick={handleDefault}
+              className="text-xs text-slate-400 hover:text-white underline decoration-dotted"
+            >
+              {ti({ en: "Reset Default", vi: "Mặc định" })}
+            </button>
+
             <div className="flex gap-2">
               <button
                 onClick={handleCancel}
@@ -2882,7 +2819,7 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
                 </span>
               </button>
               {state.gamePhase !== EKGamePhase.WAITING && (
-                <div className="absolute bottom-2 text-xs text-center text-red-500 font-bold bg-slate-900/80 px-1.5 py-0.5 rounded-full border border-red-500/20">
+                <div className="absolute bottom-2 text-xs text-center text-red-500 font-bold bg-slate-900/80 px-1.5 py-0.5 rounded-full border border-red-500/20 pointer-events-none">
                   <Bomb className="w-3 h-3 inline-block mr-1" />
                   {(() => {
                     const kittenCount = state.drawPile.filter(
@@ -2947,7 +2884,7 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
         </div>
       </div>
 
-      {renderToasts()}
+      {renderGameLogs()}
 
       {/* Bottom area: My Slot and Hand */}
       <div className="flex flex-col items-center gap-2 @md:gap-4 bg-slate-900/80 backdrop-blur-md rounded-3xl p-3 @md:p-4 border-t border-slate-800 shadow-2xl z-10">
