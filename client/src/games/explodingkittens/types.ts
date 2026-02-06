@@ -19,6 +19,10 @@ export const EKCardType = {
   TARGETED_ATTACK: 14,
   ALTER_THE_FUTURE_3: 15,
   ALTER_THE_FUTURE_5: 16,
+  PERSONAL_ATTACK: 17,
+  CATOMIC_BOMB: 18,
+  DRAW_BOTTOM: 19,
+  BURY: 20,
 } as const;
 export type EKCardType = (typeof EKCardType)[keyof typeof EKCardType];
 
@@ -43,6 +47,7 @@ export const EKGamePhase = {
   COMBO_SELECTING: 6, // For 3-card combos
   NOPE_WINDOW: 7,
   ALTER_THE_FUTURE: 8, // For reordering cards
+  BURYING_CARD: 10,
   ENDED: 9,
 } as const;
 export type EKGamePhase = (typeof EKGamePhase)[keyof typeof EKGamePhase];
@@ -70,6 +75,9 @@ export interface EKState {
   // Alter the Future data
   alterCards: EKCard[] | null; // Cards being reordered
   alterCount: number; // 3 or 5 based on card played
+
+  // Bury data
+  buryCard: EKCard | null;
 
   // Favor data
   favorFrom: string | null; // target player

@@ -1,3 +1,5 @@
+import type { Socket } from "socket.io-client";
+import type { Room } from "../../stores/roomStore";
 import { BaseGame, type GameAction } from "../BaseGame";
 import {
   type EKState,
@@ -9,7 +11,39 @@ import {
   PENDING_ACTION_TIMEOUT,
 } from "./types";
 
+export const DEFAULT_DECK_CONFIG = Object.values(EKCardType).reduce(
+  (acc, type) => ({ ...acc, [type]: true }),
+  {} as Record<EKCardType, boolean>,
+);
+
 export default class ExplodingKittens extends BaseGame<EKState> {
+  // Local config (Host only)
+  private static readonly DECK_CONFIG_KEY = "ek_deck_config";
+  private deckConfig: Record<EKCardType, boolean>;
+
+  constructor(room: Room, socket: Socket, isHost: boolean, userId: string) {
+    super(room, socket, isHost, userId);
+
+    // Load from localStorage if available
+    let savedConfig = {};
+    try {
+      if (typeof localStorage !== "undefined") {
+        const saved = localStorage.getItem(ExplodingKittens.DECK_CONFIG_KEY);
+        if (saved) savedConfig = JSON.parse(saved);
+      }
+    } catch (e) {
+      console.warn("Failed to load deck config", e);
+    }
+
+    this.deckConfig = DEFAULT_DECK_CONFIG;
+    Object.entries(savedConfig).forEach(([key, value]) => {
+      if (key in this.deckConfig) {
+        // @ts-ignore
+        this.deckConfig[key as EKCardType] = value;
+      }
+    });
+  }
+
   protected isGameOver(state: EKState): boolean {
     return state.gamePhase === EKGamePhase.ENDED;
   }
@@ -41,6 +75,7 @@ export default class ExplodingKittens extends BaseGame<EKState> {
       winner: null,
       alterCards: null,
       alterCount: 0,
+      buryCard: null,
       favorFrom: null,
       favorTo: null,
       comboFrom: null,
@@ -82,7 +117,7 @@ export default class ExplodingKittens extends BaseGame<EKState> {
         this.handleDefuse(action.playerId);
         break;
       case "INSERT_KITTEN":
-        this.handleInsertKitten(action.playerId, action.index);
+        this.handleInsertCard(action.playerId, action.index);
         break;
       case "GIVE_FAVOR":
         this.handleGiveFavor(action.playerId, action.cardIndex);
@@ -121,33 +156,209 @@ export default class ExplodingKittens extends BaseGame<EKState> {
     }
   }
 
-  // ============== Deck Management ==============
+  public getDeckConfig(): Record<EKCardType, boolean> {
+    return { ...this.deckConfig };
+  }
 
-  private createDeck(): EKCard[] {
+  public setDeckConfig(config: Record<EKCardType, boolean>) {
+    this.deckConfig = { ...config };
+    try {
+      if (typeof localStorage !== "undefined") {
+        localStorage.setItem(
+          ExplodingKittens.DECK_CONFIG_KEY,
+          JSON.stringify(this.deckConfig),
+        );
+      }
+    } catch (e) {
+      console.warn("Failed to save deck config", e);
+    }
+  }
+
+  public getCardCountForType(type: EKCardType, numPlayers: number): number {
+    if (type === EKCardType.EXPLODING_KITTEN) return numPlayers - 1;
+    if (type === EKCardType.DEFUSE) {
+      // 1 per player + extra
+      const extra = numPlayers === 2 ? 1 : 2;
+      return numPlayers + extra;
+    }
+
+    const getCount = (base: number, min: number = 2) => {
+      if (numPlayers >= 4) return base;
+      if (numPlayers === 3) return Math.max(min, Math.ceil(base * 0.75));
+      return Math.max(min, Math.ceil(base * 0.6)); // 2 players
+    };
+
+    switch (type) {
+      case EKCardType.ATTACK:
+        return getCount(4);
+      case EKCardType.SKIP:
+        return getCount(4);
+      case EKCardType.FAVOR:
+        return getCount(4);
+      case EKCardType.SHUFFLE:
+        return getCount(4);
+      case EKCardType.SEE_THE_FUTURE:
+        return getCount(5);
+      case EKCardType.NOPE:
+        return getCount(5);
+      case EKCardType.CAT_1:
+      case EKCardType.CAT_2:
+      case EKCardType.CAT_3:
+      case EKCardType.CAT_4:
+      case EKCardType.CAT_5:
+        return getCount(4, 3);
+
+      // Expansion cards
+      case EKCardType.REVERSE:
+        return getCount(4);
+      case EKCardType.TARGETED_ATTACK:
+        return getCount(3);
+      case EKCardType.ALTER_THE_FUTURE_3:
+        return getCount(4);
+      case EKCardType.ALTER_THE_FUTURE_5:
+        return getCount(2, 1);
+      case EKCardType.PERSONAL_ATTACK:
+        return getCount(3);
+      case EKCardType.CATOMIC_BOMB:
+        return 1; // Very powerful, only 1
+      case EKCardType.DRAW_BOTTOM:
+        return getCount(4);
+      case EKCardType.BURY:
+        return getCount(4);
+
+      default:
+        return 0;
+    }
+  }
+
+  private createDeck(numPlayers: number): EKCard[] {
     const deck: EKCard[] = [];
     let nextId = 1;
 
-    // Add cards (excluding Kittens and Defuses for now)
+    // Helper to add cards
     const addCards = (type: EKCardType, count: number) => {
+      if (!this.deckConfig[type]) return;
       for (let i = 0; i < count; i++) deck.push([type, nextId++]);
     };
 
-    addCards(EKCardType.ATTACK, 4);
-    addCards(EKCardType.SKIP, 4);
-    addCards(EKCardType.FAVOR, 4);
-    addCards(EKCardType.SHUFFLE, 4);
-    addCards(EKCardType.SEE_THE_FUTURE, 5);
-    addCards(EKCardType.NOPE, 5);
-    addCards(EKCardType.CAT_1, 4);
-    addCards(EKCardType.CAT_2, 4);
-    addCards(EKCardType.CAT_3, 4);
-    addCards(EKCardType.CAT_4, 4);
-    addCards(EKCardType.CAT_5, 4);
+    // Standard cards
+    addCards(
+      EKCardType.ATTACK,
+      this.getCardCountForType(EKCardType.ATTACK, numPlayers),
+    );
+    addCards(
+      EKCardType.SKIP,
+      this.getCardCountForType(EKCardType.SKIP, numPlayers),
+    );
+    addCards(
+      EKCardType.FAVOR,
+      this.getCardCountForType(EKCardType.FAVOR, numPlayers),
+    );
+    addCards(
+      EKCardType.SHUFFLE,
+      this.getCardCountForType(EKCardType.SHUFFLE, numPlayers),
+    );
+    addCards(
+      EKCardType.SEE_THE_FUTURE,
+      this.getCardCountForType(EKCardType.SEE_THE_FUTURE, numPlayers),
+    );
+    addCards(
+      EKCardType.NOPE,
+      this.getCardCountForType(EKCardType.NOPE, numPlayers),
+    );
+
+    // Cats
+    addCards(
+      EKCardType.CAT_1,
+      this.getCardCountForType(EKCardType.CAT_1, numPlayers),
+    );
+    addCards(
+      EKCardType.CAT_2,
+      this.getCardCountForType(EKCardType.CAT_2, numPlayers),
+    );
+    addCards(
+      EKCardType.CAT_3,
+      this.getCardCountForType(EKCardType.CAT_3, numPlayers),
+    );
+    addCards(
+      EKCardType.CAT_4,
+      this.getCardCountForType(EKCardType.CAT_4, numPlayers),
+    );
+    addCards(
+      EKCardType.CAT_5,
+      this.getCardCountForType(EKCardType.CAT_5, numPlayers),
+    );
+
     // Expansion cards
-    addCards(EKCardType.REVERSE, 4);
-    addCards(EKCardType.TARGETED_ATTACK, 3);
-    addCards(EKCardType.ALTER_THE_FUTURE_3, 4);
-    addCards(EKCardType.ALTER_THE_FUTURE_5, 1);
+    addCards(
+      EKCardType.REVERSE,
+      this.getCardCountForType(EKCardType.REVERSE, numPlayers),
+    );
+    addCards(
+      EKCardType.TARGETED_ATTACK,
+      this.getCardCountForType(EKCardType.TARGETED_ATTACK, numPlayers),
+    );
+    addCards(
+      EKCardType.ALTER_THE_FUTURE_3,
+      this.getCardCountForType(EKCardType.ALTER_THE_FUTURE_3, numPlayers),
+    );
+    addCards(
+      EKCardType.ALTER_THE_FUTURE_5,
+      this.getCardCountForType(EKCardType.ALTER_THE_FUTURE_5, numPlayers),
+    );
+    addCards(
+      EKCardType.PERSONAL_ATTACK,
+      this.getCardCountForType(EKCardType.PERSONAL_ATTACK, numPlayers),
+    );
+    addCards(
+      EKCardType.CATOMIC_BOMB,
+      this.getCardCountForType(EKCardType.CATOMIC_BOMB, numPlayers),
+    );
+    addCards(
+      EKCardType.DRAW_BOTTOM,
+      this.getCardCountForType(EKCardType.DRAW_BOTTOM, numPlayers),
+    );
+    addCards(
+      EKCardType.BURY,
+      this.getCardCountForType(EKCardType.BURY, numPlayers),
+    );
+
+    // Check for minimum deck size (User request: min 6-7 cards per player)
+    // We deal 6 cards to each player initially. Plus we need a draw pile.
+    // Let's ensure at least 10 cards per player total.
+    const minSize = numPlayers * 10;
+
+    if (deck.length < minSize) {
+      const enabledTypes = Object.entries(this.deckConfig)
+        .filter(([_, enabled]) => enabled)
+        .map(([type]) => Number(type) as EKCardType);
+
+      // If nothing enabled (weird), enable Cats
+      if (enabledTypes.length === 0) {
+        enabledTypes.push(
+          EKCardType.CAT_1,
+          EKCardType.CAT_2,
+          EKCardType.CAT_3,
+          EKCardType.CAT_4,
+          EKCardType.CAT_5,
+        );
+      }
+
+      let typeIndex = 0;
+      while (deck.length < minSize) {
+        const type = enabledTypes[typeIndex % enabledTypes.length];
+        // Don't add more Defuse/Exploding Kittens/Catomic here as they have specific logic
+        // (Defuse/Kitten handles separately in handleStartGame, Catomic is 1 per game)
+        if (
+          type !== EKCardType.DEFUSE &&
+          type !== EKCardType.EXPLODING_KITTEN &&
+          type !== EKCardType.CATOMIC_BOMB
+        ) {
+          deck.push([type, nextId++]);
+        }
+        typeIndex++;
+      }
+    }
 
     return this.shuffle(deck);
   }
@@ -166,7 +377,7 @@ export default class ExplodingKittens extends BaseGame<EKState> {
     const activePlayers = this.state.players.filter((p) => p.id !== null);
     if (activePlayers.length < 2) return;
 
-    let deck = this.createDeck();
+    let deck = this.createDeck(activePlayers.length);
 
     // 2. Deal 1 Defuse and 6 cards from the shuffled deck to each player (total 7 cards)
     let nextId = 1000; // Unique IDs for Defuses and Kittens
@@ -176,7 +387,8 @@ export default class ExplodingKittens extends BaseGame<EKState> {
 
     // 3. Add remaining Defuses (if any) and Kittens (n-1) to deck
     // Standard game: 6 total defuses. Let's use 2 extra defuses in the deck.
-    const extraDefuses = 2;
+    // Scale extra defuses: 2 players -> 1 extra, 3-5 players -> 2 extra
+    const extraDefuses = activePlayers.length === 2 ? 1 : 2;
     for (let i = 0; i < extraDefuses; i++)
       deck.push([EKCardType.DEFUSE, nextId++]);
 
@@ -208,20 +420,7 @@ export default class ExplodingKittens extends BaseGame<EKState> {
 
     const card = this.state.drawPile.pop()!;
     if (card[0] === EKCardType.EXPLODING_KITTEN) {
-      this.state.gamePhase = EKGamePhase.DEFUSING;
-      // Check if player has defuse
-      const player = this.state.players[playerIndex];
-      const defuseIndex = player.hand.findIndex(
-        (c) => c[0] === EKCardType.DEFUSE,
-      );
-
-      if (defuseIndex === -1) {
-        // Player explodes!
-        this.explodePlayer(playerIndex);
-      } else {
-        // Player can defuse - waiting for DEFUSE action
-        this.checkBotTurn();
-      }
+      this.handleExplode(playerId);
     } else {
       this.state.players[playerIndex].hand.push(card);
       const timestamp = Date.now();
@@ -389,7 +588,7 @@ export default class ExplodingKittens extends BaseGame<EKState> {
 
     this.state.gamePhase = EKGamePhase.NOPE_WINDOW;
 
-    // Auto-execute after 10s
+    // Auto-execute after timeout
     const currentTimerStart = this.state.pendingAction.timerStart;
     setTimeout(() => {
       if (
@@ -599,15 +798,80 @@ export default class ExplodingKittens extends BaseGame<EKState> {
         break;
       case EKCardType.ALTER_THE_FUTURE_3:
         this.state.alterCards = this.state.drawPile.slice(-3).reverse();
-        this.state.alterCount = 3;
+        this.state.alterCount = this.state.alterCards.length;
         this.state.gamePhase = EKGamePhase.ALTER_THE_FUTURE;
         this.checkBotTurn();
         break;
       case EKCardType.ALTER_THE_FUTURE_5:
         this.state.alterCards = this.state.drawPile.slice(-5).reverse();
-        this.state.alterCount = 5;
+        this.state.alterCount = this.state.alterCards.length;
         this.state.gamePhase = EKGamePhase.ALTER_THE_FUTURE;
         this.checkBotTurn();
+        break;
+
+      // NEW CARDS
+      case EKCardType.PERSONAL_ATTACK:
+        // "Same as Attack but only for yourself".
+        // Attack ends current turn without drawing, and gives next player 2 turns.
+        // Personal Attack ends current turn without drawing, and gives *self* 3 turns.
+        // So, set attackStack to 3, and then call finishTurnAction to end the current "action" turn.
+        // finishTurnAction will decrement attackStack to 2, and since it's > 0, the current player (self) will continue.
+        this.state.attackStack = 3;
+        this.finishTurnAction(); // This will decrement attackStack to 2 and keep current player
+        break;
+
+      case EKCardType.CATOMIC_BOMB:
+        // Remove all Exploding Kittens
+        const kittens = this.state.drawPile.filter(
+          (c) => c[0] === EKCardType.EXPLODING_KITTEN,
+        );
+        const others = this.state.drawPile.filter(
+          (c) => c[0] !== EKCardType.EXPLODING_KITTEN,
+        );
+
+        // Shuffle others
+        const shuffled = this.shuffle(others);
+
+        // Put kittens on top
+        this.state.drawPile = [...shuffled, ...kittens]; // pop() takes from end, so end is "top"
+
+        // End turn immediately (no draw)
+        this.finishTurnAction();
+        break;
+
+      case EKCardType.DRAW_BOTTOM:
+        // Draw from bottom (index 0)
+        if (this.state.drawPile.length > 0) {
+          const card = this.state.drawPile.shift()!; // Remove from bottom
+          if (card[0] === EKCardType.EXPLODING_KITTEN) {
+            this.handleExplode(playerId);
+          } else {
+            const player = this.state.players.find((p) => p.id === playerId);
+            if (player) {
+              player.hand.push(card);
+              // End turn (successfully drew)
+              this.finishTurnAction();
+            }
+          }
+        } else {
+          // If draw pile is empty, still end turn
+          this.finishTurnAction();
+        }
+        break;
+
+      case EKCardType.BURY:
+        // Draw top card secretly, then insert it anywhere in the deck.
+        // This action replaces the normal draw for the turn.
+        if (this.state.drawPile.length > 0) {
+          const card = this.state.drawPile.pop()!;
+          this.state.buryCard = card; // Store the card to be buried
+          this.state.gamePhase = EKGamePhase.BURYING_CARD;
+          // Wait for user to insert
+          this.checkBotTurn();
+        } else {
+          // If draw pile is empty, still end turn
+          this.finishTurnAction();
+        }
         break;
     }
   }
@@ -655,6 +919,24 @@ export default class ExplodingKittens extends BaseGame<EKState> {
     }
   }
 
+  // Refactored Explode Logic
+  private handleExplode(playerId: string): void {
+    const playerIndex = this.state.players.findIndex((p) => p.id === playerId);
+    if (playerIndex === -1) return;
+
+    this.state.gamePhase = EKGamePhase.DEFUSING;
+    const player = this.state.players[playerIndex];
+    const defuseIndex = player.hand.findIndex(
+      (c) => c[0] === EKCardType.DEFUSE,
+    );
+
+    if (defuseIndex === -1) {
+      this.explodePlayer(playerIndex);
+    } else {
+      this.checkBotTurn();
+    }
+  }
+
   private handleDefuse(playerId: string): void {
     if (this.state.gamePhase !== EKGamePhase.DEFUSING) return;
     const playerIndex = this.state.players.findIndex((p) => p.id === playerId);
@@ -688,23 +970,38 @@ export default class ExplodingKittens extends BaseGame<EKState> {
     this.checkBotTurn();
   }
 
-  private handleInsertKitten(playerId: string, index: number): void {
-    if (this.state.gamePhase !== EKGamePhase.INSERTING_KITTEN) return;
+  private handleInsertCard(playerId: string, index: number): void {
+    if (
+      this.state.gamePhase !== EKGamePhase.INSERTING_KITTEN &&
+      this.state.gamePhase !== EKGamePhase.BURYING_CARD
+    )
+      return;
     const playerIndex = this.state.players.findIndex((p) => p.id === playerId);
     if (playerIndex !== this.state.currentTurnIndex) return;
 
-    // Put kitten back into deck
-    // index is 0 to drawPile.length
-    const kIndex = Math.max(0, Math.min(index, this.state.drawPile.length));
+    let cardToInsert: EKCard | null = null;
 
-    // Find the exploding kitten card (it should be "temporary" or we can just create a new one)
-    // In our logic, handleDrawCard didn't remove it from drawPile yet?
-    // Wait, drawPile.pop() removed it.
-    this.state.drawPile.splice(this.state.drawPile.length - kIndex, 0, [
-      EKCardType.EXPLODING_KITTEN,
-      999,
-    ]);
+    if (this.state.gamePhase === EKGamePhase.INSERTING_KITTEN) {
+      // Create a new Exploding Kitten card with strict ID if possible or unique
+      cardToInsert = [EKCardType.EXPLODING_KITTEN, Date.now()];
+    } else if (this.state.gamePhase === EKGamePhase.BURYING_CARD) {
+      cardToInsert = this.state.buryCard;
+      this.state.buryCard = null;
+    }
 
+    if (!cardToInsert) return;
+
+    // index is depth from top (0 = top of deck, length = bottom)
+    const safeIndex = Math.max(0, Math.min(index, this.state.drawPile.length));
+    // splice index logic:
+    // array is [bottom, ..., top]
+    // index 0 (top) means insert at array length
+    // index length (bottom) means insert at 0
+    const spliceIndex = this.state.drawPile.length - safeIndex;
+
+    this.state.drawPile.splice(spliceIndex, 0, cardToInsert);
+
+    // Reset phase and end turn
     this.state.gamePhase = EKGamePhase.PLAYING;
     this.finishTurnAction();
   }
@@ -940,12 +1237,25 @@ export default class ExplodingKittens extends BaseGame<EKState> {
       return;
     }
 
-    if (this.state.gamePhase === EKGamePhase.INSERTING_KITTEN) {
-      // Bots put kitten at random position
+    if (
+      this.state.gamePhase === EKGamePhase.INSERTING_KITTEN ||
+      this.state.gamePhase === EKGamePhase.BURYING_CARD
+    ) {
+      // Bots put kitten/card at random position
       const index = Math.floor(
         Math.random() * (this.state.drawPile.length + 1),
       );
-      this.handleInsertKitten(bot.id!, index);
+      this.handleInsertCard(bot.id!, index);
+      return;
+    }
+
+    if (this.state.gamePhase === EKGamePhase.ALTER_THE_FUTURE) {
+      // Bots just confirm current order
+      if (this.state.alterCards) {
+        const count = this.state.alterCount;
+        const order = Array.from({ length: count }, (_, i) => i);
+        this.handleReorderFuture(bot.id!, order);
+      }
       return;
     }
 

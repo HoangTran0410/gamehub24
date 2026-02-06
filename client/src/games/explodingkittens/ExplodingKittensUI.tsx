@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef, memo } from "react";
-import ExplodingKittens from "./ExplodingKittens";
+import ExplodingKittens, { DEFAULT_DECK_CONFIG } from "./ExplodingKittens";
 import {
   type EKCard,
   EKCardType,
@@ -10,6 +10,7 @@ import {
 } from "./types";
 import {
   Play,
+  ArrowDown,
   Bot,
   User,
   X,
@@ -30,6 +31,7 @@ import {
   ArrowUpDown,
   ChevronUp,
   ChevronDown,
+  Settings,
 } from "lucide-react";
 import { useUserStore } from "../../stores/userStore";
 import useLanguage, { trans } from "../../stores/languageStore";
@@ -157,7 +159,7 @@ const NopeWindowOverlay: React.FC<NopeWindowOverlayProps> = ({
     Math.ceil((NOPE_COOLDOWN - timeSinceLastNope) / 1000),
   );
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-70 flex items-center justify-center bg-black/70 backdrop-blur-xl">
       <div className="bg-slate-950 border-4 border-slate-800 rounded-[2.5rem] p-4 shadow-[0_0_50px_rgba(0,0,0,0.5)] max-w-md w-full flex flex-col items-center gap-4 animate-in zoom-in duration-300 relative overflow-hidden">
         {/* Background Accent */}
@@ -213,7 +215,7 @@ const NopeWindowOverlay: React.FC<NopeWindowOverlayProps> = ({
             )}
             <span className="text-sm font-black uppercase tracking-[0.2em]">
               {isBlocked
-                ? ti({ en: "BLOCKED!", vi: "ĐÃ CHẶN!" })
+                ? ti({ en: "BLOCKED!", vi: "BỊ CHẶN!" })
                 : ti({ en: "PROGRESSING...", vi: "SẮP THỰC THI..." })}
             </span>
           </div>
@@ -323,8 +325,8 @@ const NopeWindowOverlay: React.FC<NopeWindowOverlayProps> = ({
                     <span className="text-xs opacity-70 mt-1">
                       {ti({ en: "Cancel the block", vi: "Huỷ lệnh chặn" })} (
                       {ti({
-                        en: myNopeCount + " left",
-                        vi: "còn " + myNopeCount,
+                        en: myNopeCount + " cards left",
+                        vi: "còn " + myNopeCount + " lá",
                       })}
                       )
                     </span>
@@ -400,7 +402,8 @@ const NopeWindowOverlay: React.FC<NopeWindowOverlayProps> = ({
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 };
 
@@ -432,6 +435,7 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
 
   const [state] = useGameState(game);
   const [showRules, setShowRules] = useState(false);
+  const [showDeckConfig, setShowDeckConfig] = useState(false);
   const { username } = useUserStore();
   const { ti, ts } = useLanguage();
   const [selectedCardIndices, setSelectedCardIndices] = useState<number[]>([]);
@@ -499,7 +503,7 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
   const isHost = game.isHost;
 
   usePrevious(state.currentTurnIndex, (prev, _current) => {
-    if (state.gamePhase !== EKGamePhase.PLAYING) return;
+    if (state.gamePhase === EKGamePhase.WAITING) return;
     if (prev !== null) SoundManager.playTurnSwitch(isMyTurn);
 
     console.log(prev, _current);
@@ -1039,8 +1043,6 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
         return a.card[1] - b.card[1];
       });
 
-    console.log("sorted", sortedHand);
-
     return (
       <div className="w-full relative mt-4">
         {/* Hand container with overlapping cards */}
@@ -1255,20 +1257,38 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
   };
 
   const renderKittenInsertion = () => {
-    if (state.gamePhase !== EKGamePhase.INSERTING_KITTEN || !isMyTurn)
+    if (
+      (state.gamePhase !== EKGamePhase.INSERTING_KITTEN &&
+        state.gamePhase !== EKGamePhase.BURYING_CARD) ||
+      !isMyTurn
+    )
       return null;
+
+    const isBurying = state.gamePhase === EKGamePhase.BURYING_CARD;
+
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
         <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 shadow-2xl max-w-md w-full">
           <h3 className="text-xl font-bold text-red-400 mb-4 flex items-center gap-2">
-            <Bomb className="w-6 h-6" />
-            {ti({ en: "Re-insert Kitten", vi: "Đặt lại Bomb mèo" })}
+            {isBurying ? (
+              <ArrowDown className="w-6 h-6" />
+            ) : (
+              <Bomb className="w-6 h-6" />
+            )}
+            {isBurying
+              ? ti({ en: "Bury Card", vi: "Chôn bài" })
+              : ti({ en: "Re-insert Kitten", vi: "Đặt lại Bomb mèo" })}
           </h3>
           <p className="text-slate-400 mb-6 text-sm">
-            {ti({
-              en: "Choose where to hide the kitten back in the deck:",
-              vi: "Chọn vị trí để đặt lại mèo nổ vào xấp bài:",
-            })}
+            {isBurying
+              ? ti({
+                  en: "Choose where to bury the card in the deck:",
+                  vi: "Chọn vị trí để chôn lá bài vào xấp bài:",
+                })
+              : ti({
+                  en: "Choose where to hide the kitten back in the deck:",
+                  vi: "Chọn vị trí để đặt lại mèo nổ vào xấp bài:",
+                })}
           </p>
           <div className="grid grid-cols-2 gap-3 mb-6">
             <button
@@ -1474,7 +1494,7 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
                     }
                   }}
                   onDragEnd={() => setAlterDragIndex(null)}
-                  className={`flex items-center gap-3 p-3 rounded-xl border cursor-move transition-all ${
+                  className={`flex items-center gap-2 p-2 rounded-xl border cursor-move transition-all ${
                     alterDragIndex === displayIdx
                       ? "opacity-50 scale-95"
                       : "bg-slate-800 border-slate-600 hover:border-indigo-500/50"
@@ -1491,7 +1511,7 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
                   <span className={`font-bold ${config.textColor} flex-1`}>
                     {ti(config.name)}
                   </span>
-                  <div className="flex flex-col gap-1">
+                  <div className="flex gap-2">
                     <button
                       type="button"
                       disabled={displayIdx === 0}
@@ -1500,7 +1520,7 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
                         if (displayIdx > 0)
                           moveCard(displayIdx, displayIdx - 1);
                       }}
-                      className="p-1 rounded bg-slate-700 hover:bg-indigo-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                      className="p-2 rounded bg-slate-700 hover:bg-indigo-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                     >
                       <ChevronUp className="w-4 h-4 text-white" />
                     </button>
@@ -1512,7 +1532,7 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
                         if (displayIdx < alterFutureOrder.length - 1)
                           moveCard(displayIdx, displayIdx + 1);
                       }}
-                      className="p-1 rounded bg-slate-700 hover:bg-indigo-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                      className="p-2 rounded bg-slate-700 hover:bg-indigo-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                     >
                       <ChevronDown className="w-4 h-4 text-white" />
                     </button>
@@ -1555,7 +1575,7 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
             <>
               <h3 className="text-xl font-bold text-blue-400 mb-4 flex items-center gap-2">
                 <Gift className="w-6 h-6" />
-                {ti({ en: "Give a Favor", vi: "Ban ơn" })}
+                {ti({ en: "Give a Favor", vi: "Thiện ý" })}
               </h3>
               <p className="text-slate-400 mb-6 text-sm">
                 {ti({
@@ -1584,7 +1604,7 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
               </div>
               <div className="text-center">
                 <h3 className="text-xl font-bold text-white mb-2 uppercase tracking-widest">
-                  {ti({ en: "FAVOR PENDING", vi: "ĐANG CHỜ BAN ƠN" })}
+                  {ti({ en: "FAVOR PENDING", vi: "ĐANG CHỜ THIỆN Ý" })}
                 </h3>
                 <p className="text-slate-400 text-sm">
                   {ti({
@@ -2470,10 +2490,253 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
                   </p>
                 </div>
               </section>
+
+              <section>
+                <div className="flex items-center gap-2 mb-3">
+                  <h4 className="font-bold text-white text-lg">
+                    {ti({
+                      en: "4. Expansion Tactics",
+                      vi: "4. Chiến thuật mở rộng",
+                    })}
+                  </h4>
+                </div>
+                <div className="space-y-4 pl-2 border-l-2 border-slate-700">
+                  <p className="leading-relaxed">
+                    <strong className="text-yellow-400">
+                      {ti({
+                        en: "Reversing Attacks:",
+                        vi: "Phản đòn bằng Đảo chiều:",
+                      })}
+                    </strong>{" "}
+                    {ti({
+                      en: "Use",
+                      vi: "Dùng",
+                    })}
+                    {renderInlineCard(EKCardType.REVERSE)}
+                    {ti({
+                      en: "to send an Attack back to the person who attacked you, or just to skip your turn.",
+                      vi: "để đẩy Tấn công ngược lại người vừa hại bạn, hoặc chỉ đơn giản là bỏ lượt.",
+                    })}
+                  </p>
+
+                  <p className="leading-relaxed">
+                    <strong className="text-yellow-400">
+                      {ti({
+                        en: "Precision Striking:",
+                        vi: "Tấn công chính xác:",
+                      })}
+                    </strong>{" "}
+                    {ti({
+                      en: "With",
+                      vi: "Với",
+                    })}
+                    {renderInlineCard(EKCardType.TARGETED_ATTACK)}
+                    {ti({
+                      en: ", target players with few cards—they likely ran out of Defuses.",
+                      vi: ", hãy nhắm vào người còn ít bài—khả năng cao họ đã hết Gỡ bom.",
+                    })}
+                  </p>
+
+                  <p className="leading-relaxed">
+                    <strong className="text-yellow-400">
+                      {ti({
+                        en: "Reality Hacking:",
+                        vi: "Hack thực tại:",
+                      })}
+                    </strong>{" "}
+                    {ti({
+                      en: "Unlike See the Future,",
+                      vi: "Khác với Xem trước,",
+                    })}
+                    {renderInlineCard(EKCardType.ALTER_THE_FUTURE_3)}
+                    {ti({
+                      en: "lets you rearrange cards. Use it to set up a trap for the next player!",
+                      vi: "cho phép sắp xếp lại bài. Dùng nó để đặt bẫy người đi sau!",
+                    })}
+                  </p>
+                </div>
+              </section>
             </div>
           </div>
         </div>
       </div>
+    );
+  };
+
+  // Use local state for configuration before applying
+  const [tempConfig, setTempConfig] = useState(game.getDeckConfig());
+  // Only host can see this, and state is local to host UI via game
+  const renderDeckConfig = () => {
+    if (!showDeckConfig || !isHost) return null;
+
+    const toggleCard = (type: EKCardType) => {
+      setTempConfig((prev: Record<EKCardType, boolean>) => ({
+        ...prev,
+        [type]: !prev[type],
+      }));
+    };
+    const handleCancel = () => {
+      setShowDeckConfig(false);
+      setTempConfig(game.getDeckConfig());
+    };
+    const handleApply = () => {
+      game.setDeckConfig(tempConfig);
+      setShowDeckConfig(false);
+    };
+    const handleDefault = () => {
+      const config = game.getDeckConfig();
+      // Reset all to true
+      Object.keys(DEFAULT_DECK_CONFIG).forEach((key) => {
+        config[Number(key) as EKCardType] = true;
+      });
+      setTempConfig(config);
+    };
+
+    const isConfigNotDefault = (() => {
+      return Object.keys(DEFAULT_DECK_CONFIG).some((key) => {
+        return (
+          DEFAULT_DECK_CONFIG[Number(key) as EKCardType] !==
+          tempConfig[Number(key) as EKCardType]
+        );
+      });
+    })();
+
+    const isConfigModified = (() => {
+      const defaults = game.getDeckConfig();
+      return Object.keys(defaults).some((key) => {
+        return (
+          defaults[Number(key) as EKCardType] !==
+          tempConfig[Number(key) as EKCardType]
+        );
+      });
+    })();
+
+    const activePlayerCount = players.length;
+
+    return createPortal(
+      <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/80 p-4">
+        <div className="bg-slate-900 border border-slate-700 rounded-xl max-w-lg w-full shadow-2xl relative flex flex-col max-h-[85vh]">
+          <div className="flex justify-between p-4 pr-2 border-b border-slate-800">
+            <h2 className="text-xl font-bold text-white flex items-center gap-2">
+              <Settings className="w-6 h-6 text-slate-400" />
+              {ti({
+                en: "Deck Configuration",
+                vi: "Cấu hình bộ bài",
+              })}
+            </h2>
+            <button
+              onClick={() => setShowDeckConfig(false)}
+              className="p-2 hover:bg-white/10 rounded-full text-slate-400"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          <div className="p-4 overflow-y-auto grid grid-cols-1 gap-2">
+            <p className="text-sm text-slate-400">
+              {ti({
+                en: "Cards that are disabled will not appear in the deck.",
+                vi: "Lá bị tắt sẽ không xuất hiện trong bộ bài.",
+              })}
+            </p>
+
+            {Object.entries(CARD_CONFIG).map(([typeStr, config]) => {
+              const type = Number(typeStr) as EKCardType;
+              // Skip mandatory cards
+              if (
+                type === EKCardType.EXPLODING_KITTEN ||
+                type === EKCardType.DEFUSE
+              )
+                return null;
+
+              const isEnabled = tempConfig[type] ?? true;
+              const count = game.getCardCountForType(type, activePlayerCount);
+
+              return (
+                <div
+                  key={type}
+                  className={`flex items-center justify-between p-2 rounded-lg border transition-all ${
+                    isEnabled
+                      ? "bg-slate-800 border-slate-600"
+                      : "bg-slate-900/50 border-slate-800 opacity-60"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <div
+                      className={`${config.bgColor} ${config.borderColor} p-2 rounded-full`}
+                    >
+                      <config.icon
+                        className={`w-6 h-6 ${config.iconColor} ${config.icon}`}
+                      />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <p className={`font-bold text-sm ${config.textColor}`}>
+                          {ti(config.name)}
+                        </p>
+                        <span className="text-xs bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded">
+                          x{count}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400 pt-1">
+                        {ti(config.description)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => toggleCard(type)}
+                    className={`shrink-0 w-12 h-6 rounded-full transition-colors relative cursor-pointer ${
+                      isEnabled
+                        ? "bg-green-500 hover:bg-green-400"
+                        : "bg-slate-700 hover:bg-slate-600"
+                    }`}
+                  >
+                    <div
+                      className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all shadow-md ${
+                        isEnabled ? "left-7" : "left-1"
+                      }`}
+                    />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="p-4 border-t border-slate-800 bg-slate-900/50 rounded-b-xl flex justify-between items-center gap-4">
+            {isConfigNotDefault ? (
+              <button
+                onClick={handleDefault}
+                className="text-xs text-slate-400 hover:text-white underline decoration-dotted"
+              >
+                {ti({ en: "Reset Default", vi: "Mặc định" })}
+              </button>
+            ) : (
+              <div />
+            )}
+            <div className="flex gap-2">
+              <button
+                onClick={handleCancel}
+                className="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-sm font-bold transition-all"
+              >
+                {ti({ en: "Cancel", vi: "Hủy" })}
+              </button>
+              <button
+                onClick={handleApply}
+                disabled={!isConfigModified}
+                className={`px-4 py-2 rounded-lg text-sm font-bold transition-all shadow-lg ${
+                  isConfigModified
+                    ? "bg-green-600 hover:bg-green-500 text-white hover:shadow-green-500/20"
+                    : "bg-slate-700 text-slate-400 cursor-not-allowed"
+                }`}
+              >
+                {ti({ en: "Apply", vi: "Áp dụng" })}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>,
+      document.body,
     );
   };
 
@@ -2507,28 +2770,44 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
         <div className="flex-1 flex flex-col items-center gap-6 justify-center">
           <div className="flex gap-4 @md:gap-8 items-center justify-center">
             {/* Draw Pile */}
-            <button
-              ref={drawPileRef}
-              onClick={handleDraw}
-              disabled={!isMyTurn || state.gamePhase !== EKGamePhase.PLAYING}
-              className="relative w-20 h-28 @md:w-32 @md:h-44 rounded-xl bg-linear-to-br from-slate-800 to-slate-900 border-2 border-slate-700 shadow-2xl flex flex-col items-center justify-center transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:hover:scale-100"
-            >
-              <div className="bg-red-600 p-1.5 @md:p-2 rounded-lg mb-2">
-                <Layers className="w-6 h-6 @md:w-8 @md:h-8 text-white" />
-              </div>
-              <span className="text-[10px] @md:text-xs font-bold text-slate-400 uppercase tracking-widest">
-                {ti({ en: "DRAW", vi: "RÚT BÀI" })}
-              </span>
-              <span className="absolute -top-2 -right-2 text-white text-[10px] @md:text-xs w-6 h-6 rounded-full flex items-center justify-center font-bold bg-slate-600">
-                {state.drawPile.length}
-              </span>
-            </button>
+            <div className="flex flex-col items-center gap-1 relative">
+              <button
+                ref={drawPileRef}
+                onClick={handleDraw}
+                disabled={!isMyTurn || state.gamePhase !== EKGamePhase.PLAYING}
+                className="relative w-24 h-32 @md:w-32 @md:h-44 rounded-xl bg-linear-to-br from-slate-800 to-slate-900 border-2 border-slate-700 shadow-2xl flex flex-col items-center justify-center transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:hover:scale-100 cursor-pointer"
+              >
+                <div className="bg-red-600 p-1.5 @md:p-2 rounded-lg mb-2">
+                  <Layers className="w-6 h-6 @md:w-8 @md:h-8 text-white" />
+                </div>
+                <span className="text-[10px] @md:text-xs font-bold text-slate-400 uppercase tracking-widest">
+                  {ti({ en: "DRAW", vi: "RÚT BÀI" })}
+                </span>
+                <span className="absolute -top-2 -right-2 text-white text-[10px] @md:text-xs w-6 h-6 rounded-full flex items-center justify-center font-bold bg-slate-600">
+                  {state.drawPile.length}
+                </span>
+              </button>
+              {state.gamePhase !== EKGamePhase.WAITING && (
+                <div className="absolute bottom-2 text-xs text-center text-red-500 font-bold bg-slate-900/80 px-1.5 py-0.5 rounded-full border border-red-500/20">
+                  <Bomb className="w-3 h-3 inline-block mr-1" />
+                  {(() => {
+                    const kittenCount = state.drawPile.filter(
+                      (c) => c[0] === EKCardType.EXPLODING_KITTEN,
+                    ).length;
+                    const total = state.drawPile.length;
+                    const percent =
+                      total > 0 ? Math.round((kittenCount / total) * 100) : 0;
+                    return `${kittenCount}/${total} (${percent}%)`;
+                  })()}
+                </div>
+              )}
+            </div>
 
             {/* Discard Pile */}
             <div
               ref={discardPileRef}
               onClick={() => setShowDiscardHistory(true)}
-              className="relative w-20 h-28 @md:w-32 @md:h-44 rounded-xl bg-slate-900/50 border-2 border-dashed border-slate-700 flex items-center justify-center cursor-pointer hover:border-slate-500 transition-colors group"
+              className="relative w-24 h-32 @md:w-32 @md:h-44 rounded-xl bg-slate-900/50 border-2 border-dashed border-slate-700 flex items-center justify-center cursor-pointer hover:border-slate-500 transition-colors group"
             >
               <div className="absolute inset-x-0 -bottom-4 flex justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                 <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest whitespace-nowrap">
@@ -2604,16 +2883,28 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
           renderHand()}
 
         {state.gamePhase === EKGamePhase.WAITING && isHost && (
-          <button
-            onClick={() => game.requestStartGame()}
-            disabled={players.length < 2}
-            className="px-12 py-3 bg-green-600 hover:bg-green-500 text-white rounded-full font-bold flex items-center gap-2 shadow-xl transition-all hover:scale-105 disabled:bg-slate-700 disabled:cursor-not-allowed"
-          >
-            <Play className="w-5 h-5" />
-            {players.length < 2
-              ? ti({ en: "NEED 2+ PLAYERS/BOTS", vi: "CẦN 2+ NGƯỜI CHƠI/BOT" })
-              : ti({ en: "START GAME", vi: "BẮT ĐẦU" })}
-          </button>
+          <div className="flex gap-2 flex-col items-center">
+            <button
+              onClick={() => setShowDeckConfig(true)}
+              className="flex items-center gap-2 px-3 py-2 bg-green-700 hover:bg-green-600 text-white rounded-full shadow-xl transition-all hover:scale-105 border border-slate-600 cursor-pointer"
+            >
+              <Settings className="w-5 h-5" />
+              {ti({ en: "Configure Deck", vi: "Cấu hình bộ bài" })}
+            </button>
+            <button
+              onClick={() => game.requestStartGame()}
+              disabled={players.length < 2}
+              className="px-8 py-3 bg-green-600 hover:bg-green-500 text-white rounded-full font-bold flex items-center gap-2 shadow-xl transition-all hover:scale-105 disabled:bg-slate-700 disabled:cursor-not-allowed"
+            >
+              <Play className="w-5 h-5" />
+              {players.length < 2
+                ? ti({
+                    en: "NEED 2+ PLAYERS/BOTS",
+                    vi: "CẦN 2+ NGƯỜI CHƠI/BOT",
+                  })
+                : ti({ en: "START GAME", vi: "BẮT ĐẦU" })}
+            </button>
+          </div>
         )}
 
         {isHost && state.gamePhase !== EKGamePhase.WAITING && (
@@ -2650,6 +2941,7 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
       {renderDiscardHistory()}
       {renderComboTargetSelection()}
       {renderComboCardTypeSelection()}
+      {renderDeckConfig()}
 
       {/* Exploded Overlay for Local Player */}
       {mySlot?.isExploded && state.gamePhase !== EKGamePhase.ENDED && (

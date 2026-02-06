@@ -15,7 +15,7 @@ export default function usePrevious<T>(
     if (onChangeRef.current && prevRef.current !== value) {
       onChangeRef.current(prevRef.current, value);
     }
-    console.log("usePrev", value);
+    console.log("usePrev", prevRef.current, value);
 
     prevRef.current = value;
   }, [value]);
