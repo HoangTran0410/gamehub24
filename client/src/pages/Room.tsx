@@ -344,6 +344,20 @@ export default function RoomPage() {
   }, [isResizing, resize, stopResizing]);
 
   const handleChangeGame = (gameId: string) => {
+    if (!isHost) {
+      showAlert(
+        ts({
+          en: "Only host can change game",
+          vi: "Chỉ chủ phòng mới có thể đổi game",
+        }),
+        {
+          type: "warning",
+          title: ts({ en: "Host only", vi: "Cần chủ phòng" }),
+        },
+      );
+      return;
+    }
+
     if (currentRoom?.isOffline) {
       // Local update
       if (currentRoom) {
@@ -437,7 +451,7 @@ export default function RoomPage() {
                       <Share2 className="w-4 h-4 text-text-secondary hover:text-primary" />
                     </button>
                   </div>
-                  {/* Host info - hidden on mobile */}
+                  {/* Host info - if room name != host username - hidden on mobile */}
                   {hostUser?.username != currentRoom.name && (
                     <div className="hidden md:flex items-center gap-2 text-sm">
                       <Crown className="w-4 h-4 text-text-muted" />
@@ -450,14 +464,8 @@ export default function RoomPage() {
                   {/* Game type - visible on all screens */}
                   <div className="flex items-center gap-1.5 text-xs md:text-sm mt-1">
                     <button
-                      onClick={
-                        isHost ? () => setShowChangeGameModal(true) : undefined
-                      }
-                      className={`flex items-center gap-1.5 ${
-                        isHost
-                          ? "bg-white/5 hover:bg-white/10 cursor-pointer px-2 py-1 rounded transition-colors text-primary"
-                          : "text-text-muted cursor-default"
-                      }`}
+                      onClick={() => setShowChangeGameModal(true)}
+                      className={`flex items-center gap-1.5 bg-white/5 hover:bg-white/10 cursor-pointer px-2 py-1 rounded transition-colors text-primary`}
                     >
                       {game?.icon ? (
                         <game.icon className="w-3.5 h-3.5 md:w-4 md:h-4" />
@@ -467,9 +475,7 @@ export default function RoomPage() {
                       <p className="capitalize font-medium text-left">
                         {ti(game?.name || "")}
                       </p>
-                      {isHost && (
-                        <span className="text-[10px] opacity-70">▼</span>
-                      )}
+                      <span className="text-[10px] opacity-70">▼</span>
                     </button>
                   </div>
                 </div>

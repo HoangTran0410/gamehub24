@@ -14,6 +14,11 @@ export const EKCardType = {
   CAT_3: 10,
   CAT_4: 11,
   CAT_5: 12,
+  // Expansion cards
+  REVERSE: 13,
+  TARGETED_ATTACK: 14,
+  ALTER_THE_FUTURE_3: 15,
+  ALTER_THE_FUTURE_5: 16,
 } as const;
 export type EKCardType = (typeof EKCardType)[keyof typeof EKCardType];
 
@@ -37,7 +42,8 @@ export const EKGamePhase = {
   FAVOR_GIVING: 5,
   COMBO_SELECTING: 6, // For 3-card combos
   NOPE_WINDOW: 7,
-  ENDED: 8,
+  ALTER_THE_FUTURE: 8, // For reordering cards
+  ENDED: 9,
 } as const;
 export type EKGamePhase = (typeof EKGamePhase)[keyof typeof EKGamePhase];
 
@@ -57,8 +63,13 @@ export interface EKState {
   discardHistory: EKDiscardEntry[];
   currentTurnIndex: number;
   attackStack: number; // number of turns remaining
+  direction: 1 | -1; // 1 = clockwise, -1 = counter-clockwise
   gamePhase: EKGamePhase;
   winner: string | null;
+
+  // Alter the Future data
+  alterCards: EKCard[] | null; // Cards being reordered
+  alterCount: number; // 3 or 5 based on card played
 
   // Favor data
   favorFrom: string | null; // target player
@@ -121,4 +132,5 @@ export type EKAction =
   | { type: "REQUEST_NEW_GAME"; playerId: string; playerName: string }
   | { type: "ACCEPT_NEW_GAME" }
   | { type: "DECLINE_NEW_GAME" }
-  | { type: "RESPOND_NOPE"; playerId: string; response: "NOPE" | "ALLOW" };
+  | { type: "RESPOND_NOPE"; playerId: string; response: "NOPE" | "ALLOW" }
+  | { type: "REORDER_FUTURE"; playerId: string; newOrder: number[] }; // indices of alterCards in new order

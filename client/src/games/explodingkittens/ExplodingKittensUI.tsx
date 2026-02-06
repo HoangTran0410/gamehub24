@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, memo } from "react";
 import ExplodingKittens from "./ExplodingKittens";
 import {
   type EKCard,
@@ -26,6 +26,10 @@ import {
   ChevronsRight,
   Ban,
   Check,
+  Crosshair,
+  ArrowUpDown,
+  ChevronUp,
+  ChevronDown,
 } from "lucide-react";
 import { useUserStore } from "../../stores/userStore";
 import useLanguage, { trans } from "../../stores/languageStore";
@@ -37,6 +41,63 @@ import usePrevious from "../../hooks/usePrevious";
 import { useAlertStore } from "../../stores/alertStore";
 import CommonFlyingCard, { isVisible } from "../../components/FlyingCard";
 import { CARD_CONFIG, COMBO_CONFIG } from "./cards";
+
+// Memoized Toast component to prevent animation jank from parent re-renders
+interface ToastItemProps {
+  id: number;
+  message: React.ReactNode;
+  type: "success" | "error";
+  icon: any;
+  isExiting?: boolean;
+}
+
+const ToastItem = memo(
+  ({ message, type, icon: Icon, isExiting }: ToastItemProps) => {
+    const [animPhase, setAnimPhase] = useState<"enter" | "idle" | "exit">(
+      "enter",
+    );
+
+    useEffect(() => {
+      // Enter animation
+      const timer = setTimeout(() => setAnimPhase("idle"), 400);
+      return () => clearTimeout(timer);
+    }, []);
+
+    useEffect(() => {
+      if (isExiting) setAnimPhase("exit");
+    }, [isExiting]);
+
+    return (
+      <div
+        className={`
+        flex items-center gap-3 px-4 py-3 rounded-2xl border-2 shadow-2xl
+        transition-all duration-400 ease-out
+        ${
+          animPhase === "exit"
+            ? "opacity-0 translate-y-8 scale-90"
+            : animPhase === "enter"
+              ? "opacity-0 -translate-y-4 scale-95"
+              : "opacity-100 translate-y-0 scale-100"
+        }
+        ${
+          type === "success"
+            ? "bg-slate-900/90 border-green-500/50 text-green-400 backdrop-blur-md"
+            : "bg-slate-900/90 border-red-500/50 text-red-400 backdrop-blur-md"
+        }
+      `}
+      >
+        <div
+          className={`p-2 rounded-xl ${type === "success" ? "bg-green-500/20" : "bg-red-500/20"}`}
+        >
+          <Icon className="w-5 h-5" />
+        </div>
+        <span className="text-xs font-black uppercase tracking-tight leading-tight">
+          {message}
+        </span>
+      </div>
+    );
+  },
+);
 
 interface NopeWindowOverlayProps {
   state: EKState;
@@ -86,6 +147,15 @@ const NopeWindowOverlay: React.FC<NopeWindowOverlayProps> = ({
   const isBlocked = nopeCount % 2 === 1;
   const lastPlayerId = nopeChain[nopeChain.length - 1].playerId;
   const isWaitingForOthers = game.userId === lastPlayerId || myNopeCount === 0;
+
+  // 2s cooldown after someone Nopes to prevent race conditions
+  const NOPE_COOLDOWN = 2000;
+  const timeSinceLastNope = timerNow - timerStart;
+  const isInCooldown = nopeCount > 0 && timeSinceLastNope < NOPE_COOLDOWN;
+  const cooldownRemaining = Math.max(
+    0,
+    Math.ceil((NOPE_COOLDOWN - timeSinceLastNope) / 1000),
+  );
 
   return (
     <div className="fixed inset-0 z-70 flex items-center justify-center bg-black/70 backdrop-blur-xl">
@@ -147,17 +217,6 @@ const NopeWindowOverlay: React.FC<NopeWindowOverlayProps> = ({
                 : ti({ en: "PROGRESSING...", vi: "SẮP THỰC THI..." })}
             </span>
           </div>
-
-          {/* {isWaitingForOthers && (
-            <div className="p-4 bg-slate-900/50 rounded-2xl border border-slate-800/50 shadow-inner w-full mb-2">
-              <p className="text-slate-400 text-sm font-medium animate-pulse text-center">
-                {ti({
-                  en: "Waiting for other players to react...",
-                  vi: "Đang chờ người khác phản ứng...",
-                })}
-              </p>
-            </div>
-          )} */}
         </div>
 
         {/* Action Chain */}
@@ -228,23 +287,67 @@ const NopeWindowOverlay: React.FC<NopeWindowOverlayProps> = ({
             <button
               onClick={() => game.requestRespondNope("NOPE")}
               disabled={
+                isInCooldown ||
                 state.players.find((p) => p.id === game.userId)?.isExploded
               }
               className={`
                 group relative w-full py-5 rounded-2xl font-black text-2xl flex items-center justify-center gap-3 transition-all
-                bg-red-600 hover:bg-red-500 text-white shadow-[0_10px_30px_rgba(220,38,38,0.4)] hover:-translate-y-1 active:scale-95
+                ${
+                  isInCooldown
+                    ? "bg-slate-700 text-slate-400 cursor-not-allowed"
+                    : isBlocked
+                      ? "bg-green-600 hover:bg-green-500 text-white shadow-[0_10px_30px_rgba(34,197,94,0.4)] hover:-translate-y-1 active:scale-95"
+                      : "bg-red-600 hover:bg-red-500 text-white shadow-[0_10px_30px_rgba(220,38,38,0.4)] hover:-translate-y-1 active:scale-95"
+                }
               `}
             >
-              <Ban className={`w-8 h-8 animate-wiggle`} />
-              <div className="flex flex-col items-start leading-none">
-                <span className="uppercase tracking-widest leading-none">
-                  {ti({ en: "NOPE!", vi: "CHẶN!" })}
-                </span>
-                <span className="text-xs opacity-70 mt-1">
-                  {ti({ en: "USE 1 CARD", vi: "DÙNG 1 LÁ" })} (
-                  {ti({ en: myNopeCount + " left", vi: "còn " + myNopeCount })})
-                </span>
-              </div>
+              {isInCooldown ? (
+                <>
+                  <div className="w-8 h-8 border-4 border-slate-500 border-t-white rounded-full animate-spin" />
+                  <div className="flex flex-col items-start leading-none">
+                    <span className="uppercase tracking-widest leading-none">
+                      {ti({ en: "WAIT...", vi: "CHỜ..." })}
+                    </span>
+                    <span className="text-xs opacity-70 mt-1">
+                      {cooldownRemaining}s
+                    </span>
+                  </div>
+                </>
+              ) : isBlocked ? (
+                <>
+                  <RotateCcw className="w-8 h-8 animate-wiggle" />
+                  <div className="flex flex-col items-start leading-none">
+                    <span className="uppercase tracking-widest leading-none">
+                      {ti({ en: "RE-NOPE!", vi: "GỠ CHẶN!" })}
+                    </span>
+                    <span className="text-xs opacity-70 mt-1">
+                      {ti({ en: "Cancel the block", vi: "Huỷ lệnh chặn" })} (
+                      {ti({
+                        en: myNopeCount + " left",
+                        vi: "còn " + myNopeCount,
+                      })}
+                      )
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <Ban className="w-8 h-8 animate-wiggle" />
+                  <div className="flex flex-col items-start leading-none">
+                    <span className="uppercase tracking-widest leading-none">
+                      {ti({ en: "NOPE!", vi: "CHẶN!" })}
+                    </span>
+                    <span className="text-xs opacity-70 mt-1">
+                      {ti({ en: "USE 1 CARD", vi: "DÙNG 1 LÁ" })} (
+                      {ti({
+                        en: myNopeCount + " left",
+                        vi: "còn " + myNopeCount,
+                      })}
+                      )
+                    </span>
+                  </div>
+                </>
+              )}
             </button>
 
             <button
@@ -338,6 +441,11 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
   const [favorTargetingIndex, setFavorTargetingIndex] = useState<number | null>(
     null,
   );
+  const [targetedAttackIndex, setTargetedAttackIndex] = useState<number | null>(
+    null,
+  );
+  const [alterFutureOrder, setAlterFutureOrder] = useState<number[]>([]);
+  const [alterDragIndex, setAlterDragIndex] = useState<number | null>(null);
   const [comboTargetingIndices, setComboTargetingIndices] = useState<
     number[] | null
   >(null);
@@ -370,11 +478,6 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
     hidden?: boolean;
   } | null>(null);
 
-  // Hide the newest card in discard pile while animation is playing
-  const [hideTopDiscard, setHideTopDiscard] = useState(false);
-  // Hide drawn cards in hand while animation is playing (by ID)
-  const [hiddenCardIds, setHiddenCardIds] = useState<number[]>([]);
-
   // Refs for tracking positions
   const desktopSlotRefs = useRef<(HTMLDivElement | null)[]>(
     Array(5).fill(null),
@@ -394,21 +497,6 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
   const mySlot = myIndex >= 0 ? state.players[myIndex] : null;
   const isMyTurn = state.currentTurnIndex === myIndex;
   const isHost = game.isHost;
-
-  const sortedHand = useMemo(() => {
-    if (!mySlot) return [];
-    return mySlot.hand
-      .map((card, originalIndex) => ({ card, originalIndex }))
-      .sort((a, b) => {
-        // null case
-        if (!a.card) return 1;
-        if (!b.card) return -1;
-        // Sort by card type
-        if (a.card[0] !== b.card[0]) return a.card[0] - b.card[0];
-        // Then by card id (for stability)
-        return a.card[1] - b.card[1];
-      });
-  }, [mySlot?.hand]);
 
   usePrevious(state.currentTurnIndex, (prev, _current) => {
     if (state.gamePhase !== EKGamePhase.PLAYING) return;
@@ -452,6 +540,29 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
       } else if (action.type === "DEFUSE") {
         actionName = ts({ en: "Defuse the bomb", vi: "Gỡ bom" });
         Icon = Sparkle;
+      } else if (action.type === "REORDER_FUTURE") {
+        actionName = ts({ en: "Alter the Future", vi: "Đổi Tương Lai" });
+        Icon = ArrowUpDown;
+      } else if ((action as any).type === "EXPLODE") {
+        // Player exploded - special toast
+        const id = ++toastIdRef.current;
+        const message = ts({
+          en: `💥 ${initiatorName} EXPLODED!`,
+          vi: `💥 ${initiatorName} đã NỔ TUNG!`,
+        });
+        setToasts((prev) => [
+          ...prev,
+          { id, message, type: "error", icon: Bomb },
+        ]);
+        setTimeout(() => {
+          setToasts((prev) =>
+            prev.map((t) => (t.id === id ? { ...t, isExiting: true } : t)),
+          );
+          setTimeout(() => {
+            setToasts((prev) => prev.filter((t) => t.id !== id));
+          }, 500);
+        }, 5000);
+        return; // Don't continue with normal toast flow
       }
 
       const id = ++toastIdRef.current;
@@ -472,7 +583,12 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
 
       setToasts((prev) => [
         ...prev,
-        { id, message, type: isNoped ? "error" : "success", icon: Icon },
+        {
+          id,
+          message,
+          type: isNoped ? "error" : "success",
+          icon: Icon,
+        },
       ]);
 
       setTimeout(() => {
@@ -541,6 +657,8 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
 
   useEffect(() => {
     return game.onUpdate((newState) => {
+      let _flyingCard: any = null;
+
       // 1. Detect if a card was played (discard pile grew)
       if (
         newState.discardPile.length > prevDiscardLengthRef.current &&
@@ -552,17 +670,11 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
           (p) => p.actualIndex === fromPlayerIndex,
         );
 
-        setHideTopDiscard(true);
-        setFlyingCard({
+        _flyingCard = {
           card: newCard,
           fromPlayerIndex: arrangedFromIndex,
           direction: "toDiscard",
-        });
-
-        setTimeout(() => {
-          setHideTopDiscard(false);
-          setFlyingCard(null);
-        }, 400);
+        };
       }
 
       // 2. Detect if cards were drawn (hand grew)
@@ -572,19 +684,17 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
 
         if (
           newLength > prevLength &&
-          newState.gamePhase === EKGamePhase.PLAYING
+          (newState.gamePhase === EKGamePhase.PLAYING ||
+            newState.gamePhase === EKGamePhase.DEFUSING)
         ) {
           const isMe = actualIndex === myIndex;
           const arrangedToIndex = arrangedPlayers.findIndex(
             (p) => p.actualIndex === actualIndex,
           );
 
-          // Detect if this was a transfer from another player (Favor)
+          // Detect if this was a transfer from another player (Favor/Combo)
           let sourcePlayerIndex: number | undefined = undefined;
-          if (
-            newState.gamePhase === EKGamePhase.PLAYING ||
-            newState.gamePhase === EKGamePhase.FAVOR_GIVING
-          ) {
+          {
             const giverIndex = newState.players.findIndex((p, i) => {
               const prevHandSize = prevHandLengthsRef.current[i] || 0;
               return p.hand.length < prevHandSize;
@@ -597,32 +707,20 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
             }
           }
 
-          if (isMe) {
-            // Determine which cards are new
-            // They are added to the end of the array on the server/state update
-            const diff = newLength - prevLength;
-            if (diff > 0) {
-              const newCards = player.hand.slice(-diff);
-              const newIds = newCards.map((c) => c[1]);
-              setHiddenCardIds(newIds);
-            }
-          }
-
-          setFlyingCard({
+          _flyingCard = {
             card: isMe ? player.hand[newLength - 1] : undefined,
             fromPlayerIndex: arrangedToIndex,
             sourcePlayerIndex: sourcePlayerIndex,
             direction:
               sourcePlayerIndex !== undefined ? "playerToPlayer" : "toHand",
             hidden: !isMe,
-          });
-
-          setTimeout(() => {
-            if (isMe) setHiddenCardIds([]);
-            setFlyingCard(null);
-          }, 400);
+          };
         }
       });
+
+      if (_flyingCard) {
+        setFlyingCard(_flyingCard);
+      }
 
       // Update refs
       prevDiscardLengthRef.current = newState.discardPile.length;
@@ -630,6 +728,16 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
       prevTurnIndexRef.current = newState.currentTurnIndex;
     });
   }, [game, myIndex, arrangedPlayers]);
+
+  // Dedicated effect for animation cleanup
+  useEffect(() => {
+    if (flyingCard) {
+      const timer = setTimeout(() => {
+        setFlyingCard(null);
+      }, 400);
+      return () => clearTimeout(timer);
+    }
+  }, [flyingCard]);
 
   const handleDraw = () => {
     if (isMyTurn && state.gamePhase === EKGamePhase.PLAYING) {
@@ -682,6 +790,8 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
       const card = mySlot!.hand[index];
       if (card[0] === EKCardType.FAVOR) {
         setFavorTargetingIndex(index);
+      } else if (card[0] === EKCardType.TARGETED_ATTACK) {
+        setTargetedAttackIndex(index);
       } else {
         game.requestPlayCard(index);
       }
@@ -744,6 +854,13 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
       return ti({
         en: "Someone played a card! Can anyone NOPE it?",
         vi: "Có người vừa đánh bài! Có ai muốn KHÔNG! (NOPE) không?",
+      });
+    }
+
+    if (state.gamePhase === EKGamePhase.ALTER_THE_FUTURE) {
+      return ti({
+        en: "Reorder the cards as you wish, then confirm.",
+        vi: "Sắp xếp lại các lá bài theo ý muốn, sau đó xác nhận.",
       });
     }
 
@@ -843,7 +960,10 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
           en: "DEFUSE ONLY ON BOMB",
           vi: "CHỈ DÙNG KHI CÓ BOM",
         });
-      } else if (topCardType >= EKCardType.CAT_1) {
+      } else if (
+        topCardType >= EKCardType.CAT_1 &&
+        topCardType <= EKCardType.CAT_5
+      ) {
         errorLabel = ti({
           en: "COMBO ONLY",
           vi: "CẦN COMBO",
@@ -906,6 +1026,21 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
 
   const renderHand = () => {
     if (!mySlot) return null;
+
+    const sortedHand = [...(mySlot?.hand || [])]
+      .map((card, originalIndex) => ({ card, originalIndex }))
+      .sort((a, b) => {
+        // null case
+        if (!a.card) return 1;
+        if (!b.card) return -1;
+        // Sort by card type
+        if (a.card[0] !== b.card[0]) return a.card[0] - b.card[0];
+        // Then by card id (for stability)
+        return a.card[1] - b.card[1];
+      });
+
+    console.log("sorted", sortedHand);
+
     return (
       <div className="w-full relative mt-4">
         {/* Hand container with overlapping cards */}
@@ -917,11 +1052,7 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
             if (!card) {
               // should never happen
               debugger;
-              return null;
-            }
-
-            if (hiddenCardIds.includes(card[1])) {
-              // This card is currently flying in, don't show it yet
+              console.error("Card is null", originalIndex, index, sortedHand);
               return null;
             }
 
@@ -930,12 +1061,6 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
               state.gamePhase === EKGamePhase.PLAYING ||
               (state.gamePhase === EKGamePhase.DEFUSING &&
                 card[0] === EKCardType.DEFUSE);
-
-            // Don't show newly drawn cards while animating
-            // We need to check if the *original* index corresponds to a newly drawn card
-            // For now, simple length check might be enough or we need more complex tracking if strictly required.
-            // Using logic: if this card's original index is high enough to be "new"
-            const isHidden = false; // logic handled by hiddenCardIds above return null
 
             // Calculate overlap and rotation
             const totalCards = mySlot.hand.length;
@@ -951,7 +1076,7 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
             return (
               <div
                 key={`${card[1]}-${index}`}
-                className={`absolute transition-all duration-300 ease-out ${isHidden ? "opacity-0 pointer-events-none" : ""}`}
+                className={`absolute transition-all duration-300 ease-out`}
                 style={{
                   transform: `translateX(${xShift}px) rotate(${rotation}deg) translateY(${isSelected ? -30 : 0}px) scale(${scale})`,
                   zIndex: isSelected ? 30 : index + 10,
@@ -1238,6 +1363,179 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
     );
   };
 
+  const renderTargetedAttackSelection = () => {
+    if (targetedAttackIndex === null) return null;
+
+    const targets = state.players.filter(
+      (p) => p.id !== null && p.id !== game.userId && !p.isExploded,
+    );
+
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 shadow-2xl max-w-md w-full">
+          <h3 className="text-xl font-bold text-red-400 mb-4 flex items-center gap-2">
+            <Crosshair className="w-6 h-6" />
+            {ti({ en: "Choose Target", vi: "Chọn mục tiêu" })}
+          </h3>
+          <p className="text-slate-400 mb-6 text-sm">
+            {ti({
+              en: "Pick a player to take 2 turns:",
+              vi: "Chọn người phải đi 2 lượt:",
+            })}
+          </p>
+          <div className="grid grid-cols-1 gap-3 mb-6">
+            {targets.map((target) => (
+              <button
+                key={target.id}
+                onClick={() => {
+                  game.requestPlayCard(targetedAttackIndex, target.id!);
+                  setTargetedAttackIndex(null);
+                }}
+                className="flex items-center justify-between p-4 bg-slate-800 hover:bg-red-900/40 rounded-xl border border-slate-600 hover:border-red-500/50 transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <User className="w-5 h-5 text-slate-400" />
+                  <span className="text-white font-bold">
+                    {target.username}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Hand className="w-4 h-4 text-slate-500" />
+                  <span className="text-slate-400 text-xs font-bold">
+                    {target.hand.length}
+                  </span>
+                </div>
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => setTargetedAttackIndex(null)}
+            className="w-full py-2 text-slate-400 hover:text-white transition-colors text-sm"
+          >
+            {ti({ en: "Cancel", vi: "Hủy" })}
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  const renderAlterTheFuture = () => {
+    if (
+      state.gamePhase !== EKGamePhase.ALTER_THE_FUTURE ||
+      !state.alterCards ||
+      state.currentTurnIndex !== myIndex
+    )
+      return null;
+
+    // Initialize order if not set
+    if (alterFutureOrder.length !== state.alterCount) {
+      setAlterFutureOrder(
+        Array.from({ length: state.alterCount }, (_, i) => i),
+      );
+      return null;
+    }
+
+    const moveCard = (from: number, to: number) => {
+      if (from === to) return;
+      const newOrder = [...alterFutureOrder];
+      const [moved] = newOrder.splice(from, 1);
+      newOrder.splice(to, 0, moved);
+      setAlterFutureOrder(newOrder);
+    };
+
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 shadow-2xl max-w-lg w-full">
+          <h3 className="text-xl font-bold text-indigo-400 mb-4 flex items-center gap-2">
+            <ArrowUpDown className="w-6 h-6" />
+            {ti({ en: "Alter the Future", vi: "Đổi Tương Lai" })}
+          </h3>
+          <p className="text-slate-400 mb-4 text-sm">
+            {ti({
+              en: `Drag to reorder. Top card will be drawn first.`,
+              vi: `Kéo để sắp xếp. Lá trên cùng sẽ được rút trước.`,
+            })}
+          </p>
+          <div className="flex flex-col gap-3 mb-6">
+            {alterFutureOrder.map((cardIndex, displayIdx) => {
+              const card = state.alterCards![cardIndex];
+              const config = CARD_CONFIG[card[0]];
+              const Icon = config.icon;
+              return (
+                <div
+                  key={cardIndex}
+                  draggable
+                  onDragStart={() => setAlterDragIndex(displayIdx)}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={() => {
+                    if (alterDragIndex !== null) {
+                      moveCard(alterDragIndex, displayIdx);
+                      setAlterDragIndex(null);
+                    }
+                  }}
+                  onDragEnd={() => setAlterDragIndex(null)}
+                  className={`flex items-center gap-3 p-3 rounded-xl border cursor-move transition-all ${
+                    alterDragIndex === displayIdx
+                      ? "opacity-50 scale-95"
+                      : "bg-slate-800 border-slate-600 hover:border-indigo-500/50"
+                  }`}
+                >
+                  <span className="text-slate-500 font-bold w-6 text-center">
+                    {displayIdx + 1}
+                  </span>
+                  <div
+                    className={`${config.bgColor} ${config.borderColor} p-2 rounded-lg`}
+                  >
+                    <Icon className={`w-5 h-5 ${config.iconColor}`} />
+                  </div>
+                  <span className={`font-bold ${config.textColor} flex-1`}>
+                    {ti(config.name)}
+                  </span>
+                  <div className="flex flex-col gap-1">
+                    <button
+                      type="button"
+                      disabled={displayIdx === 0}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (displayIdx > 0)
+                          moveCard(displayIdx, displayIdx - 1);
+                      }}
+                      className="p-1 rounded bg-slate-700 hover:bg-indigo-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    >
+                      <ChevronUp className="w-4 h-4 text-white" />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={displayIdx === alterFutureOrder.length - 1}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (displayIdx < alterFutureOrder.length - 1)
+                          moveCard(displayIdx, displayIdx + 1);
+                      }}
+                      className="p-1 rounded bg-slate-700 hover:bg-indigo-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    >
+                      <ChevronDown className="w-4 h-4 text-white" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <button
+            onClick={() => {
+              game.requestReorderFuture(alterFutureOrder);
+              setAlterFutureOrder([]);
+            }}
+            className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2"
+          >
+            <Check className="w-5 h-5" />
+            {ti({ en: "Confirm Order", vi: "Xác nhận thứ tự" })}
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   const renderFavorGiving = () => {
     if (
       state.gamePhase !== EKGamePhase.FAVOR_GIVING ||
@@ -1408,13 +1706,13 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
                         >
                           {entry.isNoped ? (
                             <>
-                              <X className="w-3 h-3" />
+                              <Ban className="w-3 h-3" />
                               {ti({ en: "Blocked", vi: "Bị chặn" })}
                             </>
                           ) : (
                             <>
-                              <Play className="w-3 h-3" />
-                              {ti({ en: "Executed", vi: "Thực thi" })}
+                              <Check className="w-3 h-3" />
+                              {ti({ en: "Executed", vi: "Xong" })}
                             </>
                           )}
                         </div>
@@ -1678,6 +1976,77 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
     );
   };
 
+  const [prevPlayer, nextPlayer] = useMemo(() => {
+    const alivePlayers = state.players.filter(
+      (p) => p.id !== null && !p.isExploded,
+    );
+    if (alivePlayers.length <= 1) return [null, null];
+
+    // Use local player's index instead of current turn index
+    const myIdx = state.players.findIndex((p) => p.id === game.userId);
+    if (myIdx === -1) return [null, null];
+
+    const numPlayers = state.players.length;
+    let prevIdx = myIdx;
+    do {
+      prevIdx = (prevIdx - state.direction + numPlayers) % numPlayers;
+    } while (
+      state.players[prevIdx].id === null ||
+      state.players[prevIdx].isExploded
+    );
+
+    let nextIdx = myIdx;
+    do {
+      nextIdx = (nextIdx + state.direction + numPlayers) % numPlayers;
+    } while (
+      state.players[nextIdx].id === null ||
+      state.players[nextIdx].isExploded
+    );
+
+    const prevPlayer = state.players[prevIdx];
+    const nextPlayer = state.players[nextIdx];
+
+    return [prevPlayer, nextPlayer];
+  }, [state.players, state.direction, game.userId]);
+
+  const renderPrevNextPlayerInfo = () => {
+    if (
+      state.gamePhase === EKGamePhase.WAITING ||
+      state.gamePhase === EKGamePhase.ENDED
+    )
+      return null;
+
+    return (
+      <div className="flex items-center gap-4 text-xs text-slate-500 w-full justify-center">
+        <span>
+          ← {ti({ en: "Prev", vi: "Trước" })}: {prevPlayer?.username}
+        </span>
+        <span className="text-slate-600">|</span>
+        <span>
+          {ti({ en: "Next", vi: "Sau" })}: {nextPlayer?.username} →
+        </span>
+      </div>
+    );
+  };
+
+  const renderToasts = () => {
+    if (toasts.length === 0) return null;
+    return (
+      <div className="flex flex-col gap-2 pointer-events-none w-full justify-center items-center px-4">
+        {[...toasts].reverse().map((toast) => (
+          <ToastItem
+            key={toast.id}
+            id={toast.id}
+            message={toast.message}
+            type={toast.type}
+            icon={toast.icon}
+            isExiting={toast.isExiting}
+          />
+        ))}
+      </div>
+    );
+  };
+
   const renderGameRules = () => {
     return (
       <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/80 p-4">
@@ -1711,8 +2080,23 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
             </h3>
             <p>
               {ti({
-                en: "Be the last player alive by avoiding the Exploding Kittens. If you draw one without a Defuse, you are out!",
-                vi: "Sống sót đến cuối cùng bằng cách tránh hoặc vô hiệu hóa các lá bài Mèo Nổ. Nếu bạn rút phải lá Mèo Nổ mà không có lá Gỡ bom (Defuse), bạn sẽ bị loại ngay lập tức.",
+                en: (
+                  <>
+                    Be the last player alive by avoiding the{" "}
+                    {renderInlineCard(EKCardType.EXPLODING_KITTEN)}. If you draw
+                    one without a {renderInlineCard(EKCardType.DEFUSE)}, you are
+                    out!
+                  </>
+                ),
+                vi: (
+                  <>
+                    Sống sót đến cuối cùng bằng cách tránh hoặc vô hiệu hóa các
+                    lá bài {renderInlineCard(EKCardType.EXPLODING_KITTEN)}. Nếu
+                    bạn rút phải lá Mèo Nổ mà không có lá{" "}
+                    {renderInlineCard(EKCardType.DEFUSE)}, bạn sẽ bị loại ngay
+                    lập tức.
+                  </>
+                ),
               })}
             </p>
 
@@ -1722,14 +2106,34 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
             <ul className="list-disc pl-5 space-y-1">
               <li>
                 {ti({
-                  en: "Each player starts with 1 Defuse and 6 random cards.",
-                  vi: "Mỗi người nhận 1 lá Gỡ bom và 6 lá bài ngẫu nhiên khác.",
+                  en: (
+                    <>
+                      Each player starts with 1{" "}
+                      {renderInlineCard(EKCardType.DEFUSE)} and 6 random cards.
+                    </>
+                  ),
+                  vi: (
+                    <>
+                      Mỗi người nhận 1 lá {renderInlineCard(EKCardType.DEFUSE)}{" "}
+                      và 6 lá bài ngẫu nhiên khác.
+                    </>
+                  ),
                 })}
               </li>
               <li>
                 {ti({
-                  en: "The deck contains (Players - 1) Exploding Kittens.",
-                  vi: "Bỏ số lá Mèo Nổ ít hơn số người chơi 1 lá vào chồng bài rút.",
+                  en: (
+                    <>
+                      The deck contains (Players - 1){" "}
+                      {renderInlineCard(EKCardType.EXPLODING_KITTEN)}.
+                    </>
+                  ),
+                  vi: (
+                    <>
+                      Chồng bài rút có (số người chơi - 1) lá{" "}
+                      {renderInlineCard(EKCardType.EXPLODING_KITTEN)}.
+                    </>
+                  ),
                 })}
               </li>
             </ul>
@@ -1740,7 +2144,7 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
             <p>
               {ti({
                 en: "Your turn has two phases:",
-                vi: "Mỗi lượt chơi của bạn gồm 2 giai đoạn chính:",
+                vi: "Mỗi lượt chơi gồm 2 giai đoạn chính:",
               })}
             </p>
             <ul className="list-disc pl-5 space-y-1">
@@ -1753,7 +2157,7 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
                 </strong>{" "}
                 {ti({
                   en: "Play as many cards as you want from your hand.",
-                  vi: "Bạn có thể đánh xuống bao nhiêu lá bài tùy thích để sử dụng chức năng của chúng, hoặc không đánh lá nào.",
+                  vi: "Đánh xuống bao nhiêu lá bài tùy thích để sử dụng chức năng của chúng, hoặc không đánh lá nào.",
                 })}
               </li>
               <li>
@@ -1764,8 +2168,20 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
                   })}
                 </strong>{" "}
                 {ti({
-                  en: "Draw one card from the deck. If it's not a kitten, you're safe!",
-                  vi: "Rút một lá từ chồng bài chung. Nếu đó không phải Mèo Nổ, lượt của bạn kết thúc an toàn.",
+                  en: (
+                    <>
+                      Draw one card from the deck. If it's not a{" "}
+                      {renderInlineCard(EKCardType.EXPLODING_KITTEN)}, you're
+                      safe!
+                    </>
+                  ),
+                  vi: (
+                    <>
+                      Rút một lá từ chồng bài chung. Nếu đó không phải{" "}
+                      {renderInlineCard(EKCardType.EXPLODING_KITTEN)}, lượt của
+                      bạn kết thúc an toàn.
+                    </>
+                  ),
                 })}
               </li>
             </ul>
@@ -1781,17 +2197,56 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
             </p>
             <ul className="list-disc pl-5 space-y-1">
               <li>
-                <strong>{ti({ en: "Pairs:", vi: "Cặp Đôi:" })}</strong>{" "}
+                <strong className="text-yellow-400">
+                  {ti({ en: "Pairs:", vi: "Cặp Đôi:" })}
+                </strong>{" "}
                 {ti({
-                  en: "Play 2 cards of the same type to steal a random card from another player.",
-                  vi: "Đánh 2 lá cùng loại để cướp 1 lá ngẫu nhiên từ người chơi khác.",
+                  en: (
+                    <>
+                      Play 2 cards of the same type to{" "}
+                      <span className="font-bold text-green-500">
+                        STEAL a RANDOM
+                      </span>{" "}
+                      card from another player.
+                    </>
+                  ),
+                  vi: (
+                    <>
+                      Đánh 2 lá cùng loại để{" "}
+                      <span className="font-bold text-green-500">
+                        CƯỚP 1 lá NGẪU NHIÊN
+                      </span>{" "}
+                      từ người chơi khác.
+                    </>
+                  ),
                 })}
               </li>
               <li>
-                <strong>{ti({ en: "Triplets:", vi: "Bộ Ba:" })}</strong>{" "}
+                <strong className="text-yellow-400">
+                  {ti({ en: "Triplets:", vi: "Bộ Ba:" })}
+                </strong>{" "}
                 {ti({
-                  en: "Play 3 cards of the same type to name a card. If the target has it, you steal it.",
-                  vi: "Đánh 3 lá cùng loại và đọc tên 1 lá. Nếu đối thủ có lá đó, bạn sẽ lấy được nó.",
+                  en: (
+                    <>
+                      Play 3 cards of the same type to{" "}
+                      <span className="font-bold text-green-500">
+                        NAME A CARD
+                      </span>
+                      . If the target has it, you{" "}
+                      <span className="font-bold text-green-500">STEAL IT</span>
+                      .
+                    </>
+                  ),
+                  vi: (
+                    <>
+                      Đánh 3 lá cùng loại và{" "}
+                      <span className="font-bold text-green-500">
+                        ĐỌC TÊN 1 LÁ
+                      </span>
+                      . Nếu đối thủ có lá đó, bạn sẽ{" "}
+                      <span className="font-bold text-green-500">LẤY NÓ</span>.
+                    </>
+                  ),
                 })}
               </li>
             </ul>
@@ -1810,8 +2265,10 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
                     />
                   </div>
                   <div>
-                    <p className="font-bold text-yellow-400">{ti(card.name)}</p>
-                    <p className="text-sm text-slate-300">
+                    <p className={`font-bold ${card.textColor}`}>
+                      {ti(card.name)}
+                    </p>
+                    <p className="text-sm text-slate-500">
                       {ti(card.description)}
                     </p>
                   </div>
@@ -1834,7 +2291,7 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
                   </h4>
                 </div>
                 <div className="space-y-4 pl-2 border-l-2 border-slate-700">
-                  <p className="text-sm leading-relaxed">
+                  <p className="leading-relaxed">
                     <strong className="text-yellow-400">
                       {ti({
                         en: "Keep Defuse until the end:",
@@ -1852,7 +2309,7 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
                     })}
                   </p>
 
-                  <p className="text-sm leading-relaxed">
+                  <p className="leading-relaxed">
                     <strong className="text-yellow-400">
                       {ti({
                         en: "Use Combos effectively:",
@@ -1870,7 +2327,7 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
                     })}
                   </p>
 
-                  <p className="text-sm leading-relaxed">
+                  <p className="leading-relaxed">
                     <strong className="text-yellow-400">
                       {ti({
                         en: "Master the Nope card:",
@@ -1900,7 +2357,7 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
                   </h4>
                 </div>
                 <div className="space-y-4 pl-2 border-l-2 border-slate-700">
-                  <p className="text-sm leading-relaxed">
+                  <p className="leading-relaxed">
                     <strong className="text-yellow-400">
                       {ti({
                         en: "Combine See the Future + Shuffle/Skip:",
@@ -1928,7 +2385,7 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
                     })}
                   </p>
 
-                  <p className="text-sm leading-relaxed">
+                  <p className="leading-relaxed">
                     <strong className="text-yellow-400">
                       {ti({
                         en: "Mind Games with Defuse:",
@@ -1946,7 +2403,7 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
                     })}
                   </p>
 
-                  <p className="text-sm leading-relaxed">
+                  <p className="leading-relaxed">
                     <strong className="text-yellow-400">
                       {ti({
                         en: "Track Defuses:",
@@ -1976,7 +2433,7 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
                   </h4>
                 </div>
                 <div className="space-y-4 pl-2 border-l-2 border-slate-700">
-                  <p className="text-sm leading-relaxed">
+                  <p className="leading-relaxed">
                     <strong className="text-yellow-400">
                       {ti({
                         en: "Use Attack wisely:",
@@ -1994,7 +2451,7 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
                     })}
                   </p>
 
-                  <p className="text-sm leading-relaxed">
+                  <p className="leading-relaxed">
                     <strong className="text-yellow-400">
                       {ti({
                         en: "Shuffle when in doubt:",
@@ -2016,43 +2473,6 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
             </div>
           </div>
         </div>
-      </div>
-    );
-  };
-  const renderToasts = () => {
-    if (toasts.length === 0) return null;
-    return (
-      <div className="flex flex-col gap-2 pointer-events-none w-full justify-center items-center px-4">
-        {toasts.map((toast) => {
-          const Icon = toast.icon;
-          return (
-            <div
-              key={toast.id}
-              className={`
-                flex items-center gap-3 px-4 py-3 rounded-2xl border-2 shadow-2xl transition-all duration-500
-                ${
-                  toast.isExiting
-                    ? "opacity-0 -translate-y-10 scale-95"
-                    : "animate-in slide-in-from-top-10 fade-in duration-500"
-                }
-                ${
-                  toast.type === "success"
-                    ? "bg-slate-900/90 border-green-500/50 text-green-400 backdrop-blur-md"
-                    : "bg-slate-900/90 border-red-500/50 text-red-400 backdrop-blur-md"
-                }
-              `}
-            >
-              <div
-                className={`p-2 rounded-xl ${toast.type === "success" ? "bg-green-500/20" : "bg-red-500/20"}`}
-              >
-                <Icon className="w-5 h-5" />
-              </div>
-              <span className="text-xs font-black uppercase tracking-tight leading-tight">
-                {toast.message}
-              </span>
-            </div>
-          );
-        })}
       </div>
     );
   };
@@ -2118,8 +2538,6 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
               {state.discardPile.length > 0 ? (
                 <div className="relative w-full h-full flex items-center justify-center">
                   {state.discardPile.slice(-3).map((card, i) => {
-                    const isLast = i === state.discardPile.slice(-3).length - 1;
-                    if (isLast && hideTopDiscard) return null;
                     return (
                       <div
                         key={`${card[1]}-${i}`}
@@ -2139,7 +2557,7 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
             </div>
           </div>
 
-          {state.attackStack > 1 && (
+          {state.attackStack > 1 && isMyTurn && (
             <div className="flex items-center gap-2 bg-orange-500/20 text-yellow-400 px-3 py-1 rounded-full border border-orange-500/30 animate-pulse">
               <Swords className="w-4 h-4" />
               <span className="text-xs font-bold uppercase">
@@ -2160,9 +2578,12 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
 
       {/* Bottom area: My Slot and Hand */}
       <div className="flex flex-col items-center gap-2 @md:gap-4 bg-slate-900/80 backdrop-blur-md rounded-3xl p-3 @md:p-4 border-t border-slate-800 shadow-2xl z-10">
-        {/* Hint Area */}
-        <div className="text-xs text-center font-bold text-slate-400 bg-slate-800/50 px-4 py-1.5 rounded-full border border-slate-700/50 animate-pulse tracking-wider">
+        <div className="text-xs text-center font-bold text-slate-400 bg-slate-800/50 px-4 py-1.5 rounded-full border border-slate-700/50">
+          {/* Hint Area */}
           {getTurnHint()}
+
+          {/* Previous/Next Player Info */}
+          {renderPrevNextPlayerInfo()}
         </div>
 
         <div className="flex items-center gap-4">
@@ -2222,6 +2643,8 @@ export default function ExplodingKittensUI({ game: baseGame }: GameUIProps) {
       {renderKittenInsertion()}
       {renderFavorGiving()}
       {renderFavorTargetSelection()}
+      {renderTargetedAttackSelection()}
+      {renderAlterTheFuture()}
       {renderFutureCards()}
       {renderNopeWindow()}
       {renderDiscardHistory()}

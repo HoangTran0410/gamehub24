@@ -36,8 +36,11 @@ export default class ExplodingKittens extends BaseGame<EKState> {
       discardHistory: [],
       currentTurnIndex: 0,
       attackStack: 1,
+      direction: 1,
       gamePhase: EKGamePhase.WAITING,
       winner: null,
+      alterCards: null,
+      alterCount: 0,
       favorFrom: null,
       favorTo: null,
       comboFrom: null,
@@ -112,6 +115,9 @@ export default class ExplodingKittens extends BaseGame<EKState> {
       case "RESPOND_NOPE":
         this.handleRespondNope(action.playerId, action.response);
         break;
+      case "REORDER_FUTURE":
+        this.handleReorderFuture(action.playerId, action.newOrder);
+        break;
     }
   }
 
@@ -137,6 +143,11 @@ export default class ExplodingKittens extends BaseGame<EKState> {
     addCards(EKCardType.CAT_3, 4);
     addCards(EKCardType.CAT_4, 4);
     addCards(EKCardType.CAT_5, 4);
+    // Expansion cards
+    addCards(EKCardType.REVERSE, 4);
+    addCards(EKCardType.TARGETED_ATTACK, 3);
+    addCards(EKCardType.ALTER_THE_FUTURE_3, 4);
+    addCards(EKCardType.ALTER_THE_FUTURE_5, 1);
 
     return this.shuffle(deck);
   }
@@ -176,6 +187,7 @@ export default class ExplodingKittens extends BaseGame<EKState> {
     // 4. Shuffle again
     this.state.drawPile = this.shuffle(deck);
     this.state.gamePhase = EKGamePhase.PLAYING;
+    this.state.direction = 1; // Reset direction
     this.state.currentTurnIndex = this.state.players.findIndex(
       (p) => p.id !== null,
     );
@@ -241,11 +253,12 @@ export default class ExplodingKittens extends BaseGame<EKState> {
     if (cardIndex < 0 || cardIndex >= player.hand.length) return;
 
     const card = player.hand[cardIndex];
+    // Block NOPE, DEFUSE, EXPLODING_KITTEN and Cat cards (which are combos only)
     if (
       card[0] === EKCardType.NOPE ||
       card[0] === EKCardType.DEFUSE ||
       card[0] === EKCardType.EXPLODING_KITTEN ||
-      card[0] >= EKCardType.CAT_1 // Cat cards cannot be played individually
+      (card[0] >= EKCardType.CAT_1 && card[0] <= EKCardType.CAT_5)
     ) {
       return;
     }
@@ -492,9 +505,10 @@ export default class ExplodingKittens extends BaseGame<EKState> {
       }
     }
 
+    // Get original card type from nopeChain[0] - this is the actual action card, not NOPE cards
     let cardType: EKCardType | undefined;
-    if (action.type === "PLAY_CARD") {
-      cardType = this.state.discardPile[this.state.discardPile.length - 1][0];
+    if (action.type === "PLAY_CARD" && nopeChain.length > 0) {
+      cardType = nopeChain[0].cardType;
     }
 
     this.state.lastAction = {
@@ -560,6 +574,40 @@ export default class ExplodingKittens extends BaseGame<EKState> {
             this.state.favorTo = playerId;
           }
         }
+        break;
+      // Expansion cards
+      case EKCardType.REVERSE:
+        this.state.direction *= -1;
+        this.finishTurnAction();
+        break;
+      case EKCardType.TARGETED_ATTACK:
+        if (targetPlayerId) {
+          const targetIndex = this.state.players.findIndex(
+            (p) => p.id === targetPlayerId,
+          );
+          if (
+            targetIndex !== -1 &&
+            targetIndex !== playerIndex &&
+            !this.state.players[targetIndex].isExploded
+          ) {
+            this.state.attackStack =
+              (this.state.attackStack > 1 ? this.state.attackStack : 0) + 2;
+            this.state.currentTurnIndex = targetIndex;
+            this.checkBotTurn();
+          }
+        }
+        break;
+      case EKCardType.ALTER_THE_FUTURE_3:
+        this.state.alterCards = this.state.drawPile.slice(-3).reverse();
+        this.state.alterCount = 3;
+        this.state.gamePhase = EKGamePhase.ALTER_THE_FUTURE;
+        this.checkBotTurn();
+        break;
+      case EKCardType.ALTER_THE_FUTURE_5:
+        this.state.alterCards = this.state.drawPile.slice(-5).reverse();
+        this.state.alterCount = 5;
+        this.state.gamePhase = EKGamePhase.ALTER_THE_FUTURE;
+        this.checkBotTurn();
         break;
     }
   }
@@ -691,6 +739,44 @@ export default class ExplodingKittens extends BaseGame<EKState> {
     }
   }
 
+  private handleReorderFuture(playerId: string, newOrder: number[]): void {
+    if (this.state.gamePhase !== EKGamePhase.ALTER_THE_FUTURE) return;
+    const playerIndex = this.state.players.findIndex((p) => p.id === playerId);
+    if (playerIndex !== this.state.currentTurnIndex) return;
+    if (!this.state.alterCards) return;
+
+    const count = this.state.alterCount;
+    // Validate newOrder
+    if (
+      newOrder.length !== count ||
+      !newOrder.every(
+        (idx, i, arr) => idx >= 0 && idx < count && arr.indexOf(idx) === i,
+      )
+    ) {
+      return;
+    }
+
+    // Apply new order: alterCards[0] = top of deck (will be drawn first)
+    const reordered = newOrder.map((idx) => this.state.alterCards![idx]);
+    // Remove old top cards and push reordered back
+    this.state.drawPile.splice(this.state.drawPile.length - count, count);
+    // Push in reverse so reordered[0] is on top (end of array)
+    for (let i = reordered.length - 1; i >= 0; i--) {
+      this.state.drawPile.push(reordered[i]);
+    }
+
+    this.state.alterCards = null;
+    this.state.alterCount = 0;
+    this.state.lastAction = {
+      action: { type: "REORDER_FUTURE", playerId, newOrder },
+      playerId,
+      timestamp: Date.now(),
+      isNoped: false,
+    };
+    this.state.gamePhase = EKGamePhase.PLAYING;
+    this.checkBotTurn();
+  }
+
   private finishTurnAction(): void {
     this.state.attackStack--;
     if (this.state.attackStack <= 0) {
@@ -714,7 +800,7 @@ export default class ExplodingKittens extends BaseGame<EKState> {
     const numPlayers = this.state.players.length;
     let nextIndex = fromIndex;
     do {
-      nextIndex = (nextIndex + 1) % numPlayers;
+      nextIndex = (nextIndex + this.state.direction + numPlayers) % numPlayers;
     } while (
       this.state.players[nextIndex].id === null ||
       this.state.players[nextIndex].isExploded
@@ -728,6 +814,25 @@ export default class ExplodingKittens extends BaseGame<EKState> {
   }
 
   private explodePlayer(index: number): void {
+    const player = this.state.players[index];
+
+    // Add to discard history for tracking
+    this.state.discardHistory.push({
+      playerId: player.id!,
+      cards: [[EKCardType.EXPLODING_KITTEN, 0]],
+      timestamp: Date.now(),
+      isNoped: false,
+    });
+
+    // Set lastAction to trigger toast
+    this.state.lastAction = {
+      action: { type: "EXPLODE" as any, playerId: player.id! },
+      playerId: player.id!,
+      timestamp: Date.now(),
+      isNoped: false,
+      cardType: EKCardType.EXPLODING_KITTEN,
+    };
+
     this.state.players[index].isExploded = true;
     this.state.players[index].hand = []; // Discard everything
 
@@ -756,6 +861,23 @@ export default class ExplodingKittens extends BaseGame<EKState> {
       );
       if (target?.isBot) {
         setTimeout(() => this.makeBotFavor(target), 1000);
+      }
+      return;
+    }
+
+    if (this.state.gamePhase === EKGamePhase.ALTER_THE_FUTURE) {
+      const currentPlayer = this.state.players[this.state.currentTurnIndex];
+      if (currentPlayer?.isBot && this.state.alterCards) {
+        // Bot just confirms current order after a delay
+        setTimeout(() => {
+          if (this.state.gamePhase === EKGamePhase.ALTER_THE_FUTURE) {
+            const order = Array.from(
+              { length: this.state.alterCount },
+              (_, i) => i,
+            );
+            this.handleReorderFuture(currentPlayer.id!, order);
+          }
+        }, 1500);
       }
       return;
     }
@@ -830,9 +952,11 @@ export default class ExplodingKittens extends BaseGame<EKState> {
     if (this.state.gamePhase !== EKGamePhase.PLAYING) return;
 
     // 1. Try to play combos first (if bot has them)
+    // Only use CAT cards for combos - expansion cards are better played individually
     const combos = new Map<EKCardType, number[]>();
     bot.hand.forEach((c, i) => {
-      if (c[0] >= EKCardType.CAT_1) {
+      // Only CAT_1 to CAT_5 can be used for combos
+      if (c[0] >= EKCardType.CAT_1 && c[0] <= EKCardType.CAT_5) {
         if (!combos.has(c[0])) combos.set(c[0], []);
         combos.get(c[0])!.push(i);
       }
@@ -859,7 +983,11 @@ export default class ExplodingKittens extends BaseGame<EKState> {
                   EKCardType.FAVOR,
                   EKCardType.SHUFFLE,
                   EKCardType.SEE_THE_FUTURE,
-                ][Math.floor(Math.random() * 5)]
+                  // Expansion cards - valuable targets
+                  EKCardType.REVERSE,
+                  EKCardType.TARGETED_ATTACK,
+                  EKCardType.ALTER_THE_FUTURE_3,
+                ][Math.floor(Math.random() * 8)]
               : undefined;
 
           this.handlePlayCombo(
@@ -878,12 +1006,12 @@ export default class ExplodingKittens extends BaseGame<EKState> {
       .map((_, i) => i)
       .filter((i) => {
         const type = bot.hand[i][0];
-        return (
-          type !== EKCardType.DEFUSE &&
-          type !== EKCardType.EXPLODING_KITTEN &&
-          type !== EKCardType.NOPE &&
-          type < EKCardType.CAT_1 // Filter out Cat cards for single play
-        );
+        // Exclude: DEFUSE (save for emergency), EXPLODING_KITTEN, NOPE (for defense), CAT cards (for combos)
+        if (type === EKCardType.DEFUSE) return false;
+        if (type === EKCardType.EXPLODING_KITTEN) return false;
+        if (type === EKCardType.NOPE) return false;
+        if (type >= EKCardType.CAT_1 && type <= EKCardType.CAT_5) return false;
+        return true; // Allow action cards + expansion cards
       });
 
     if (playableIndices.length > 0 && Math.random() < 0.3) {
@@ -892,7 +1020,11 @@ export default class ExplodingKittens extends BaseGame<EKState> {
       const cardType = bot.hand[idx][0];
 
       let targetId: string | undefined;
-      if (cardType === EKCardType.FAVOR) {
+      // Cards that need a target
+      if (
+        cardType === EKCardType.FAVOR ||
+        cardType === EKCardType.TARGETED_ATTACK
+      ) {
         const potentialTargets = this.state.players.filter(
           (p) => p.id !== null && p.id !== bot.id && !p.isExploded,
         );
@@ -901,6 +1033,10 @@ export default class ExplodingKittens extends BaseGame<EKState> {
             potentialTargets[
               Math.floor(Math.random() * potentialTargets.length)
             ].id!;
+        } else if (cardType === EKCardType.TARGETED_ATTACK) {
+          // No valid target, skip this card
+          this.handleDrawCard(bot.id!);
+          return;
         }
       }
 
@@ -1046,6 +1182,14 @@ export default class ExplodingKittens extends BaseGame<EKState> {
 
   requestRespondNope(response: "NOPE" | "ALLOW"): void {
     this.makeAction({ type: "RESPOND_NOPE", playerId: this.userId, response });
+  }
+
+  requestReorderFuture(newOrder: number[]): void {
+    this.makeAction({
+      type: "REORDER_FUTURE",
+      playerId: this.userId,
+      newOrder,
+    });
   }
 
   requestNewGame(): void {

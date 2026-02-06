@@ -1,9 +1,12 @@
 import {
+  ArrowUpDown,
   Ban,
   Bomb,
   Cat,
+  Crosshair,
   Eye,
   Gift,
+  RotateCcw,
   Shield,
   ShuffleIcon,
   SkipForward,
@@ -72,7 +75,7 @@ export const CARD_CONFIG: Record<EKCardType, EKCardConfig> = {
     textColor: "text-white",
   },
   [EKCardType.FAVOR]: {
-    name: { en: "FAVOR", vi: "BAN ƠN" },
+    name: { en: "FAVOR", vi: "THIỆN Ý" },
     description: {
       en: "Choose a player to give you a card.",
       vi: "Chọn một người chơi để lấy 1 lá bài từ họ.",
@@ -183,6 +186,55 @@ export const CARD_CONFIG: Record<EKCardType, EKCardConfig> = {
     iconColor: "text-green-400",
     textColor: "text-slate-300",
     isCombo: true,
+  },
+  // Expansion cards
+  [EKCardType.REVERSE]: {
+    name: { en: "REVERSE", vi: "ĐẢO CHIỀU" },
+    description: {
+      en: "Reverse direction, end turn without drawing.",
+      vi: "Đảo chiều vòng chơi, kết thúc lượt mà không rút bài.",
+    },
+    icon: RotateCcw,
+    bgColor: "bg-yellow-600",
+    borderColor: "border-yellow-400",
+    iconColor: "text-white",
+    textColor: "text-white",
+  },
+  [EKCardType.TARGETED_ATTACK]: {
+    name: { en: "TARGETED ATTACK", vi: "TẤN CÔNG ĐÍCH DANH" },
+    description: {
+      en: "Choose a player to take 2 turns.",
+      vi: "Chọn người phải đi 2 lượt.",
+    },
+    icon: Crosshair,
+    bgColor: "bg-orange-600",
+    borderColor: "border-orange-400",
+    iconColor: "text-white",
+    textColor: "text-white",
+  },
+  [EKCardType.ALTER_THE_FUTURE_3]: {
+    name: { en: "ALTER FUTURE 3X", vi: "ĐỔI TƯƠNG LAI 3X" },
+    description: {
+      en: "View and reorder top 3 cards.",
+      vi: "Xem và sắp xếp lại 3 lá trên cùng.",
+    },
+    icon: ArrowUpDown,
+    bgColor: "bg-indigo-600",
+    borderColor: "border-indigo-400",
+    iconColor: "text-white",
+    textColor: "text-white",
+  },
+  [EKCardType.ALTER_THE_FUTURE_5]: {
+    name: { en: "ALTER FUTURE 5X", vi: "ĐỔI TƯƠNG LAI 5X" },
+    description: {
+      en: "View and reorder top 5 cards.",
+      vi: "Xem và sắp xếp lại 5 lá trên cùng.",
+    },
+    icon: ArrowUpDown,
+    bgColor: "bg-violet-600",
+    borderColor: "border-violet-400",
+    iconColor: "text-white",
+    textColor: "text-white",
   },
 };
 
