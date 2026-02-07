@@ -37,7 +37,27 @@ export const WeaponType = {
   MIRV_MINI: 14,
   METEOR_STRIKE: 15,
 } as const;
-export type WeaponType = (typeof WeaponType)[keyof typeof WeaponType];
+export type WeaponType = (typeof WeaponType)[keyof typeof WeaponType] | string; // Allow dynamic IDs for custom weapons
+
+// Weapon Effects
+export const WeaponEffectType = {
+  BOUNCE: 0,
+  PIERCE: 1,
+  GRAVITY: 2,
+  GENERATOR: 3,
+  SPLIT: 4,
+  HEAL: 5,
+  VAMPIRE: 6,
+  BUILDER: 7,
+  DRILL: 8,
+} as const;
+export type WeaponEffectType =
+  (typeof WeaponEffectType)[keyof typeof WeaponEffectType];
+
+export interface WeaponEffect {
+  type: WeaponEffectType;
+  value: number; // Multi-purpose value (count, speed, strength, etc.)
+}
 
 // Vector interface
 export interface Vector {
@@ -70,6 +90,14 @@ export interface Weapon {
   terrainDamageMultiplier: number;
   description: string;
   descriptionVi: string;
+}
+
+export interface CustomWeapon extends Weapon {
+  id: string;
+  effects: WeaponEffect[];
+  cooldown: number;
+  size: number;
+  creatorId: string;
 }
 
 export type MoveDirection = -1 | 1;
@@ -105,7 +133,10 @@ export interface Projectile {
   weapon: WeaponType;
   ownerId: string;
   active: boolean;
-  bounces?: number; // For bouncy weapons
+  bounces?: number; // For backward compatibility
+  effects?: WeaponEffect[]; // New effect system
+  size?: number;
+  timer?: number; // For internal behaviors like generators
 }
 
 // Fire shot data (synced to all clients)
@@ -197,6 +228,8 @@ export interface GunnyWarsState {
   isSimulating: boolean;
   selectedMode?: GameMode;
   gameStartTime: number;
+  customWeapons: CustomWeapon[];
+  disabledWeaponIds: WeaponType[];
 }
 
 // Socket Actions

@@ -1,17 +1,23 @@
 import { BaseGame, type GameAction } from "../BaseGame";
 import {
-  type GunnyWarsState,
-  type GunnyWarsAction,
-  type Tank,
-  type Projectile,
   GamePhase,
   GameMode,
   WeaponType,
-  type MoveDirection,
-  type FireShotData,
-  type PlayerInfo,
   TerrainMod,
   TerrainModType,
+  WeaponEffectType,
+} from "./types";
+import type {
+  PlayerInfo,
+  WeaponEffect,
+  CustomWeapon,
+  Weapon,
+  GunnyWarsState,
+  GunnyWarsAction,
+  Tank,
+  Projectile,
+  MoveDirection,
+  FireShotData,
 } from "./types";
 import {
   WORLD_WIDTH,
@@ -40,6 +46,8 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
   private terrainRenderer: TerrainRenderer | null = null;
   // TerrainShaderRenderer - for GPU accelerated rendering
   private terrainShaderRenderer: TerrainShaderRenderer | null = null;
+
+  private static readonly STORAGE_KEY = "gunnywars_custom_weapons";
 
   // Sync modifications
   private lastSyncedModCount = 0;
@@ -108,6 +116,8 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
       isSimulating: false,
       selectedMode: GameMode.TURN_BASED,
       gameStartTime: Date.now(),
+      customWeapons: this.loadCustomWeapons(),
+      disabledWeaponIds: [],
     };
   }
 
@@ -249,6 +259,15 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
     return this.terrainShaderRenderer;
   }
 
+  // Get weapon data (handles both static and custom)
+  public getWeaponData(type: WeaponType): Weapon {
+    if (typeof type === "number") {
+      return WEAPONS[type as keyof typeof WEAPONS] || WEAPONS[WeaponType.BASIC];
+    }
+    const custom = this.state.customWeapons.find((w) => w.id === type);
+    return custom || WEAPONS[WeaponType.BASIC];
+  }
+
   // Initialize GPU shader renderer (call from UI with WebGL canvas)
   initShaderRenderer(canvas: HTMLCanvasElement): boolean {
     if (!this.terrainShaderRenderer) {
@@ -383,6 +402,10 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
   private handleSelectWeapon(weapon: WeaponType, playerId: string): void {
     const tank = this.getTankByPlayerId(playerId);
     if (!tank) return;
+
+    // Check if weapon is disabled
+    if (this.state.disabledWeaponIds.includes(weapon)) return;
+
     if (
       !this.isPlayerTurn(playerId) &&
       this.state.selectedMode !== GameMode.CHAOS
@@ -497,9 +520,76 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
     this.makeAction({ type: "FIRE_SHOT", shot: shotData });
   }
 
+  private handleCreateCustomWeapon(weapon: CustomWeapon): void {
+    // Check if weapon already exists
+    const index = this.state.customWeapons.findIndex((w) => w.id === weapon.id);
+    if (index !== -1) {
+      this.state.customWeapons[index] = weapon;
+    } else {
+      this.state.customWeapons.push(weapon);
+    }
+    if (this.isHost) this.saveCustomWeapons();
+  }
+
+  private handleDeleteCustomWeapon(weaponId: string): void {
+    this.state.customWeapons = this.state.customWeapons.filter(
+      (w) => w.id !== weaponId,
+    );
+    if (this.isHost) this.saveCustomWeapons();
+  }
+
+  private saveCustomWeapons(): void {
+    if (typeof window === "undefined" || !this.isHost) return;
+    try {
+      localStorage.setItem(
+        GunnyWars.STORAGE_KEY,
+        JSON.stringify(this.state.customWeapons),
+      );
+    } catch (e) {
+      console.error("Failed to save custom weapons", e);
+    }
+  }
+
+  private loadCustomWeapons(): CustomWeapon[] {
+    if (typeof window === "undefined") return [];
+    try {
+      const saved = localStorage.getItem(GunnyWars.STORAGE_KEY);
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      console.error("Failed to load custom weapons", e);
+      return [];
+    }
+  }
+
+  private handleToggleWeapon(weaponId: WeaponType): void {
+    const index = this.state.disabledWeaponIds.indexOf(weaponId);
+    if (index !== -1) {
+      this.state.disabledWeaponIds.splice(index, 1);
+    } else {
+      this.state.disabledWeaponIds.push(weaponId);
+      // If weapon is now disabled, reset any tanks using it
+      for (const tank of this.state.tanks) {
+        if (tank.weapon === weaponId) {
+          tank.weapon = WeaponType.BASIC;
+        }
+      }
+    }
+  }
+
+  public createCustomWeapon(weapon: CustomWeapon): void {
+    this.handleCreateCustomWeapon(weapon);
+  }
+
+  public deleteCustomWeapon(weaponId: string): void {
+    this.handleDeleteCustomWeapon(weaponId);
+  }
+
+  public toggleWeapon(weaponId: WeaponType): void {
+    this.handleToggleWeapon(weaponId);
+  }
+
   // --- Game Logic ---
 
-  // Track local position for smooth movement without state updates
   // Track local position for smooth movement without state updates
   private _tankSimulations = new Map<
     string,
@@ -736,16 +826,28 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
       };
     };
 
-    const weaponData = WEAPONS[shot.weapon];
+    const weaponData = this.getWeaponData(shot.weapon);
     const count = weaponData.count;
     const spread = weaponData.spread || 0;
+
+    const customWeapon = weaponData as CustomWeapon;
+    const effects = customWeapon.effects || [];
+    const size = customWeapon.size || 5;
 
     for (let i = 0; i < count; i++) {
       let angleOffset = 0;
       if (count > 1) {
         angleOffset = -(((count - 1) * spread) / 2) + i * spread;
       }
-      this._projectiles.push(createProj(angleOffset, i * 0.001));
+      const p = createProj(angleOffset, i * 0.001);
+      p.effects =
+        effects.length > 0 ? JSON.parse(JSON.stringify(effects)) : undefined;
+      p.size = size;
+      p.radius = weaponData.radius || 5;
+      if (effects.some((e) => e.type === WeaponEffectType.GENERATOR)) {
+        p.timer = 0;
+      }
+      this._projectiles.push(p);
     }
 
     // Set phase after projectiles are created
@@ -860,24 +962,69 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
 
       // Terrain collision
       if (this.checkSolid(p.x, p.y)) {
-        if (p.weapon === WeaponType.BOUNCY && (p.bounces || 0) > 0) {
+        const pierceEffect = p.effects?.find(
+          (e) => e.type === WeaponEffectType.PIERCE,
+        );
+        if (pierceEffect && pierceEffect.value > 0) {
+          // Reduce pierce and continue
+          pierceEffect.value--;
+          // Visual spark
+          this.createParticles(p.x, p.y, 2, PARTICLE_TYPES.spark, 0.5);
+        } else if (
+          p.weapon === WeaponType.BOUNCY ||
+          p.effects?.some((e) => e.type === WeaponEffectType.BOUNCE)
+        ) {
           // Bounce!
-          p.vy = -p.vy * 0.6; // Reverse and lose some energy
-          p.vx *= 0.8; // Friction
-          p.bounces = (p.bounces || 0) - 1;
+          const bounceCount =
+            p.effects?.find((e) => e.type === WeaponEffectType.BOUNCE)?.value ??
+            p.bounces ??
+            0;
+          if (bounceCount > 0) {
+            p.vy = -p.vy * 0.6; // Reverse and lose some energy
+            p.vx *= 0.8; // Friction
+            if (p.effects) {
+              const e = p.effects.find(
+                (ef) => ef.type === WeaponEffectType.BOUNCE,
+              );
+              if (e) e.value--;
+            } else {
+              p.bounces = bounceCount - 1;
+            }
 
-          // Push out of terrain to avoid sticking
-          let safety = 0;
-          while (this.checkSolid(p.x, p.y) && safety < 10) {
-            p.y -= 2;
-            safety++;
+            // Push out of terrain to avoid sticking
+            let safety = 0;
+            while (this.checkSolid(p.x, p.y) && safety < 10) {
+              p.y -= 2;
+              safety++;
+            }
+
+            // Visual spark effect
+            this.createParticles(p.x, p.y, 5, PARTICLE_TYPES.spark, 1);
+          } else {
+            this.explode(p);
           }
-
-          // Visual spark effect
-          this.createParticles(p.x, p.y, 5, PARTICLE_TYPES.spark, 1);
         } else {
           this.explode(p);
         }
+      }
+
+      // Generator logic
+      const genEffect = p.effects?.find(
+        (e) => e.type === WeaponEffectType.GENERATOR,
+      );
+      if (genEffect && p.timer !== undefined) {
+        p.timer += 1;
+        if (p.timer % Math.floor(genEffect.value || 30) === 0) {
+          this.spawnMiniProjectile(p);
+        }
+      }
+
+      // Gravity logic
+      const gravEffect = p.effects?.find(
+        (e) => e.type === WeaponEffectType.GRAVITY,
+      );
+      if (gravEffect) {
+        this.applyGravityPull(p, gravEffect.value);
       }
     });
 
@@ -1003,7 +1150,14 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
 
     // Terrain effects - Push to state (Host only)
     if (this.isHost) {
-      if (weapon.type === WeaponType.BUILDER) {
+      const isBuilder =
+        weapon.type === WeaponType.BUILDER ||
+        projectile.effects?.some((e) => e.type === WeaponEffectType.BUILDER);
+      const isDrill =
+        weapon.type === WeaponType.DRILL ||
+        projectile.effects?.some((e) => e.type === WeaponEffectType.DRILL);
+
+      if (isBuilder) {
         this.state.terrainMods.push(
           TerrainMod.create(
             TerrainModType.ADD,
@@ -1012,7 +1166,7 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
             weapon.radius,
           ),
         );
-      } else if (weapon.type === WeaponType.DRILL) {
+      } else if (isDrill) {
         this.state.terrainMods.push(
           TerrainMod.create(
             TerrainModType.CARVE,
@@ -1027,7 +1181,12 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
       } else if (
         weapon.type !== WeaponType.TELEPORT &&
         weapon.type !== WeaponType.AIRSTRIKE &&
-        weapon.type !== WeaponType.HEAL
+        weapon.type !== WeaponType.HEAL &&
+        !projectile.effects?.some(
+          (e) =>
+            e.type === WeaponEffectType.HEAL ||
+            e.type === WeaponEffectType.VAMPIRE,
+        )
       ) {
         const destroyRadius = weapon.radius * weapon.terrainDamageMultiplier;
         this.state.terrainMods.push(
@@ -1062,9 +1221,18 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
             weapon.damage * (1 - dist / (weapon.radius + 50)),
           );
           if (magnitude > 0) {
-            if (weapon.type === WeaponType.HEAL) {
+            const isHeal =
+              weapon.type === WeaponType.HEAL ||
+              projectile.effects?.some((e) => e.type === WeaponEffectType.HEAL);
+            const isVampire =
+              weapon.type === WeaponType.VAMPIRE ||
+              projectile.effects?.some(
+                (e) => e.type === WeaponEffectType.VAMPIRE,
+              );
+
+            if (isHeal) {
               tank.health = Math.min(tank.maxHealth, tank.health + magnitude);
-            } else if (weapon.type === WeaponType.VAMPIRE) {
+            } else if (isVampire) {
               tank.health = Math.max(0, tank.health - magnitude);
               // Heal the owner
               const owner = this.state.tanks.find(
@@ -1120,6 +1288,59 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
     }
 
     projectile.active = false;
+  }
+
+  private spawnMiniProjectile(parent: Projectile): void {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 5;
+    this._projectiles.push({
+      id: Math.random().toString(36),
+      x: parent.x,
+      y: parent.y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      radius: 3,
+      weapon: WeaponType.BASIC,
+      ownerId: parent.ownerId,
+      active: true,
+    });
+    // Visual effect
+    this.createParticles(parent.x, parent.y, 3, PARTICLE_TYPES.spark, 1);
+  }
+
+  private applyGravityPull(gravSource: Projectile, strength: number): void {
+    const radius = 200;
+    const force = strength || 0.1;
+
+    // Pull tanks
+    this.state.tanks.forEach((tank) => {
+      if (tank.health <= 0) return;
+      const dx = gravSource.x - tank.x;
+      const dy = gravSource.y - 10 - tank.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist < radius && dist > 10) {
+        const pull = (force * (1 - dist / radius)) / dist;
+        const sim = this.getSimTank(tank);
+        sim.x += dx * pull;
+        sim.y += dy * pull;
+        sim.falling = true;
+      }
+    });
+
+    // Pull other projectiles
+    this._projectiles.forEach((p) => {
+      if (!p.active || p === gravSource) return;
+      const dx = gravSource.x - p.x;
+      const dy = gravSource.y - p.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist < radius && dist > 5) {
+        const pull = (force * (1 - dist / radius)) / dist;
+        p.vx += dx * pull;
+        p.vy += dy * pull;
+      }
+    });
   }
 
   private handleSpecialWeapons(
@@ -1229,6 +1450,32 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
         ownerId: projectile.ownerId,
         active: true,
       });
+    }
+
+    // Custom Split effect
+    const splitEffect = projectile.effects?.find(
+      (e) => e.type === WeaponEffectType.SPLIT,
+    );
+    if (splitEffect) {
+      const baseSeed = Number(projectile.id) || projectile.x;
+      const splitCount = Math.floor(splitEffect.value || 3);
+      for (let i = 0; i < splitCount; i++) {
+        const seed = baseSeed + i * 0.13;
+        const vx = (this.seededRandom(seed) - 0.5) * 12;
+        const vy = -3 - this.seededRandom(seed + 0.05) * 8;
+
+        this._projectiles.push({
+          id: (baseSeed + i + 200).toString(36),
+          x: projectile.x,
+          y: projectile.y - 10,
+          vx,
+          vy,
+          radius: projectile.radius * 0.6,
+          weapon: WeaponType.BASIC,
+          ownerId: projectile.ownerId,
+          active: true,
+        });
+      }
     }
   }
 

@@ -37,6 +37,9 @@ import {
   Swords,
   Flame,
   X,
+  Eye,
+  EyeOff,
+  Lock,
 } from "lucide-react";
 import type { GameUIProps } from "../types";
 import useLanguage from "../../stores/languageStore";
@@ -46,6 +49,9 @@ import { useAlertStore } from "../../stores/alertStore";
 import Portal from "../../components/Portal";
 import SoundManager from "../../utils/SoundManager";
 import usePrevious from "../../hooks/usePrevious";
+import WeaponEditorUI from "./WeaponEditorUI";
+import { Plus, Sparkles, Settings2, Trash2 } from "lucide-react";
+import type { CustomWeapon } from "./types";
 
 const FireButton = ({
   game,
@@ -179,12 +185,14 @@ const WeaponSelectModal = ({
   currentTank,
   game,
   ts,
+  openWeaponEditor,
 }: {
   show: boolean;
   onClose: () => void;
   currentTank: any;
   game: GunnyWars;
   ts: (m: { en: string; vi: string }) => string;
+  openWeaponEditor: (w?: CustomWeapon) => void;
 }) => {
   if (!show) return null;
 
@@ -205,54 +213,302 @@ const WeaponSelectModal = ({
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 grid grid-cols-1 md:grid-cols-2 gap-3 no-scrollbar">
-            {SELECTABLE_WEAPONS.map((w) => (
-              <button
-                key={w.type}
-                onClick={() => {
-                  game.selectWeapon(w.type);
-                  onClose();
-                }}
-                className={`flex flex-col gap-2 p-4 rounded-xl border-2 text-left transition-all hover:scale-[1.02] active:scale-95 ${
-                  currentTank?.weapon === w.type
-                    ? "bg-blue-600/20 border-blue-500"
-                    : "bg-gray-800/50 border-gray-700 hover:border-gray-600"
-                }`}
-              >
-                <div className="flex justify-between items-center">
-                  <span
-                    className="font-bold text-lg"
-                    style={{ color: w.color }}
-                  >
-                    {w.name}
-                  </span>
-                  {currentTank?.weapon === w.type && (
-                    <div className="bg-blue-500 text-white text-[10px] px-2 py-0.5 rounded-full uppercase tracking-tighter">
-                      {ts({ en: "Selected", vi: "Đã chọn" })}
+          <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-6 no-scrollbar">
+            {/* Standard Weapons */}
+            <div className="space-y-3">
+              <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest px-2">
+                {ts({ en: "Standard Arsenal", vi: "Kho vũ khí cơ bản" })}
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {SELECTABLE_WEAPONS.map((w) => {
+                  const isDisabled = game.state.disabledWeaponIds.includes(
+                    w.type,
+                  );
+                  return (
+                    <div key={w.type} className="relative group">
+                      <button
+                        onClick={() => {
+                          if (isDisabled) return;
+                          game.selectWeapon(w.type);
+                          onClose();
+                        }}
+                        disabled={isDisabled}
+                        className={`w-full flex flex-col gap-2 p-4 rounded-xl border-2 text-left transition-all ${
+                          !isDisabled
+                            ? "hover:scale-[1.02] active:scale-95"
+                            : "opacity-30 cursor-not-allowed grayscale"
+                        } ${
+                          currentTank?.weapon === w.type
+                            ? "bg-blue-600/20 border-blue-500"
+                            : "bg-gray-800/50 border-gray-700 hover:border-gray-600"
+                        }`}
+                      >
+                        <div className="flex justify-between items-center">
+                          <span
+                            className="font-bold text-lg"
+                            style={{ color: w.color }}
+                          >
+                            {w.name}
+                          </span>
+                          {currentTank?.weapon === w.type && (
+                            <div className="bg-blue-500 text-white text-[10px] px-2 py-0.5 rounded-full uppercase tracking-tighter">
+                              {ts({ en: "Selected", vi: "Đã chọn" })}
+                            </div>
+                          )}
+                          {isDisabled && (
+                            <div className="bg-red-500/20 text-red-400 border border-red-500/30 text-[10px] px-2 py-0.5 rounded-full uppercase font-black tracking-tighter flex items-center gap-1">
+                              <Lock size={10} />
+                              {ts({ en: "Disabled", vi: "Đã tắt" })}
+                            </div>
+                          )}
+                        </div>
+                        <p className="text-sm text-gray-400 leading-tight">
+                          {ts({ en: w.description, vi: w.descriptionVi })}
+                        </p>
+                        <div className="flex gap-4 mt-1 text-[10px] font-mono text-gray-500 uppercase">
+                          <span>
+                            {ts({ en: "Dmg", vi: "St" })}:{" "}
+                            <b className="text-gray-300">
+                              {w.type === WeaponType.HEAL
+                                ? `+${w.damage}`
+                                : w.damage}
+                            </b>
+                          </span>
+                          <span>
+                            {ts({ en: "Rad", vi: "Bk" })}:{" "}
+                            <b className="text-gray-300">{w.radius}</b>
+                          </span>
+                        </div>
+                      </button>
+
+                      {isDisabled && (
+                        <div className="absolute inset-0 pointer-events-none rounded-xl overflow-hidden">
+                          <div
+                            className="absolute inset-0 opacity-10"
+                            style={{
+                              backgroundImage: `repeating-linear-gradient(45deg, #000, #000 10px, transparent 10px, transparent 20px)`,
+                            }}
+                          />
+                        </div>
+                      )}
+
+                      {game.isHost && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            game.toggleWeapon(w.type);
+                          }}
+                          className={`absolute -top-1 -right-1 p-3 rounded-lg shadow-lg z-10 transition-all ${
+                            isDisabled
+                              ? "bg-red-500 text-white hover:bg-red-400"
+                              : "bg-gray-800 text-gray-400 hover:text-green-400 opacity-50 md:opacity-0 group-hover:opacity-100"
+                          }`}
+                          title={
+                            isDisabled
+                              ? ts({ en: "Enable", vi: "Bật" })
+                              : ts({ en: "Disable", vi: "Tắt" })
+                          }
+                        >
+                          {isDisabled ? (
+                            <EyeOff size={16} />
+                          ) : (
+                            <Eye size={16} />
+                          )}
+                        </button>
+                      )}
                     </div>
-                  )}
-                </div>
-                <p className="text-sm text-gray-400 leading-tight">
-                  {ts({ en: w.description, vi: w.descriptionVi })}
-                </p>
-                <div className="flex gap-4 mt-1 text-[10px] font-mono text-gray-500 uppercase">
-                  <span>
-                    {ts({ en: "Dmg", vi: "St" })}:{" "}
-                    <b className="text-gray-300">
-                      {w.type === WeaponType.HEAL ? `+${w.damage}` : w.damage}
-                    </b>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Custom Weapons */}
+            <div className="space-y-3 pb-4">
+              <div className="flex justify-between items-center px-2">
+                <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest ">
+                  {ts({ en: "Custom Prototypes", vi: "Vũ khí chế tạo" })}
+                </h3>
+                {game.isHost && (
+                  <button
+                    onClick={() => (onClose(), openWeaponEditor())}
+                    className="text-[10px] font-black uppercase text-blue-400 hover:text-blue-300 flex items-center gap-1 bg-blue-400/10 px-2 py-1 rounded-lg transition-all"
+                  >
+                    <Plus size={12} />
+                    {ts({ en: "New Prototype", vi: "Chế tạo mới" })}
+                  </button>
+                )}
+              </div>
+
+              {game.state.customWeapons.length === 0 ? (
+                <div className="py-8 border-2 border-dashed border-gray-800 rounded-2xl flex flex-col items-center justify-center text-gray-600 gap-2">
+                  <Sparkles size={24} className="opacity-20" />
+                  <span className="text-[10px] font-bold uppercase tracking-widest">
+                    {ts({
+                      en: "No custom prototypes",
+                      vi: "Chưa có vũ khí chế tạo",
+                    })}
                   </span>
-                  <span>
-                    {ts({ en: "Rad", vi: "Bk" })}:{" "}
-                    <b className="text-gray-300">{w.radius}</b>
-                  </span>
                 </div>
-              </button>
-            ))}
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {game.state.customWeapons.map((w: any) => (
+                    <CustomWeaponItem
+                      key={w.id}
+                      weapon={w}
+                      isSelected={currentTank?.weapon === w.id}
+                      isDisabled={game.state.disabledWeaponIds.includes(w.id)}
+                      onSelect={() => {
+                        game.selectWeapon(w.id);
+                        onClose();
+                      }}
+                      onToggle={() => {
+                        game.toggleWeapon(w.id);
+                      }}
+                      onEdit={() => {
+                        onClose();
+                        openWeaponEditor(w);
+                      }}
+                      onDelete={() => {
+                        game.deleteCustomWeapon(w.id);
+                      }}
+                      isHost={game.isHost}
+                      ts={ts}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
     </Portal>
+  );
+};
+
+const CustomWeaponItem = ({
+  weapon,
+  isSelected,
+  isDisabled,
+  onSelect,
+  onToggle,
+  onEdit,
+  onDelete,
+  isHost,
+  ts,
+}: {
+  weapon: CustomWeapon;
+  isSelected: boolean;
+  isDisabled: boolean;
+  onSelect: () => void;
+  onToggle: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  isHost: boolean;
+  ts: (m: { en: string; vi: string }) => string;
+}) => {
+  return (
+    <div
+      className={`relative group flex flex-col gap-2 p-4 rounded-xl border-2 text-left transition-all ${
+        !isDisabled
+          ? "hover:scale-[1.02] active:scale-95"
+          : "opacity-30 cursor-not-allowed grayscale"
+      } ${
+        isSelected
+          ? "bg-blue-600/20 border-blue-500"
+          : "bg-gray-800/50 border-gray-700 hover:border-gray-600"
+      }`}
+    >
+      <div
+        className="flex justify-between items-center"
+        onClick={() => !isDisabled && onSelect()}
+      >
+        <span className="font-bold text-lg" style={{ color: weapon.color }}>
+          {weapon.name}
+        </span>
+        {isSelected && (
+          <div className="bg-blue-500 text-white text-[10px] px-2 py-0.5 rounded-full uppercase tracking-tighter">
+            {ts({ en: "Selected", vi: "Đã chọn" })}
+          </div>
+        )}
+        {isDisabled && (
+          <div className="bg-red-500/20 text-red-400 border border-red-500/30 text-[10px] px-2 py-0.5 rounded-full uppercase font-black tracking-tighter flex items-center gap-1">
+            <Lock size={10} />
+            {ts({ en: "Disabled", vi: "Đã tắt" })}
+          </div>
+        )}
+      </div>
+      <p
+        className="text-sm text-gray-400 leading-tight"
+        onClick={() => !isDisabled && onSelect()}
+      >
+        {ts({ en: weapon.description, vi: weapon.descriptionVi })}
+      </p>
+      <div
+        className="flex gap-4 mt-1 text-[10px] font-mono text-gray-500 uppercase"
+        onClick={() => !isDisabled && onSelect()}
+      >
+        <span>
+          {ts({ en: "Dmg", vi: "St" })}:{" "}
+          <b className="text-gray-300">{weapon.damage}</b>
+        </span>
+        <span>
+          {ts({ en: "Rad", vi: "Bk" })}:{" "}
+          <b className="text-gray-300">{weapon.radius}</b>
+        </span>
+        {weapon.effects.length > 0 && (
+          <span className="text-blue-400">
+            {weapon.effects.length} {ts({ en: "Effects", vi: "Hiệu ứng" })}
+          </span>
+        )}
+      </div>
+
+      {isDisabled && (
+        <div className="absolute inset-0 pointer-events-none rounded-xl overflow-hidden">
+          <div
+            className="absolute inset-0 opacity-10"
+            style={{
+              backgroundImage: `repeating-linear-gradient(45deg, #000, #000 10px, transparent 10px, transparent 20px)`,
+            }}
+          />
+        </div>
+      )}
+
+      {isHost && (
+        <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggle();
+            }}
+            className={`p-1.5 rounded-lg shadow-lg transition-all ${
+              isDisabled
+                ? "bg-red-500 text-white hover:bg-red-400"
+                : "bg-gray-700 text-gray-400 hover:text-green-400"
+            }`}
+          >
+            {isDisabled ? <EyeOff size={12} /> : <Eye size={12} />}
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit();
+            }}
+            className="p-1.5 bg-gray-700 hover:bg-gray-600 rounded-lg text-gray-300"
+          >
+            <Settings2 size={12} />
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+            className="p-1.5 bg-red-900/50 hover:bg-red-800 rounded-lg text-red-300"
+          >
+            <Trash2 size={12} />
+          </button>
+        </div>
+      )}
+    </div>
   );
 };
 
@@ -287,6 +543,16 @@ export default function GunnyWarsUI({ game: baseGame }: GameUIProps) {
 
   // Local angle/power/position for live UI updates (sync on release/stop move)
   const [showWeaponModal, setShowWeaponModal] = useState(false);
+  const [showEditor, setShowEditor] = useState(false);
+  const [editingWeapon, setEditingWeapon] = useState<
+    CustomWeapon | undefined
+  >();
+
+  const openWeaponEditor = (w?: CustomWeapon) => {
+    setEditingWeapon(w);
+    setShowEditor(true);
+  };
+
   const [localAngle, setLocalAngle] = useState<number | null>(null);
   const [localPower, setLocalPower] = useState<number | null>(50);
   const localAngleRef = useRef<number | null>(null);
@@ -1531,161 +1797,190 @@ export default function GunnyWarsUI({ game: baseGame }: GameUIProps) {
   // Waiting screen
   if (state.phase === GamePhase.WAITING) {
     return (
-      <div className="w-full h-full flex flex-col items-center justify-center bg-gray-950 text-white p-4">
-        <h1 className="text-4xl font-black mb-8 bg-linear-to-r from-blue-400 to-purple-500 text-transparent bg-clip-text">
-          GunnyWars
-        </h1>
+      <>
+        <div className="w-full h-full flex flex-col items-center justify-center bg-gray-950 text-white p-4">
+          <h1 className="text-4xl font-black mb-8 bg-linear-to-r from-blue-400 to-purple-500 text-transparent bg-clip-text">
+            GunnyWars
+          </h1>
 
-        <div className="bg-gray-900 rounded-xl p-6 border border-gray-800 w-full max-w-md">
-          <h2 className="text-lg font-bold mb-4">
-            {ts({ en: "Players", vi: "Người chơi" })}
-            <span className="text-xs text-gray-500 ml-2">
-              ({ts({ en: "Max: ", vi: "Tối đa: " })}
-              {MAX_PLAYERS})
-            </span>
-          </h2>
+          <div className="bg-gray-900 rounded-xl p-6 border border-gray-800 w-full max-w-md">
+            <h2 className="text-lg font-bold mb-4">
+              {ts({ en: "Players", vi: "Người chơi" })}
+              <span className="text-xs text-gray-500 ml-2">
+                ({ts({ en: "Max: ", vi: "Tối đa: " })}
+                {MAX_PLAYERS})
+              </span>
+            </h2>
 
-          <div className="space-y-3">
-            {state.players.map((p, index) => (
-              <div
-                key={(p.id || "bot") + index}
-                className="flex items-center gap-3 p-3 bg-gray-800 rounded-lg"
-              >
-                {p.isBot ? (
-                  <Bot size={18} className="text-red-400" />
-                ) : (
-                  <User
-                    size={18}
-                    className={
-                      index === 0 ? "text-blue-400" : "text-emerald-400"
-                    }
-                  />
-                )}
-                <span className="font-medium">
-                  {p.username || ts({ en: "Waiting...", vi: "Đang đợi..." })}
-                </span>
-                {index === 0 && (
-                  <span className="ml-auto text-xs text-gray-500">
-                    {ts({ en: "Host", vi: "Chủ phòng" })}
+            <div className="space-y-3">
+              {state.players.map((p, index) => (
+                <div
+                  key={(p.id || "bot") + index}
+                  className="flex items-center gap-3 p-3 bg-gray-800 rounded-lg"
+                >
+                  {p.isBot ? (
+                    <Bot size={18} className="text-red-400" />
+                  ) : (
+                    <User
+                      size={18}
+                      className={
+                        index === 0 ? "text-blue-400" : "text-emerald-400"
+                      }
+                    />
+                  )}
+                  <span className="font-medium">
+                    {p.username || ts({ en: "Waiting...", vi: "Đang đợi..." })}
                   </span>
-                )}
-                {p.isBot && game.isHost && (
-                  <button
-                    onClick={() => game.requestRemoveBot()}
-                    className="ml-auto text-red-400 hover:text-red-300 transition-colors p-2 bg-red-400/20 rounded-lg"
-                  >
-                    <X size={16} />
-                  </button>
-                )}
-              </div>
-            ))}
+                  {index === 0 && (
+                    <span className="ml-auto text-xs text-gray-500">
+                      {ts({ en: "Host", vi: "Chủ phòng" })}
+                    </span>
+                  )}
+                  {p.isBot && game.isHost && (
+                    <button
+                      onClick={() => game.requestRemoveBot()}
+                      className="ml-auto text-red-400 hover:text-red-300 transition-colors p-2 bg-red-400/20 rounded-lg"
+                    >
+                      <X size={16} />
+                    </button>
+                  )}
+                </div>
+              ))}
 
-            {game.isHost && state.players.length < MAX_PLAYERS && (
-              <button
-                onClick={() => game.requestAddBot()}
-                className="w-full p-3 border border-dashed border-green-500/50 rounded-xl text-green-500 hover:border-green-500/80 hover:bg-green-500/10 transition-all flex items-center justify-center gap-2"
-              >
-                <Bot size={18} />
-                {ts({ en: "Add Bot", vi: "Thêm Bot" })}
-              </button>
-            )}
-          </div>
-
-          <div className="mt-6 space-y-4">
-            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-widest px-1">
-              {ts({ en: "Game Mode", vi: "Chế độ chơi" })}
-            </h3>
-
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                onClick={() =>
-                  game.isHost && game.selectMode(GameMode.TURN_BASED)
-                }
-                disabled={!game.isHost}
-                className={`flex flex-col items-center gap-3 p-4 rounded-2xl border transition-all ${
-                  state.selectedMode === GameMode.TURN_BASED ||
-                  !state.selectedMode
-                    ? "bg-green-500/10 border-green-500/50 text-green-400 shadow-[0_0_20px_rgba(34,197,94,0.1)]"
-                    : "bg-white/5 border-white/5 text-gray-500 hover:border-white/10"
-                } ${!game.isHost ? "cursor-default" : "cursor-pointer active:scale-95"}`}
-              >
-                <div
-                  className={`p-2 rounded-xl ${state.selectedMode === GameMode.TURN_BASED || !state.selectedMode ? "bg-green-500/20" : "bg-white/5"}`}
+              {game.isHost && state.players.length < MAX_PLAYERS && (
+                <button
+                  onClick={() => game.requestAddBot()}
+                  className="w-full p-3 border border-dashed border-green-500/50 rounded-xl text-green-500 hover:border-green-500/80 hover:bg-green-500/10 transition-all flex items-center justify-center gap-2"
                 >
-                  <Swords size={20} />
-                </div>
-                <div className="text-center">
-                  <div className="font-bold text-sm">
-                    {ts({ en: "Turn-based", vi: "Theo lượt" })}
-                  </div>
-                  <div className="text-[10px] opacity-60 font-medium">
-                    {ts({ en: "Strategy", vi: "Chiến thuật" })}
-                  </div>
-                </div>
-              </button>
-
-              <button
-                onClick={() => game.isHost && game.selectMode(GameMode.CHAOS)}
-                disabled={!game.isHost}
-                className={`flex flex-col items-center gap-3 p-4 rounded-2xl border transition-all ${
-                  state.selectedMode === GameMode.CHAOS
-                    ? "bg-orange-500/10 border-orange-500/50 text-orange-400 shadow-[0_0_20px_rgba(249,115,22,0.1)]"
-                    : "bg-white/5 border-white/5 text-gray-500 hover:border-white/10"
-                } ${!game.isHost ? "cursor-default" : "cursor-pointer active:scale-95"}`}
-              >
-                <div
-                  className={`p-2 rounded-xl ${state.selectedMode === GameMode.CHAOS ? "bg-orange-500/20" : "bg-white/5"}`}
-                >
-                  <Flame size={20} />
-                </div>
-                <div className="text-center">
-                  <div className="font-bold text-sm">
-                    {ts({ en: "Chaos Mode", vi: "Tự do" })}
-                  </div>
-                  <div className="text-[10px] opacity-60 font-medium">
-                    {ts({ en: "Real-time", vi: "Hỗn loạn" })}
-                  </div>
-                </div>
-              </button>
-            </div>
-          </div>
-
-          {game.isHost && (
-            <div className="mt-8">
-              <button
-                onClick={() => game.startGame()}
-                disabled={!canStartGame}
-                className={`w-full py-4 rounded-2xl font-black text-lg flex items-center justify-center gap-3 transition-all active:scale-[0.98] shadow-lg ${
-                  state.selectedMode === GameMode.CHAOS
-                    ? "bg-linear-to-r from-orange-500 to-red-600 hover:from-orange-400 hover:to-red-500 shadow-orange-500/20"
-                    : "bg-linear-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 shadow-green-500/20"
-                } disabled:opacity-30 disabled:grayscale disabled:cursor-not-allowed text-white`}
-              >
-                <Play size={24} fill="currentColor" />
-                <span className="uppercase tracking-widest">
-                  {state.selectedMode === GameMode.TURN_BASED && !canStartGame
-                    ? ts({ en: "Need 2+ players", vi: "Cần 2+ người chơi" })
-                    : ts({ en: "Start Game", vi: "Bắt đầu" })}
-                </span>
-              </button>
-
-              {!canStartGame && (
-                <p className="text-center text-[10px] text-gray-500 mt-3 font-medium uppercase tracking-tighter">
-                  {state.selectedMode === GameMode.CHAOS
-                    ? ts({
-                        en: "Press start to explore",
-                        vi: "Nhấn bắt đầu để khám phá",
-                      })
-                    : ts({
-                        en: "Requires 2+ players or bots to start",
-                        vi: "Cần tối thiểu 2 người hoặc bot để bắt đầu",
-                      })}
-                </p>
+                  <Bot size={18} />
+                  {ts({ en: "Add Bot", vi: "Thêm Bot" })}
+                </button>
               )}
             </div>
-          )}
+
+            <div className="mt-6 space-y-4">
+              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-widest px-1">
+                {ts({ en: "Game Mode", vi: "Chế độ chơi" })}
+              </h3>
+
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={() =>
+                    game.isHost && game.selectMode(GameMode.TURN_BASED)
+                  }
+                  disabled={!game.isHost}
+                  className={`flex flex-col items-center gap-3 p-4 rounded-2xl border transition-all ${
+                    state.selectedMode === GameMode.TURN_BASED ||
+                    !state.selectedMode
+                      ? "bg-green-500/10 border-green-500/50 text-green-400 shadow-[0_0_20px_rgba(34,197,94,0.1)]"
+                      : "bg-white/5 border-white/5 text-gray-500 hover:border-white/10"
+                  } ${!game.isHost ? "cursor-default" : "cursor-pointer active:scale-95"}`}
+                >
+                  <div
+                    className={`p-2 rounded-xl ${state.selectedMode === GameMode.TURN_BASED || !state.selectedMode ? "bg-green-500/20" : "bg-white/5"}`}
+                  >
+                    <Swords size={20} />
+                  </div>
+                  <div className="text-center">
+                    <div className="font-bold text-sm">
+                      {ts({ en: "Turn-based", vi: "Theo lượt" })}
+                    </div>
+                    <div className="text-[10px] opacity-60 font-medium">
+                      {ts({ en: "Strategy", vi: "Chiến thuật" })}
+                    </div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => game.isHost && game.selectMode(GameMode.CHAOS)}
+                  disabled={!game.isHost}
+                  className={`flex flex-col items-center gap-3 p-4 rounded-2xl border transition-all ${
+                    state.selectedMode === GameMode.CHAOS
+                      ? "bg-orange-500/10 border-orange-500/50 text-orange-400 shadow-[0_0_20px_rgba(249,115,22,0.1)]"
+                      : "bg-white/5 border-white/5 text-gray-500 hover:border-white/10"
+                  } ${!game.isHost ? "cursor-default" : "cursor-pointer active:scale-95"}`}
+                >
+                  <div
+                    className={`p-2 rounded-xl ${state.selectedMode === GameMode.CHAOS ? "bg-orange-500/20" : "bg-white/5"}`}
+                  >
+                    <Flame size={20} />
+                  </div>
+                  <div className="text-center">
+                    <div className="font-bold text-sm">
+                      {ts({ en: "Chaos Mode", vi: "Tự do" })}
+                    </div>
+                    <div className="text-[10px] opacity-60 font-medium">
+                      {ts({ en: "Real-time", vi: "Hỗn loạn" })}
+                    </div>
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            {game.isHost && (
+              <div className="mt-8 flex flex-col gap-4">
+                <button
+                  onClick={() => setShowWeaponModal(true)}
+                  className="w-full py-4 rounded-2xl font-black text-lg bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 text-blue-400 flex items-center justify-center gap-3 transition-all active:scale-[0.98] shadow-lg shadow-blue-500/5"
+                >
+                  <Swords size={24} />
+                  <span className="uppercase tracking-widest">
+                    {ts({ en: "Manage Arsenal", vi: "Quản lý kho vũ khí" })}
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => game.startGame()}
+                  disabled={!canStartGame}
+                  className={`w-full py-4 rounded-2xl font-black text-lg flex items-center justify-center gap-3 transition-all active:scale-[0.98] shadow-lg ${
+                    state.selectedMode === GameMode.CHAOS
+                      ? "bg-linear-to-r from-orange-500 to-red-600 hover:from-orange-400 hover:to-red-500 shadow-orange-500/20"
+                      : "bg-linear-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 shadow-green-500/20"
+                  } disabled:opacity-30 disabled:grayscale disabled:cursor-not-allowed text-white`}
+                >
+                  <Play size={24} fill="currentColor" />
+                  <span className="uppercase tracking-widest">
+                    {state.selectedMode === GameMode.TURN_BASED && !canStartGame
+                      ? ts({ en: "Need 2+ players", vi: "Cần 2+ người chơi" })
+                      : ts({ en: "Start Game", vi: "Bắt đầu" })}
+                  </span>
+                </button>
+
+                {!canStartGame && (
+                  <p className="text-center text-[10px] text-gray-500 mt-3 font-medium uppercase tracking-tighter">
+                    {state.selectedMode === GameMode.CHAOS
+                      ? ts({
+                          en: "Press start to explore",
+                          vi: "Nhấn bắt đầu để khám phá",
+                        })
+                      : ts({
+                          en: "Requires 2+ players or bots to start",
+                          vi: "Cần tối thiểu 2 người hoặc bot để bắt đầu",
+                        })}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+
+        <WeaponSelectModal
+          show={showWeaponModal}
+          onClose={() => setShowWeaponModal(false)}
+          currentTank={null}
+          game={game}
+          ts={ts}
+          openWeaponEditor={openWeaponEditor}
+        />
+
+        <WeaponEditorUI
+          show={showEditor}
+          onClose={() => setShowEditor(false)}
+          onSave={(w) => game.createCustomWeapon(w)}
+          initialWeapon={editingWeapon}
+          userId={game.userId}
+        />
+      </>
     );
   }
 
@@ -2021,33 +2316,37 @@ export default function GunnyWarsUI({ game: baseGame }: GameUIProps) {
             {/* Fire & Weapon Group */}
             <div className="flex flex-1 gap-2 min-w-[180px]">
               {/* Weapon Toggle */}
-              <button
-                onClick={() => setShowWeaponModal(true)}
-                className={`flex-1 @md:flex-none @md:w-32 flex flex-col items-center justify-center rounded-lg border-2 transition-all p-1.5 hover:scale-105 active:scale-95 ${!isMyTurn || (state.phase !== GamePhase.AIMING && state.selectedMode !== GameMode.CHAOS) ? "opacity-30 pointer-events-none grayscale" : ""}`}
-                style={{
-                  backgroundColor: `${WEAPONS[currentTank?.weapon ?? WeaponType.BASIC].color}15`,
-                  borderColor:
-                    WEAPONS[currentTank?.weapon ?? WeaponType.BASIC].color,
-                }}
-              >
-                <Sword
-                  size={14}
-                  style={{
-                    color:
-                      WEAPONS[currentTank?.weapon ?? WeaponType.BASIC].color,
-                  }}
-                  className="mb-0.5"
-                />
-                <span
-                  className="text-[10px] font-black uppercase truncate w-full text-center"
-                  style={{
-                    color:
-                      WEAPONS[currentTank?.weapon ?? WeaponType.BASIC].color,
-                  }}
-                >
-                  {WEAPONS[currentTank?.weapon ?? WeaponType.BASIC].name}
-                </span>
-              </button>
+              {(() => {
+                const weaponData = game.getWeaponData(
+                  currentTank?.weapon ?? WeaponType.BASIC,
+                );
+                return (
+                  <button
+                    onClick={() => setShowWeaponModal(true)}
+                    className={`flex-1 @md:flex-none @md:w-32 flex flex-col items-center justify-center rounded-lg border-2 transition-all p-1.5 hover:scale-105 active:scale-95 ${!isMyTurn || (state.phase !== GamePhase.AIMING && state.selectedMode !== GameMode.CHAOS) ? "opacity-30 pointer-events-none grayscale" : ""}`}
+                    style={{
+                      backgroundColor: `${weaponData.color}15`,
+                      borderColor: weaponData.color,
+                    }}
+                  >
+                    <Sword
+                      size={14}
+                      style={{
+                        color: weaponData.color,
+                      }}
+                      className="mb-0.5"
+                    />
+                    <span
+                      className="text-[10px] font-black uppercase truncate w-full text-center"
+                      style={{
+                        color: weaponData.color,
+                      }}
+                    >
+                      {weaponData.name}
+                    </span>
+                  </button>
+                );
+              })()}
 
               {/* Fire Button (Reactive) */}
               <FireButton
@@ -2067,6 +2366,15 @@ export default function GunnyWarsUI({ game: baseGame }: GameUIProps) {
         currentTank={currentTank}
         game={game}
         ts={ts}
+        openWeaponEditor={openWeaponEditor}
+      />
+
+      <WeaponEditorUI
+        show={showEditor}
+        onClose={() => setShowEditor(false)}
+        onSave={(w) => game.createCustomWeapon(w)}
+        initialWeapon={editingWeapon}
+        userId={game.userId}
       />
     </div>
   );
