@@ -1894,8 +1894,16 @@ export default function GunnyWarsUI({ game: baseGame }: GameUIProps) {
             </div>
           </div>
 
+          {/* View Weapons Button */}
+          <button
+            onClick={() => setShowWeaponModal(true)}
+            className="mt-4 w-full py-3 rounded-xl font-bold text-md flex items-center justify-center gap-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 transition-all"
+          >
+            <Sword size={16} />
+            {ts({ en: "Weapons", vi: "Kho vũ khí" })}
+          </button>
           {game.isHost && (
-            <div className="mt-8">
+            <div className="mt-4">
               <button
                 onClick={() => game.startGame()}
                 disabled={!canStartGame}
@@ -1929,6 +1937,14 @@ export default function GunnyWarsUI({ game: baseGame }: GameUIProps) {
             </div>
           )}
         </div>
+
+        <WeaponSelectModal
+          show={showWeaponModal}
+          onClose={() => setShowWeaponModal(false)}
+          currentTank={currentTank}
+          game={game}
+          ts={ts}
+        />
       </div>
     );
   }
