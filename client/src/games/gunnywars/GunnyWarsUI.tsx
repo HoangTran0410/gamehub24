@@ -186,12 +186,19 @@ const WeaponSelectModal = ({
   game: GunnyWars;
   ts: (m: { en: string; vi: string }) => string;
 }) => {
-  if (!show) return null;
-
+  // Keep mounted to preserve scroll position
   return (
     <Portal>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-        <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col shadow-2xl animate-in fade-in zoom-in duration-200">
+      <div
+        className={`fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm transition-opacity duration-200 ${
+          show ? "opacity-100" : "opacity-0 pointer-events-none"
+        }`}
+      >
+        <div
+          className={`bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col shadow-2xl transition-transform duration-200 ${
+            show ? "scale-100" : "scale-95"
+          }`}
+        >
           <div className="p-4 border-b border-gray-800 flex justify-between items-center bg-gray-800/50">
             <h2 className="text-xl font-bold flex items-center gap-2">
               <Sword size={20} className="text-blue-400" />
@@ -838,9 +845,154 @@ export default function GunnyWarsUI({ game: baseGame }: GameUIProps) {
         }
       }
 
+      // Draw lightning bolts (300ms duration, very bright)
+      const LIGHTNING_DURATION = 1000;
+      const now = Date.now();
+      for (const strike of game.lightningStrikes) {
+        const elapsed = now - strike.startTime;
+        if (elapsed > LIGHTNING_DURATION) continue;
+
+        // Skip if out of view (with generous margin for sky)
+        if (strike.x < camX - 100 || strike.x > camX + visibleW + 100) {
+          continue;
+        }
+
+        // Animation intensity (bright flash then fade)
+        const progress = elapsed / LIGHTNING_DURATION;
+        const intensity =
+          progress < 0.1
+            ? progress / 0.1 // Quick fade in
+            : 1 - (progress - 0.1) / 0.9; // Slower fade out
+
+        ctx.save();
+
+        // Lightning bolt path generation (jagged line from sky to impact)
+        const startY = camY - 50; // Above screen
+        const endY = strike.y;
+        const segments = 20;
+        const segmentHeight = (endY - startY) / segments;
+
+        // Generate random bolt path using strike position as seed
+        const boltPath: Array<{ x: number; y: number }> = [];
+        let currentX = strike.x;
+        boltPath.push({ x: currentX, y: startY });
+
+        // Use a seeded random based on strike position for consistency
+        const seed = strike.x + strike.y + strike.startTime;
+        const seededRandom = (i: number) => {
+          const val = Math.sin(seed * 12.9898 + i * 78.233) * 43758.5453;
+          return val - Math.floor(val);
+        };
+
+        for (let i = 1; i <= segments; i++) {
+          const offset = (seededRandom(i) - 0.5) * 60 * (1 - i / segments); // Less jitter near impact
+          currentX = strike.x + offset;
+          boltPath.push({ x: currentX, y: startY + segmentHeight * i });
+        }
+
+        // Draw outer glow
+        ctx.globalCompositeOperation = "lighter";
+        ctx.strokeStyle = `rgba(34, 211, 238, ${intensity * 0.3})`;
+        ctx.lineWidth = 20;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.beginPath();
+        ctx.moveTo(boltPath[0].x, boltPath[0].y);
+        for (let i = 1; i < boltPath.length; i++) {
+          ctx.lineTo(boltPath[i].x, boltPath[i].y);
+        }
+        ctx.stroke();
+
+        // Draw middle glow
+        ctx.strokeStyle = `rgba(165, 243, 252, ${intensity * 0.6})`;
+        ctx.lineWidth = 8;
+        ctx.beginPath();
+        ctx.moveTo(boltPath[0].x, boltPath[0].y);
+        for (let i = 1; i < boltPath.length; i++) {
+          ctx.lineTo(boltPath[i].x, boltPath[i].y);
+        }
+        ctx.stroke();
+
+        // Draw bright core
+        ctx.strokeStyle = `rgba(255, 255, 255, ${intensity})`;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(boltPath[0].x, boltPath[0].y);
+        for (let i = 1; i < boltPath.length; i++) {
+          ctx.lineTo(boltPath[i].x, boltPath[i].y);
+        }
+        ctx.stroke();
+
+        // Draw branches (smaller bolts)
+        for (let b = 0; b < 4; b++) {
+          const branchStart = Math.floor(
+            3 + seededRandom(b + 100) * (segments - 5),
+          );
+          const branchPoint = boltPath[branchStart];
+          const branchDir = seededRandom(b + 200) > 0.5 ? 1 : -1;
+          const branchLen = 3 + Math.floor(seededRandom(b + 300) * 4);
+
+          ctx.strokeStyle = `rgba(165, 243, 252, ${intensity * 0.4})`;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(branchPoint.x, branchPoint.y);
+
+          let bx = branchPoint.x;
+          let by = branchPoint.y;
+          for (let j = 0; j < branchLen; j++) {
+            bx += branchDir * (15 + seededRandom(b * 10 + j) * 20);
+            by += segmentHeight * 0.8;
+            ctx.lineTo(bx, by);
+          }
+          ctx.stroke();
+        }
+
+        // Impact flash
+        if (progress < 1) {
+          const flashIntensity = 1 - progress;
+          const gradient = ctx.createRadialGradient(
+            strike.x,
+            strike.y,
+            0,
+            strike.x,
+            strike.y,
+            200,
+          );
+          gradient.addColorStop(
+            0,
+            `rgba(255, 255, 255, ${flashIntensity * 0.8})`,
+          );
+          gradient.addColorStop(
+            0.3,
+            `rgba(34, 211, 238, ${flashIntensity * 0.5})`,
+          );
+          gradient.addColorStop(1, "rgba(34, 211, 238, 0)");
+          ctx.fillStyle = gradient;
+          ctx.beginPath();
+          ctx.arc(strike.x, strike.y, 10 + 90 * progress * 2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.restore();
+      }
+
       // Draw tanks (from live ref + local sim)
       // Margin for tanks (health bars etc)
       const tankMargin = 100;
+
+      // Helper: check if position is inside any smoke zone
+      const isInsideSmoke = (x: number, y: number): boolean => {
+        return Object.values(game.state.smokeZones).some((zone) => {
+          const dx = x - zone.x;
+          const dy = y - zone.y;
+          return Math.sqrt(dx * dx + dy * dy) < zone.radius;
+        });
+      };
+
+      // Check if my tank is inside any smoke zone
+      const myTank = game.state.tanks.find((t) => t.playerId === game.userId);
+      const meInsideSmoke = myTank && isInsideSmoke(myTank.x, myTank.y);
+
       for (const tankBase of game.state.tanks) {
         if (tankBase.health <= 0) continue;
 
@@ -858,6 +1010,13 @@ export default function GunnyWarsUI({ game: baseGame }: GameUIProps) {
         }
 
         const isMyTank = tank.playerId === game.userId;
+
+        // Smoke visibility check:
+        // If I'm OUTSIDE smoke, I cannot see tanks INSIDE smoke (except myself)
+        // If I'm INSIDE smoke, I can see everything (my own position is revealed)
+        if (!isMyTank && !meInsideSmoke && isInsideSmoke(tank.x, tank.y)) {
+          continue; // Skip drawing - tank is hidden by smoke
+        }
 
         drawTank(
           ctx,
@@ -908,6 +1067,83 @@ export default function GunnyWarsUI({ game: baseGame }: GameUIProps) {
         ctx.arc(p.x, p.y, 2, 0, Math.PI * 2);
         ctx.fill();
         // }
+        ctx.restore();
+      }
+
+      // Draw smoke zones (after tanks so they obscure enemies)
+      for (const zone of Object.values(game.state.smokeZones)) {
+        // Skip if zone is out of view
+        if (
+          zone.x + zone.radius < camX ||
+          zone.x - zone.radius > camX + visibleW ||
+          zone.y + zone.radius < camY ||
+          zone.y - zone.radius > camY + visibleH
+        ) {
+          continue;
+        }
+
+        // Optimized smoke rendering - fewer particles, simpler gradients
+        ctx.save();
+        const time = Date.now() * 0.001;
+        const alpha = 0.8;
+
+        // Seeded random for consistent positions
+        const seededRandom = (seed: number) => {
+          const val = Math.sin(seed * 12.9898 + 78.233) * 43758.5453;
+          return val - Math.floor(val);
+        };
+
+        const zoneSeed = zone.x * 1000 + zone.y;
+
+        // Base layer - single large gradient
+        const baseGrad = ctx.createRadialGradient(
+          zone.x,
+          zone.y,
+          0,
+          zone.x,
+          zone.y,
+          zone.radius,
+        );
+        baseGrad.addColorStop(0, `rgba(80, 90, 105, ${alpha * 0.6})`);
+        baseGrad.addColorStop(0.5, `rgba(70, 80, 95, ${alpha * 0.5})`);
+        baseGrad.addColorStop(1, `rgba(60, 70, 85, 0)`);
+        ctx.fillStyle = baseGrad;
+        ctx.beginPath();
+        ctx.arc(zone.x, zone.y, zone.radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Overlay clouds - only 6-8 particles with simple animation
+        const numClouds = 6 + Math.floor(seededRandom(zoneSeed) * 3);
+        for (let i = 0; i < numClouds; i++) {
+          const seed = zoneSeed + i * 123.7;
+          const baseAngle = seededRandom(seed) * Math.PI * 2;
+          const wobble =
+            Math.sin(time * 0.5 + seededRandom(seed + 1) * 10) * 0.2;
+          const angle = baseAngle + wobble;
+
+          const distFactor = 0.15 + seededRandom(seed + 2) * 0.55;
+          const dist = zone.radius * distFactor;
+
+          // Gentle wobble
+          const wobbleX =
+            Math.sin(time * 0.6 + seededRandom(seed + 3) * 15) * 10;
+          const wobbleY =
+            Math.cos(time * 0.5 + seededRandom(seed + 4) * 15) * 10;
+
+          const cx = zone.x + Math.cos(angle) * dist + wobbleX;
+          const cy = zone.y + Math.sin(angle) * dist + wobbleY;
+          const r = zone.radius * (0.25 + seededRandom(seed + 5) * 0.2);
+          const particleAlpha = alpha * (0.4 + seededRandom(seed + 6) * 0.3);
+
+          const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+          grad.addColorStop(0, `rgba(95, 105, 120, ${particleAlpha})`);
+          grad.addColorStop(1, `rgba(75, 85, 100, 0)`);
+          ctx.fillStyle = grad;
+          ctx.beginPath();
+          ctx.arc(cx, cy, r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
         ctx.restore();
       }
 
@@ -1034,6 +1270,14 @@ export default function GunnyWarsUI({ game: baseGame }: GameUIProps) {
             ctx.fillText(weapon.name, 0, -35);
           }
         }
+      }
+
+      // EMP Disabled indicator
+      if ((tank.disabledTurns ?? 0) > 0) {
+        ctx.fillStyle = "#06b6d4";
+        ctx.font = "bold 14px Arial";
+        ctx.textAlign = "center";
+        ctx.fillText("⚡ DISABLED", 0, -50);
       }
 
       ctx.restore();

@@ -32,6 +32,7 @@ import { TerrainMap, TerrainRenderer } from "./TerrainMap";
 import { TerrainShaderRenderer } from "./TerrainShaderRenderer";
 import { ParticleShaderRenderer } from "./ParticleShaderRenderer";
 import { MAX_PARTICLES, PARTICLE_STRIDE, PARTICLE_TYPES } from "./constants";
+import { simpleSeededRandom } from "../../utils/random";
 
 export default class GunnyWars extends BaseGame<GunnyWarsState> {
   // TerrainMap - for efficient collision detection
@@ -50,6 +51,20 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
   private _particleCount = 0;
   private _particleShaderRenderer: ParticleShaderRenderer | null = null;
 
+  // Pending minigun shots for delayed firing (local only)
+  private _pendingMinigunShots: Array<{
+    shot: FireShotData;
+    shotIndex: number; // 0-4, which shot in the burst
+    fireTime: number; // When to fire this shot
+  }> = [];
+
+  // Lightning visual effect tracking (local only)
+  private _lightningStrikes: Array<{
+    x: number;
+    y: number;
+    startTime: number;
+  }> = [];
+
   get projectiles(): Projectile[] {
     return this._projectiles;
   }
@@ -60,6 +75,10 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
 
   get particleCount(): number {
     return this._particleCount;
+  }
+
+  get lightningStrikes(): Array<{ x: number; y: number; startTime: number }> {
+    return this._lightningStrikes;
   }
 
   // Bot state (Turn-based)
@@ -108,6 +127,7 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
       isSimulating: false,
       selectedMode: GameMode.TURN_BASED,
       gameStartTime: Date.now(),
+      smokeZones: {},
     };
   }
 
@@ -277,7 +297,7 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
     return this._particleShaderRenderer;
   }
 
-  private seededRandom(seed: number): number {
+  public seededRandom(seed: number): number {
     const x = Math.sin(seed) * 10000;
     return x - Math.floor(x);
   }
@@ -522,7 +542,21 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
     // Update bots (Host only)
     if (this.isHost) {
       this.updateBots();
+
+      // Chaos mode: auto-clear smoke zones after 30 seconds
+      if (this.state.selectedMode === GameMode.CHAOS) {
+        const SMOKE_DURATION = 30000; // 30 seconds
+        const now = Date.now();
+        for (const id in this.state.smokeZones) {
+          if (now - this.state.smokeZones[id].startTime >= SMOKE_DURATION) {
+            delete this.state.smokeZones[id];
+          }
+        }
+      }
     }
+
+    // Process pending minigun shots (local timing, synced via seeded random)
+    this.processPendingMinigunShots();
 
     if (!this.terrainMap) return;
 
@@ -708,6 +742,33 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
     }
     this.state.isSimulating = true;
 
+    const weaponData = WEAPONS[shot.weapon];
+
+    // MINIGUN: fire first shot immediately, queue remaining with delay
+    if (shot.weapon === WeaponType.MINIGUN) {
+      const now = Date.now();
+      const burstCount = weaponData.count; // 5 bullets
+
+      // Fire first shot immediately
+      this.fireMinigunShot(shot, 0);
+
+      // Queue remaining shots with 100ms delay each
+      for (let i = 1; i < burstCount; i++) {
+        this._pendingMinigunShots.push({
+          shot,
+          shotIndex: i,
+          fireTime: now + i * 100, // 100ms between shots
+        });
+      }
+
+      // Set phase after first projectile is created
+      if (this.state.selectedMode !== GameMode.CHAOS) {
+        this.state.phase = GamePhase.PROJECTILE_MOVING;
+      }
+      return;
+    }
+
+    // Standard weapon handling
     const rad = (shot.angle * Math.PI) / 180;
     const speed = (shot.power / 100) * MAX_POWER;
 
@@ -736,7 +797,6 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
       };
     };
 
-    const weaponData = WEAPONS[shot.weapon];
     const count = weaponData.count;
     const spread = weaponData.spread || 0;
 
@@ -752,6 +812,65 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
     if (this.state.selectedMode !== GameMode.CHAOS) {
       this.state.phase = GamePhase.PROJECTILE_MOVING;
     }
+  }
+
+  /**
+   * Fire a single minigun shot with seeded random angle offset
+   */
+  private fireMinigunShot(shot: FireShotData, shotIndex: number): void {
+    const weaponData = WEAPONS[shot.weapon];
+    const spread = weaponData.spread || 8;
+
+    // Use seeded random for deterministic angle offset
+    const seed = shot.seed + shotIndex * 0.17;
+    const randomOffset = (simpleSeededRandom(seed) - 0.5) * spread * 2;
+
+    const rad = (shot.angle * Math.PI) / 180;
+    const speed = (shot.power / 100) * MAX_POWER;
+    const barrelLength = 30;
+
+    const finalRad = rad + (randomOffset * Math.PI) / 180;
+    const spawnX = shot.x + Math.cos(finalRad) * barrelLength;
+    const spawnY = shot.y - 10 - Math.sin(finalRad) * barrelLength;
+
+    this._projectiles.push({
+      id: `${shot.seed.toString(36)}-mg-${shotIndex}`,
+      x: spawnX,
+      y: spawnY,
+      vx: Math.cos(finalRad) * speed,
+      vy: -Math.sin(finalRad) * speed,
+      radius: 4,
+      weapon: shot.weapon,
+      ownerId: shot.tankId,
+      active: true,
+    });
+  }
+
+  /**
+   * Process pending minigun shots - fires when their scheduled time arrives
+   */
+  private processPendingMinigunShots(): void {
+    if (this._pendingMinigunShots.length === 0) return;
+
+    const now = Date.now();
+    const toFire: typeof this._pendingMinigunShots = [];
+    const remaining: typeof this._pendingMinigunShots = [];
+
+    for (const pending of this._pendingMinigunShots) {
+      if (now >= pending.fireTime) {
+        toFire.push(pending);
+      } else {
+        remaining.push(pending);
+      }
+    }
+
+    // Fire the ready shots
+    for (const pending of toFire) {
+      this.fireMinigunShot(pending.shot, pending.shotIndex);
+    }
+
+    // Keep remaining shots in queue
+    this._pendingMinigunShots = remaining;
   }
 
   private updateTankPhysics(): boolean {
@@ -801,8 +920,9 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
         if (sim.health <= 0) {
           if (this.state.selectedMode === GameMode.CHAOS) {
             // bring back tank
-            tank.health = 100;
-            tank.y = -1000;
+            // tank.health = 100;
+            // tank.y = -1000;
+            this.checkRespawnInChaos(tank);
           } else {
             // instant die
             tank.health = 0;
@@ -834,11 +954,20 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
 
       projectilesMoving = true;
 
+      // Store previous vy for peak detection (firework)
+      const prevVy = p.vy;
+
       // Apply physics
       p.x += p.vx;
       p.y += p.vy;
       p.vy += GRAVITY;
       p.vx += this.state.wind;
+
+      // Firework: detect peak (transition from rising to falling)
+      if (p.weapon === WeaponType.FIREWORK && prevVy < 0 && p.vy >= 0) {
+        this.splitFirework(p);
+        return; // Projectile is now inactive, skip rest
+      }
 
       // Trail particles
       if (p.weapon === WeaponType.METEOR_STRIKE) {
@@ -1066,6 +1195,7 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
               tank.health = Math.min(tank.maxHealth, tank.health + magnitude);
             } else if (weapon.type === WeaponType.VAMPIRE) {
               tank.health = Math.max(0, tank.health - magnitude);
+              this.checkRespawnInChaos(tank);
               // Heal the owner
               const owner = this.state.tanks.find(
                 (t) => t.id === projectile.ownerId,
@@ -1078,6 +1208,7 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
               }
             } else {
               tank.health = Math.max(0, tank.health - magnitude);
+              this.checkRespawnInChaos(tank);
             }
           }
         }
@@ -1174,15 +1305,15 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
 
       for (let i = 0; i < 8; i++) {
         const seed = baseSeed + i * 0.1;
-        const offset = (this.seededRandom(seed) - 0.5) * 100;
-        const yOffset = -this.seededRandom(seed + 0.05) * 200;
+        const offset = (simpleSeededRandom(seed) - 0.5) * 100;
+        const yOffset = -simpleSeededRandom(seed + 0.05) * 500;
 
         this._projectiles.push({
           id: (baseSeed + 1 + i * 0.1).toString(),
           x: projectile.x + offset,
           y: yOffset,
           vx: 0,
-          vy: 5 + this.seededRandom(seed + 0.07) * 5,
+          vy: 1 + simpleSeededRandom(seed + 0.07) * 2,
           radius: 5,
           weapon: WeaponType.AIRSTRIKE_BOMB,
           ownerId: projectile.ownerId,
@@ -1199,8 +1330,8 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
       for (let i = 0; i < 5; i++) {
         const seed = baseSeed + i * 0.13;
         // Spawn slightly above impact to avoid getting stuck
-        const vx = (this.seededRandom(seed) - 0.5) * 12;
-        const vy = -3 - this.seededRandom(seed + 0.05) * 8;
+        const vx = (simpleSeededRandom(seed) - 0.5) * 12;
+        const vy = -3 - simpleSeededRandom(seed + 0.05) * 8;
 
         this._projectiles.push({
           id: (baseSeed + i + 100).toString(36),
@@ -1230,6 +1361,182 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
         active: true,
       });
     }
+
+    // Lightning - Strike highest point near impact
+    if (weapon.type === WeaponType.LIGHTNING) {
+      const searchRadius = 10;
+      let highestY = WORLD_HEIGHT;
+      let strikeX = projectile.x;
+
+      // Find highest terrain point in search radius
+      for (
+        let x = projectile.x - searchRadius;
+        x <= projectile.x + searchRadius;
+        x += 5
+      ) {
+        const terrainY = this.getTerrainHeight(x);
+        if (terrainY < highestY) {
+          highestY = terrainY;
+          strikeX = x;
+        }
+      }
+
+      // Track lightning strike for visual rendering
+      this._lightningStrikes.push({
+        x: strikeX,
+        y: highestY,
+        startTime: Date.now(),
+      });
+
+      // Apply damage at strike point (Host only)
+      if (this.isHost) {
+        this.state.tanks.forEach((tank) => {
+          const dx = tank.x - strikeX;
+          const dy = tank.y - highestY;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < weapon.radius) {
+            const damage = Math.floor(
+              weapon.damage * (1 - dist / weapon.radius),
+            );
+            tank.health = Math.max(0, tank.health - damage);
+            this.checkRespawnInChaos(tank);
+          }
+        });
+
+        // Small terrain damage
+        this.state.terrainMods.push(
+          TerrainMod.create(TerrainModType.DESTROY, strikeX, highestY, 25),
+        );
+      }
+
+      // Visual effects - electric particles
+      this.createParticles(
+        strikeX,
+        highestY,
+        40,
+        PARTICLE_TYPES.spark,
+        3,
+        "#22d3ee",
+      );
+      this.createParticles(
+        strikeX,
+        highestY,
+        20,
+        PARTICLE_TYPES.glow,
+        4,
+        "#ffffff",
+      );
+    }
+
+    // Smoke Grenade - Create smoke zone
+    if (weapon.type === WeaponType.SMOKE) {
+      if (this.isHost) {
+        const smokeId = `smoke_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        this.state.smokeZones[smokeId] = {
+          id: smokeId,
+          x: projectile.x,
+          y: projectile.y,
+          radius: weapon.radius,
+          turnsRemaining: 3,
+          ownerId: projectile.ownerId,
+          startTime: Date.now(),
+        };
+      }
+
+      // Visual smoke burst
+      // this.createParticles(
+      //   projectile.x,
+      //   projectile.y,
+      //   50,
+      //   PARTICLE_TYPES.smoke,
+      //   2,
+      //   "#64748b",
+      //   0.3,
+      // );
+    }
+
+    // EMP - Disable enemy tanks
+    if (weapon.type === WeaponType.EMP) {
+      if (this.isHost) {
+        this.state.tanks.forEach((tank) => {
+          if (tank.id === projectile.ownerId) return; // Don't affect self
+          if (tank.health <= 0) return;
+
+          const dx = tank.x - projectile.x;
+          const dy = tank.y - projectile.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+
+          if (dist < weapon.radius) {
+            // In Chaos mode: reset lastFireTime to force cooldown wait
+            // In Normal mode: disable for 1 turn
+            if (this.state.selectedMode === GameMode.CHAOS) {
+              tank.lastFireTime = Date.now();
+            } else {
+              tank.disabledTurns = 1;
+            }
+          }
+        });
+      }
+
+      // Visual EMP pulse
+      this.createParticles(
+        projectile.x,
+        projectile.y,
+        60,
+        PARTICLE_TYPES.glow,
+        5,
+        "#06b6d4",
+      );
+      this.createParticles(
+        projectile.x,
+        projectile.y,
+        30,
+        PARTICLE_TYPES.spark,
+        3,
+        "#ffffff",
+      );
+    }
+  }
+
+  /**
+   * Split firework into multiple colorful sparks at peak height
+   * Uses seeded random for multiplayer synchronization
+   */
+  private splitFirework(p: Projectile): void {
+    const baseSeed = Number(p.id) || p.x + p.y;
+    const sparkCount = 10;
+
+    // Create visual burst at split point
+    this.createParticles(p.x, p.y, 30, PARTICLE_TYPES.glow, 3, "#ff6b9d");
+    this.createParticles(p.x, p.y, 20, PARTICLE_TYPES.spark, 4, "#fbbf24");
+
+    // Spawn sparks in a circular spread
+    for (let i = 0; i < sparkCount; i++) {
+      const seed = baseSeed + i * 0.17;
+
+      // Seeded random angle spread
+      const angle =
+        (i / sparkCount) * Math.PI * 2 + (simpleSeededRandom(seed) - 0.5) * 0.5;
+      const speed = 1 + simpleSeededRandom(seed + 0.1) * 4;
+
+      const vx = Math.cos(angle) * speed + p.vx * 0.3;
+      const vy = Math.sin(angle) * speed + 4; // Slight downward bias
+
+      this._projectiles.push({
+        id: `${baseSeed}-spark-${i}`,
+        x: p.x,
+        y: p.y,
+        vx,
+        vy,
+        radius: 4,
+        weapon: WeaponType.FIREWORK_SPARK,
+        ownerId: p.ownerId,
+        active: true,
+      });
+    }
+
+    // Deactivate original projectile
+    p.active = false;
   }
 
   private createExplosionParticles(
@@ -1261,6 +1568,10 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
     else if (weapon.type === WeaponType.HEAL) {
       this.createParticles(x, y, 20, PARTICLE_TYPES.glow, 2, "#4ade80");
       this.createParticles(x, y, 15, PARTICLE_TYPES.spark, 1.5, "#ffffff");
+    } else if (weapon.type === WeaponType.FIREWORK_SPARK) {
+      // Colorful spark explosion
+      this.createParticles(x, y, 10, PARTICLE_TYPES.glow, 2, "#fbbf24");
+      this.createParticles(x, y, 8, PARTICLE_TYPES.spark, 2, "#ff6b9d");
     } else {
       this.createParticles(x, y, 20, PARTICLE_TYPES.fire, 1.5);
       this.createParticles(x, y, 20, PARTICLE_TYPES.smoke, 1);
@@ -1277,6 +1588,12 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
       [WeaponType.BUILDER]: "#60a5fa",
       [WeaponType.HEAL]: "#4ade80",
       [WeaponType.METEOR_STRIKE]: "#fb923c",
+      [WeaponType.FIREWORK]: "#ff6b9d",
+      [WeaponType.FIREWORK_SPARK]: "#fbbf24",
+      [WeaponType.MINIGUN]: "#94a3b8",
+      [WeaponType.LIGHTNING]: "#22d3ee",
+      [WeaponType.SMOKE]: "#64748b",
+      [WeaponType.EMP]: "#06b6d4",
     };
 
     const color = colors[p.weapon];
@@ -1406,12 +1723,36 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
       state.turnTimeEnd = 0;
       return;
     }
+
+    // Decrement smoke zone turns and remove expired ones
+    if (this.isHost) {
+      for (const id in state.smokeZones) {
+        state.smokeZones[id].turnsRemaining--;
+        if (state.smokeZones[id].turnsRemaining <= 0) {
+          delete state.smokeZones[id];
+        }
+      }
+    }
+
     state.currentTurnIndex = (state.currentTurnIndex + 1) % state.tanks.length;
 
-    // Skip dead tanks
-    while (state.tanks[state.currentTurnIndex].health <= 0) {
+    // Skip dead tanks and EMP-disabled tanks
+    let loopCount = 0;
+    while (
+      loopCount < state.tanks.length &&
+      (state.tanks[state.currentTurnIndex].health <= 0 ||
+        (state.tanks[state.currentTurnIndex].disabledTurns ?? 0) > 0)
+    ) {
+      const tank = state.tanks[state.currentTurnIndex];
+
+      // Decrement disabled turns if alive but disabled
+      if (tank.health > 0 && (tank.disabledTurns ?? 0) > 0) {
+        tank.disabledTurns = (tank.disabledTurns ?? 0) - 1;
+      }
+
       state.currentTurnIndex =
         (state.currentTurnIndex + 1) % state.tanks.length;
+      loopCount++;
     }
 
     const nextTank = state.tanks[state.currentTurnIndex];
@@ -1780,6 +2121,28 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
     this.checkBotTurn();
   }
 
+  // Helper for Chaos mode respawn
+  private checkRespawnInChaos(tank: Tank): void {
+    if (this.state.selectedMode !== GameMode.CHAOS) return;
+    if (tank.health > 0) return;
+
+    // Respawn at random position
+    const margin = 500;
+    const randomX = margin + Math.random() * (WORLD_WIDTH - margin * 2);
+    tank.x = randomX;
+    tank.y = -1000; // Drop from above
+    tank.health = tank.maxHealth;
+    tank.lastFireTime = Date.now();
+
+    // Update simulation state
+    const sim = this._tankSimulations.get(tank.id);
+    if (sim) {
+      sim.x = randomX;
+      sim.y = -100;
+      sim.health = tank.maxHealth;
+    }
+  }
+
   reset(): void {
     if (!this.isHost) return;
     this.state.phase = GamePhase.WAITING;
@@ -1795,6 +2158,7 @@ export default class GunnyWars extends BaseGame<GunnyWarsState> {
     this.state.terrainMods = [];
     this.state.isSimulating = false;
     this.state.gameStartTime = Date.now();
+    this.state.smokeZones = {}; // Clear smoke zones
 
     this._tankSimulations.clear();
     this.initTerrain();

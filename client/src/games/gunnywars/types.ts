@@ -32,10 +32,16 @@ export const WeaponType = {
   BOUNCY: 10,
   VAMPIRE: 11,
   METEOR: 12,
+  FIREWORK: 13,
+  MINIGUN: 14,
+  LIGHTNING: 15,
+  SMOKE: 16,
+  EMP: 17,
   // Internal types
-  AIRSTRIKE_BOMB: 13,
-  MIRV_MINI: 14,
-  METEOR_STRIKE: 15,
+  AIRSTRIKE_BOMB: 18,
+  MIRV_MINI: 19,
+  METEOR_STRIKE: 20,
+  FIREWORK_SPARK: 21,
 } as const;
 export type WeaponType = (typeof WeaponType)[keyof typeof WeaponType];
 
@@ -92,6 +98,7 @@ export interface Tank {
   isMoving?: boolean;
   moveDir?: MoveDirection;
   lastFireTime: number;
+  disabledTurns?: number; // EMP effect - skip turns
 }
 
 // Projectile (LOCAL ONLY - not synced, simulated from fire event)
@@ -106,6 +113,17 @@ export interface Projectile {
   ownerId: string;
   active: boolean;
   bounces?: number; // For bouncy weapons
+}
+
+// Smoke zone for visual fog effect
+export interface SmokeZone {
+  id: string; // Unique identifier for object key
+  x: number;
+  y: number;
+  radius: number;
+  turnsRemaining: number;
+  ownerId: string; // Tank that placed the smoke
+  startTime: number; // For time-based expiration in Chaos mode
 }
 
 // Fire shot data (synced to all clients)
@@ -197,6 +215,7 @@ export interface GunnyWarsState {
   isSimulating: boolean;
   selectedMode?: GameMode;
   gameStartTime: number;
+  smokeZones: Record<string, SmokeZone>; // Object instead of array to avoid state churn
 }
 
 // Socket Actions

@@ -173,8 +173,8 @@ export const WEAPONS: Record<WeaponType, Weapon> = {
     color: "#a78bfa", // Purple
     count: 1,
     terrainDamageMultiplier: 0.8,
-    description: "Splits into multiple small bombs before impact.",
-    descriptionVi: "Tách thành nhiều quả bom nhỏ trước khi va chạm.",
+    description: "Splits into multiple small bombs on impact.",
+    descriptionVi: "Tách thành nhiều quả bom nhỏ khi va chạm.",
   },
   [WeaponType.MIRV_MINI]: {
     type: WeaponType.MIRV_MINI,
@@ -231,6 +231,74 @@ export const WEAPONS: Record<WeaponType, Weapon> = {
     description: "Devastating meteor impact. Huge terrain damage.",
     descriptionVi: "Thiên thạch va chạm tàn khốc. Phá hủy địa hình cực lớn.",
   },
+  [WeaponType.FIREWORK]: {
+    type: WeaponType.FIREWORK,
+    name: "Firework",
+    damage: 0,
+    radius: 10,
+    color: "#ff6b9d", // Pink
+    count: 1,
+    terrainDamageMultiplier: 0,
+    description: "Explodes at peak height into colorful sparks.",
+    descriptionVi: "Nổ thành nhiều tia lửa màu sắc khi đạt đỉnh.",
+  },
+  [WeaponType.MINIGUN]: {
+    type: WeaponType.MINIGUN,
+    name: "Minigun",
+    damage: 12,
+    radius: 25,
+    color: "#94a3b8", // Slate
+    count: 5,
+    spread: 8,
+    terrainDamageMultiplier: 0.6,
+    description: "Rapid-fires 5 bullets with slight spread.",
+    descriptionVi: "Bắn liên tiếp 5 viên đạn với độ tản nhỏ.",
+  },
+  [WeaponType.FIREWORK_SPARK]: {
+    // Internal
+    type: WeaponType.FIREWORK_SPARK,
+    name: "Spark",
+    damage: 15,
+    radius: 20,
+    color: "#fbbf24", // Amber
+    count: 1,
+    terrainDamageMultiplier: 1,
+    description: "Colorful spark from firework explosion.",
+    descriptionVi: "Tia lửa màu từ pháo hoa.",
+  },
+  [WeaponType.LIGHTNING]: {
+    type: WeaponType.LIGHTNING,
+    name: "Lightning",
+    damage: 40,
+    radius: 50,
+    color: "#22d3ee", // Cyan
+    count: 1,
+    terrainDamageMultiplier: 0.5,
+    description: "Strikes the highest point near impact with electric fury.",
+    descriptionVi: "Sét đánh xuống điểm cao nhất gần vị trí chạm.",
+  },
+  [WeaponType.SMOKE]: {
+    type: WeaponType.SMOKE,
+    name: "Smoke Grenade",
+    damage: 0,
+    radius: 450,
+    color: "#64748b", // Slate
+    count: 1,
+    terrainDamageMultiplier: 0,
+    description: "Creates a large smoke cloud that blocks vision for 3 turns.",
+    descriptionVi: "Tạo vùng khói lớn che tầm nhìn trong 3 lượt.",
+  },
+  [WeaponType.EMP]: {
+    type: WeaponType.EMP,
+    name: "EMP",
+    damage: 0,
+    radius: 80,
+    color: "#06b6d4", // Cyan
+    count: 1,
+    terrainDamageMultiplier: 0,
+    description: "Disables enemy weapons for 1 turn.",
+    descriptionVi: "Vô hiệu hóa vũ khí địch trong 1 lượt.",
+  },
 };
 
 // Get user-selectable weapons (exclude internal types)
@@ -238,7 +306,8 @@ export const SELECTABLE_WEAPONS = Object.values(WEAPONS).filter(
   (w) =>
     w.type !== WeaponType.AIRSTRIKE_BOMB &&
     w.type !== WeaponType.MIRV_MINI &&
-    w.type !== WeaponType.METEOR_STRIKE,
+    w.type !== WeaponType.METEOR_STRIKE &&
+    w.type !== WeaponType.FIREWORK_SPARK,
 );
 
 // Tank Colors
