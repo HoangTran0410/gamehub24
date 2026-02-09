@@ -69,7 +69,7 @@ export const updates: {
     en: "Gunny Wars: new guns",
     vi: "Bắn Gunny: thêm vũ khí",
     gameId: "gunny",
-    timestamp: 1770622503792,
+    timestamp: 1770628887605,
   },
   {
     type: "new",

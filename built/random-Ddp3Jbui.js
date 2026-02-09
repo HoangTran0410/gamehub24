@@ -1,0 +1,1 @@
+class t{seed;constructor(t){this.seed=t}next(){return this.seed=(1664525*this.seed+1013904223)%4294967295,this.seed/4294967295}nextInt(t,e){return Math.floor(this.next()*(e-t+1))+t}shuffle(t){for(let e=t.length-1;e>0;e--){const s=this.nextInt(0,e);[t[e],t[s]]=[t[s],t[e]]}return t}}function e(t){const e=1e4*Math.sin(t);return e-Math.floor(e)}export{t as S,e as s};
