@@ -66,6 +66,12 @@ export const updates: {
 }[] = [
   {
     type: "new",
+    en: "New feature: Direct chat",
+    vi: "Chức năng mới: Chat riêng tư",
+    timestamp: 1770717385517,
+  },
+  {
+    type: "new",
     en: "New game: Iro Karuta",
     vi: "Game mới: Trộn màu",
     gameId: "irokaruta",

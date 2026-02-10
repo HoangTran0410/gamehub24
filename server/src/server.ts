@@ -49,6 +49,21 @@ const spamMap = new Map<string, { count: number; lastMessageTime: number }>();
 const SPAM_WINDOW_MS = 5000;
 const MAX_MESSAGES_PER_WINDOW = 5;
 
+// Generate a deterministic roomId for DM persistence using usernames
+function getDmRoomId(userA: string, userB: string): string {
+  return "dm:" + [userA, userB].sort().join("_");
+}
+
+// Online users tracking for DM feature - Keyed by USERNAME
+const onlineUsers = new Map<string, { userId: string; socketId: string }>();
+
+function getOnlineUserList() {
+  return Array.from(onlineUsers.entries()).map(([username, { userId }]) => ({
+    userId,
+    username,
+  }));
+}
+
 function trackDataStats(roomId: string, size: number) {
   const room = roomManager.getRoom(roomId);
   if (!room || !room.gameType) return;
@@ -68,6 +83,72 @@ setInterval(
   },
   10 * 60 * 1000,
 );
+
+// =============================================
+// Room auto-cleanup: delete rooms with no connected sockets after 5 minutes
+// =============================================
+const ROOM_CLEANUP_INTERVAL_MS = 60 * 1000; // Check every 1 minute
+const ROOM_EMPTY_TIMEOUT_MS = 5 * 60 * 1000; // Delete after 5 minutes empty
+const emptyRoomTimestamps = new Map<string, number>(); // roomId -> timestamp when first detected empty
+
+setInterval(async () => {
+  try {
+    const allRooms = roomManager.getAllRooms();
+    for (const room of allRooms) {
+      // Check how many sockets are actually in this Socket.IO room
+      const sockets = await io.in(room.id).fetchSockets();
+      const connectedCount = sockets.length;
+
+      if (connectedCount === 0) {
+        // Room has no connected sockets
+        if (!emptyRoomTimestamps.has(room.id)) {
+          // First time detecting empty, record timestamp
+          emptyRoomTimestamps.set(room.id, Date.now());
+          log(
+            `⏳ Room "${room.name}" (${room.id}) has no connected sockets, will auto-delete in 5 minutes`,
+          );
+        } else {
+          // Check if it's been empty long enough
+          const emptyAt = emptyRoomTimestamps.get(room.id)!;
+          if (Date.now() - emptyAt >= ROOM_EMPTY_TIMEOUT_MS) {
+            // Delete the room
+            log(
+              `🗑️  Auto-deleting empty room "${room.name}" (${room.id}) — no connected sockets for 5 minutes`,
+            );
+
+            // Clean up all players/spectators from the room via RoomManager
+            for (const player of [...room.players, ...room.spectators]) {
+              roomManager.leaveRoom(player.id);
+            }
+
+            // If room still exists (e.g. leaveRoom didn't delete it), force delete
+            if (roomManager.getRoom(room.id)) {
+              // Force remove via leaveRoom of the owner
+              roomManager.leaveRoom(room.ownerId);
+            }
+
+            // Clean up chat history
+            chatHistory.delete(room.id);
+            emptyRoomTimestamps.delete(room.id);
+
+            // Broadcast updated room list
+            io.emit("room:list:update", roomManager.getPublicRooms());
+          }
+        }
+      } else {
+        // Room has connected sockets, remove from empty tracking
+        if (emptyRoomTimestamps.has(room.id)) {
+          log(
+            `✅ Room "${room.name}" (${room.id}) has active connections again, cancelling auto-delete`,
+          );
+          emptyRoomTimestamps.delete(room.id);
+        }
+      }
+    }
+  } catch (error) {
+    console.error("Error during room auto-cleanup:", error);
+  }
+}, ROOM_CLEANUP_INTERVAL_MS);
 
 function formatUpTime(diff: number) {
   const seconds = Math.floor(diff / 1000);
@@ -122,6 +203,10 @@ io.on("connection", (socket: Socket) => {
   const { userId, username } = socket.handshake.auth;
 
   log(`🟢 User connected: ${username} (${userId}) [${socket.id}]`);
+
+  // Track online user (by username)
+  onlineUsers.set(username, { userId, socketId: socket.id });
+  io.emit("dm:online_users", getOnlineUserList());
 
   // Update socket ID if user reconnects
   roomManager.updatePlayerSocketId(userId, socket.id);
@@ -697,12 +782,91 @@ io.on("connection", (socket: Socket) => {
     callback?.(globalChatHistory);
   });
 
+  // DM EVENTS
+
+  // Request online users list
+  socket.on("dm:online_users", (callback) => {
+    callback?.(getOnlineUserList());
+  });
+
+  // Send DM to specific user (by username)
+  socket.on("dm:send", (data: { to: string; message: string }, callback) => {
+    try {
+      // Spam prevention (same as global chat)
+      const now = Date.now();
+      const userSpam = spamMap.get(userId) || {
+        count: 0,
+        lastMessageTime: 0,
+      };
+      if (now - userSpam.lastMessageTime > SPAM_WINDOW_MS) {
+        userSpam.count = 0;
+      }
+      if (userSpam.count >= MAX_MESSAGES_PER_WINDOW) {
+        return callback?.({
+          success: false,
+          error: "You are sending messages too fast. Please slow down.",
+        });
+      }
+      userSpam.count++;
+      userSpam.lastMessageTime = now;
+      spamMap.set(userId, userSpam);
+
+      const targetUser = onlineUsers.get(data.to);
+
+      const dmMessage = {
+        id: uuidShort(),
+        from: username,
+        to: data.to,
+        message: data.message.trim().slice(0, 500),
+        timestamp: Date.now(),
+      };
+
+      // Persist DM to file
+      const dmRoomId = getDmRoomId(username, data.to);
+      chatPersistence.saveMessage({
+        id: dmMessage.id,
+        roomId: dmRoomId,
+        userId: userId, // Keep original userId for record/auth if needed, but message structure uses usernames
+        username: username,
+        message: dmMessage.message,
+        timestamp: dmMessage.timestamp,
+        type: "user",
+      });
+
+      // Send to target user if online
+      if (targetUser) {
+        io.to(targetUser.socketId).emit("dm:receive", dmMessage);
+      }
+
+      // Echo back to sender for confirmation
+      callback?.({ success: true, message: dmMessage });
+    } catch (error) {
+      console.error("Error sending DM:", error);
+      callback?.({ success: false, error: "Failed to send message" });
+    }
+  });
+
+  // Typing indicator
+  socket.on("dm:typing", (data: { to: string; isTyping: boolean }) => {
+    const targetUser = onlineUsers.get(data.to);
+    if (targetUser) {
+      io.to(targetUser.socketId).emit("dm:typing", {
+        from: username,
+        isTyping: data.isTyping,
+      });
+    }
+  });
+
   // DISCONNECT
 
   socket.on("disconnect", (reason) => {
     log(
       `🔴 User disconnected: ${username} (${userId}) [${socket.id}]. Reason: ${reason}`,
     );
+
+    // Remove from online users and broadcast
+    onlineUsers.delete(username);
+    io.emit("dm:online_users", getOnlineUserList());
 
     // Handle room cleanup
     const result = roomManager.leaveRoom(userId);

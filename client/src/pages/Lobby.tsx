@@ -183,7 +183,7 @@ export default function Lobby() {
               {/* Chat Toggle Button (Desktop Only) */}
               <button
                 onClick={() => setGlobalChatOpen(true)}
-                className="hidden md:flex items-center gap-2 px-4 py-1.5 bg-blue-500/10 border border-blue-500/30 rounded-full text-blue-400 text-sm font-medium hover:bg-blue-500/20 transition-colors cursor-pointer"
+                className="flex items-center gap-2 px-4 py-1.5 bg-blue-500/10 border border-blue-500/30 rounded-full text-blue-400 text-sm font-medium hover:bg-blue-500/20 transition-colors cursor-pointer"
               >
                 {/* <div className="w-2 h-2 rounded-full bg-blue-500" /> */}
                 <MessageSquare className="w-5 h-5 text-primary" />

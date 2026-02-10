@@ -28,7 +28,7 @@ const SearchInput = memo(
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={ts(placeholder || defaultPlaceholder)}
-          className="w-full pl-10 pr-10 py-2 bg-white/5 border border-white/10 rounded-full text-sm text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-all glass-blur"
+          className="w-full pl-10 pr-10 py-2 bg-white/5 border border-white/10 rounded-full text-sm text-text-primary placeholder:text-text-muted/50 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-all"
         />
         {value && (
           <button
