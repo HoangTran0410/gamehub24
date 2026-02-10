@@ -1,0 +1,1 @@
+import{b as r}from"./react-vendor-CTzO0a5p.js";function e(e,t){const u=r.useRef(e),c=r.useRef(t);return r.useEffect(()=>{c.current=t},[t]),r.useEffect(()=>{c.current&&u.current!==e&&c.current(u.current,e),console.log("usePrev",u.current,e),u.current=e},[e]),u.current}export{e as u};
