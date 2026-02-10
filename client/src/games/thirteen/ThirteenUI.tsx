@@ -12,8 +12,8 @@ import {
   RefreshCcw,
   Check,
   Crown,
-  Sparkle,
   BookOpen,
+  Trophy,
 } from "lucide-react";
 import { useUserStore } from "../../stores/userStore";
 import { useAlertStore } from "../../stores/alertStore";
@@ -221,26 +221,56 @@ export default function ThirteenUI({ game: baseGame }: GameUIProps) {
     );
   };
 
-  // Reusable Winner display element
+  const RANK_MEDALS = ["🥇", "🥈", "🥉"];
+
+  // Reusable Rankings display element
   const renderWinner = (variant: "desktop" | "mobile") => {
     const isDesktop = variant === "desktop";
-    const iconSize = isDesktop ? "w-12 h-12" : "w-8 h-8";
-    const textSize = isDesktop ? "text-xl" : "text-base";
-    const gap = isDesktop ? "gap-4" : "gap-2";
+    const textSize = isDesktop ? "text-base" : "text-sm";
+    const gap = isDesktop ? "gap-3" : "gap-2";
 
     return (
       <div className={`flex flex-col items-center ${gap}`}>
-        <Sparkle className={`${iconSize} text-yellow-400`} />
-        <span className={`${textSize} font-bold text-yellow-400`}>
-          {state.players.find((p) => p.id === state.winner)?.username} Won!
-        </span>
+        <div className="flex items-center gap-2">
+          <Trophy
+            className={`${isDesktop ? "w-8 h-8" : "w-6 h-6"} text-yellow-400`}
+          />
+          <span
+            className={`${isDesktop ? "text-xl" : "text-base"} font-bold text-yellow-400`}
+          >
+            {ts({ en: "Game Over", vi: "Kết thúc" })}
+          </span>
+        </div>
+        <div className={`flex flex-col ${gap} w-full max-w-[250px]`}>
+          {state.rankings.map((playerId, index) => {
+            const player = state.players.find((p) => p.id === playerId);
+            if (!player) return null;
+            const medal = RANK_MEDALS[index] || `#${index + 1}`;
+            return (
+              <div
+                key={playerId}
+                className={`flex items-center gap-2 ${textSize} ${
+                  index === 0 ? "text-yellow-400 font-bold" : "text-slate-300"
+                }`}
+              >
+                <span className="text-lg">{medal}</span>
+                <span>{player.username}</span>
+              </div>
+            );
+          })}
+        </div>
       </div>
     );
   };
 
   const renderPlayerSlot = (playerIndex: number, compact = false) => {
     const player = arrangedPlayers[playerIndex];
-    const isInGame = myIndex >= 0; // Current user is already in a slot
+    const isInGame = myIndex >= 0;
+    const rankIndex = player.slot.id
+      ? state.rankings.indexOf(player.slot.id)
+      : -1;
+    const rankBadge =
+      rankIndex >= 0 ? RANK_MEDALS[rankIndex] || `#${rankIndex + 1}` : null;
     return (
       <PlayerSlotDisplay
         key={player.actualIndex}
@@ -254,6 +284,7 @@ export default function ThirteenUI({ game: baseGame }: GameUIProps) {
         onRemove={() => game.requestRemovePlayer(player.actualIndex)}
         compact={compact}
         isInGame={isInGame}
+        rankBadge={rankBadge}
         canJoin={
           !isHost && state.gamePhase === "waiting" && !isInGame && isRoomPlayer
         }
@@ -490,7 +521,7 @@ export default function ThirteenUI({ game: baseGame }: GameUIProps) {
         <div className="flex @md:hidden">{renderPlayerSlot(0, true)}</div>
 
         {/* My Hand */}
-        {mySlot && state.gamePhase === "playing" && (
+        {mySlot && state.gamePhase === "playing" && mySlot.hand.length > 0 && (
           <div className="flex justify-center max-w-full overflow-x-auto overflow-y-visible pt-4 p-0 @md:p-4 pb-1">
             {mySlot.hand.map((card, index) => (
               <CardDisplay
@@ -751,6 +782,7 @@ function PlayerSlotDisplay({
   compact = false,
   // isInGame,
   canJoin = false,
+  rankBadge = null,
 }: {
   slot: PlayerSlot;
   index: number;
@@ -761,13 +793,13 @@ function PlayerSlotDisplay({
   onJoinSlot: () => void;
   onRemove: () => void;
   compact?: boolean;
-  isInGame: boolean; // Is current user already in a slot
+  isInGame: boolean;
   canJoin?: boolean;
+  rankBadge?: string | null;
 }) {
   const { ts } = useLanguage();
   const isEmpty = slot.id === null;
   const canAddBot = isHost && gamePhase === "waiting";
-  // const canJoin = !isHost && gamePhase === "waiting" && !isInGame;
 
   return (
     <div
@@ -818,11 +850,20 @@ function PlayerSlotDisplay({
       ) : (
         <div className="flex flex-col items-center gap-0.5">
           <div className="flex items-center gap-1">
-            {slot.isBot && <Bot className="w-5 h-5 text-blue-400" />}
-            {slot.isGuest && <User className="w-5 h-5 text-green-400" />}
-            {slot.isHost && <Crown className="w-5 h-5 text-yellow-400" />}
+            {slot.isBot ? (
+              <Bot className="w-5 h-5 text-blue-400" />
+            ) : slot.isHost ? (
+              <Crown className="w-5 h-5 text-yellow-400" />
+            ) : (
+              <User className="w-5 h-5 text-green-400" />
+            )}
             <span className="text-xs font-medium">{slot.username}</span>
-            {canAddBot && (slot.isBot || slot.isGuest) && (
+            {rankBadge && (
+              <span className="text-sm" title={`Rank: ${rankBadge}`}>
+                {rankBadge}
+              </span>
+            )}
+            {isHost && !slot.isHost && gamePhase === "waiting" && (
               <button
                 onClick={onRemove}
                 className="p-0.5 hover:bg-slate-700 rounded"
@@ -865,11 +906,13 @@ function PlayerSlotDisplay({
           ) : (
             (gamePhase === "playing" || gamePhase === "ended") && (
               <span className="text-xs text-slate-400">
-                {slot.hand.length} {ts({ en: "cards", vi: "lá" })}
+                {slot.hand.length > 0
+                  ? `${slot.hand.length} ${ts({ en: "cards", vi: "lá" })}`
+                  : ts({ en: "Finished", vi: "Hết bài" })}
               </span>
             )
           )}
-          {slot.passed && (
+          {slot.passed && slot.hand.length > 0 && (
             <span className="text-xs text-yellow-400">
               {ts({ en: "Passed", vi: "Bỏ lượt" })}
             </span>

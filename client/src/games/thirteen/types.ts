@@ -96,7 +96,6 @@ export interface PlayerSlot {
   username: string;
   hand: Card[];
   isBot: boolean;
-  isGuest: boolean;
   isHost: boolean;
   passed: boolean; // Has passed in current trick
 }
@@ -115,7 +114,8 @@ export interface ThirteenState {
   currentTurnIndex: number; // 0-3, whose turn
   lastPlayedBy: string | null; // Who made the last valid play
   lastCombination: Combination | null; // Last played combination for comparison
-  winner: string | null; // Winner's player ID
+  winner: string | null; // Winner's player ID (first to finish)
+  rankings: string[]; // Ordered list of player IDs who finished (1st, 2nd, 3rd...)
   gamePhase: GamePhase;
   newGameRequest: NewGameRequest | null; // Pending new game request from guest
 }

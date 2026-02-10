@@ -43,6 +43,7 @@ export default class Thirteen extends BaseGame<ThirteenState> {
       lastPlayedBy: null,
       lastCombination: null,
       winner: null,
+      rankings: [],
       gamePhase: "waiting",
       newGameRequest: null,
     };
@@ -318,13 +319,49 @@ export default class Thirteen extends BaseGame<ThirteenState> {
       });
     }
 
-    // Check win condition
+    // Check if player finished their hand
     if (player.hand.length === 0) {
-      this.state.winner = playerId;
-      this.state.gamePhase = "ended";
+      // Add to rankings if not already there
+      if (!this.state.rankings.includes(playerId)) {
+        this.state.rankings.push(playerId);
+      }
+      // Set winner to first finisher
+      if (!this.state.winner) {
+        this.state.winner = playerId;
+      }
 
-      this.clearSavedState();
-      return;
+      // Check remaining players with cards
+      const playersWithCards = this.state.players.filter(
+        (p) => p.id !== null && p.hand.length > 0,
+      );
+
+      // If only 1 player left with cards, auto-rank them last
+      if (playersWithCards.length <= 1) {
+        for (const p of playersWithCards) {
+          if (p.id && !this.state.rankings.includes(p.id)) {
+            this.state.rankings.push(p.id);
+          }
+        }
+        this.state.gamePhase = "ended";
+        this.clearSavedState();
+        return;
+      }
+
+      // If all human players finished, also end game (rank remaining bots)
+      const humanPlayersWithCards = playersWithCards.filter((p) => !p.isBot);
+      if (humanPlayersWithCards.length === 0) {
+        const sorted = playersWithCards.sort(
+          (a, b) => a.hand.length - b.hand.length,
+        );
+        for (const p of sorted) {
+          if (p.id && !this.state.rankings.includes(p.id)) {
+            this.state.rankings.push(p.id);
+          }
+        }
+        this.state.gamePhase = "ended";
+        this.clearSavedState();
+        return;
+      }
     }
 
     // Move to next player
@@ -362,7 +399,15 @@ export default class Thirteen extends BaseGame<ThirteenState> {
       const winnerIndex = this.state.players.findIndex(
         (p) => p.id === this.state.lastPlayedBy,
       );
-      this.state.currentTurnIndex = winnerIndex;
+
+      // If the trick winner already finished (has no cards), find the next player with cards
+      const winnerPlayer = this.state.players[winnerIndex];
+      if (winnerPlayer && winnerPlayer.hand.length === 0) {
+        this.state.currentTurnIndex = winnerIndex;
+        this.advanceTurn();
+      } else {
+        this.state.currentTurnIndex = winnerIndex;
+      }
     } else {
       this.advanceTurn();
     }
@@ -412,7 +457,6 @@ export default class Thirteen extends BaseGame<ThirteenState> {
       username: `Bot ${slotIndex + 1}`,
       hand: [],
       isBot: true,
-      isGuest: false,
       isHost: false,
       passed: false,
     };
@@ -434,7 +478,6 @@ export default class Thirteen extends BaseGame<ThirteenState> {
       username: playerName,
       hand: [],
       isBot: false,
-      isGuest: false, // They're a real player now
       isHost: false,
       passed: false,
     };
@@ -444,16 +487,11 @@ export default class Thirteen extends BaseGame<ThirteenState> {
     if (slotIndex < 0 || slotIndex >= 4) return;
     if (this.state.gamePhase !== "waiting") return;
 
-    const player = this.state.players[slotIndex];
-    // Can only remove bots and guests, not real players
-    if (!player.isBot && !player.isGuest) return;
-
     this.state.players[slotIndex] = {
       id: null,
       username: `Slot ${slotIndex + 1}`,
       hand: [],
       isBot: false,
-      isGuest: false,
       isHost: false,
       passed: false,
     };
@@ -507,7 +545,6 @@ export default class Thirteen extends BaseGame<ThirteenState> {
       username: p.username,
       hand: [],
       isBot: p.isBot,
-      isGuest: p.isGuest,
       isHost: p.isHost,
       passed: false,
     }));
@@ -519,6 +556,7 @@ export default class Thirteen extends BaseGame<ThirteenState> {
       lastPlayedBy: null,
       lastCombination: null,
       winner: null,
+      rankings: [],
       gamePhase: "waiting",
       newGameRequest: null,
     };
@@ -535,7 +573,7 @@ export default class Thirteen extends BaseGame<ThirteenState> {
     // Determine which players are currently in slots
     for (let i = 0; i < 4; i++) {
       const slot = this.state.players[i];
-      if (!slot.isBot && !slot.isGuest && slot.id) {
+      if (!slot.isBot) {
         // Check if this player is still in the room
         const existingPlayer = players.find((p) => p.id === slot.id);
         if (existingPlayer) {
