@@ -68,7 +68,7 @@ export const updates: {
     type: "new",
     en: "New feature: Direct chat",
     vi: "Chức năng mới: Chat riêng tư",
-    timestamp: 1770717385517,
+    timestamp: 1770719322993,
   },
   {
     type: "new",
