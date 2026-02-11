@@ -21,6 +21,7 @@ import {
   SquareDashedBottom,
   Cat,
   Pencil,
+  Club,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { ComponentType } from "react";
@@ -493,7 +494,7 @@ games.set("phom", {
     vi: "Trò chơi dân gian Việt Nam",
   },
   icon: Spade,
-  categories: ["card", "party", "strategy"],
+  categories: ["card", "strategy", "party"],
   minPlayers: 2,
   maxPlayers: 4,
   isAvailable: true,
@@ -502,6 +503,26 @@ games.set("phom", {
     return new PhomGame(room, socket, isHost, userId);
   },
   loadUI: () => import("./phom/PhomUI").then((m) => m.default),
+});
+
+// Register Mậu Binh (Chinese Poker)
+games.set("maubinh", {
+  id: "maubinh",
+  name: { en: "Chinese Poker", vi: "Mậu Binh (Xập Xám)" },
+  description: {
+    en: "Arrange 13 cards into 3 hands to win!",
+    vi: "Xếp 13 lá bài thành 3 chi để thắng!",
+  },
+  icon: Club,
+  categories: ["card", "strategy", "party"],
+  minPlayers: 2,
+  maxPlayers: 4,
+  isAvailable: true,
+  createGame: async (room, socket, isHost, userId) => {
+    const { default: MauBinh } = await import("./maubinh/MauBinh");
+    return new MauBinh(room, socket, isHost, userId);
+  },
+  loadUI: () => import("./maubinh/MauBinhUI").then((m) => m.default),
 });
 
 // Registry functions

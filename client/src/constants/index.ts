@@ -66,6 +66,13 @@ export const updates: {
 }[] = [
   {
     type: "new",
+    en: "New game: Chinese Poker (Mậu Binh)",
+    vi: "Game mới: Mậu Binh (Xập Xám)",
+    gameId: "maubinh",
+    timestamp: Date.now(),
+  },
+  {
+    type: "new",
     en: "New game: Phom",
     vi: "Game mới: Phỏm (Tá lả)",
     gameId: "phom",
