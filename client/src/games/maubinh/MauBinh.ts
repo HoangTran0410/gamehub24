@@ -60,7 +60,6 @@ export default class MauBinh extends BaseGame<MauBinhState> {
       timerEndsAt: 0,
       roundResults: [],
       roundNumber: 0,
-      postGameAnalysis: [],
     };
   }
 
@@ -95,6 +94,7 @@ export default class MauBinh extends BaseGame<MauBinhState> {
           action.front,
           action.middle,
           action.back,
+          action.isAuto,
         );
         break;
       case "AUTO_ARRANGE":
@@ -161,7 +161,6 @@ export default class MauBinh extends BaseGame<MauBinhState> {
     this.state.gamePhase = "arranging";
     this.state.timerEndsAt = Date.now() + ARRANGE_TIME * 1000;
     this.state.roundResults = [];
-    this.state.postGameAnalysis = [];
 
     // Reset player states and deal
     this.state.players.forEach((p) => {
@@ -247,6 +246,7 @@ export default class MauBinh extends BaseGame<MauBinhState> {
         p.isFouled =
           p.instantWin === InstantWin.NONE &&
           !this.isValidArrangement(p.front, p.middle, p.back);
+        p.usedAuto = true;
         p.isReady = true;
       }
     });
@@ -258,6 +258,7 @@ export default class MauBinh extends BaseGame<MauBinhState> {
     front: Card[],
     middle: Card[],
     back: Card[],
+    isAuto: boolean,
   ) {
     if (this.state.gamePhase !== "arranging") return;
     const pIdx = this.state.players.findIndex((p) => p.id === playerId);
@@ -280,6 +281,7 @@ export default class MauBinh extends BaseGame<MauBinhState> {
     p.front = front;
     p.middle = middle;
     p.back = back;
+    p.usedAuto = isAuto;
     p.instantWin = this.checkInstantWin(p.hand, front, middle, back);
     p.isFouled =
       p.instantWin === InstantWin.NONE &&
@@ -558,7 +560,7 @@ export default class MauBinh extends BaseGame<MauBinhState> {
       .sort((a, b) => b.count - a.count || b.rank - a.rank);
 
     // Four of a kind
-    if (countEntries[0].count === 4) {
+    if (countEntries[0]?.count === 4) {
       return {
         rank: HandRank.FOUR_OF_A_KIND,
         value:
@@ -570,7 +572,7 @@ export default class MauBinh extends BaseGame<MauBinhState> {
     }
 
     // Full house
-    if (countEntries[0].count === 3 && countEntries[1].count === 2) {
+    if (countEntries[0]?.count === 3 && countEntries[1]?.count === 2) {
       return {
         rank: HandRank.FULL_HOUSE,
         value:
@@ -612,9 +614,9 @@ export default class MauBinh extends BaseGame<MauBinhState> {
     }
 
     // Two pair
-    if (countEntries[0].count === 2 && countEntries[1].count === 2) {
-      const p1 = Math.max(countEntries[0].rank, countEntries[1].rank);
-      const p2 = Math.min(countEntries[0].rank, countEntries[1].rank);
+    if (countEntries[0]?.count === 2 && countEntries[1]?.count === 2) {
+      const p1 = Math.max(countEntries[0]?.rank, countEntries[1]?.rank);
+      const p2 = Math.min(countEntries[0]?.rank, countEntries[1]?.rank);
       const kicker = countEntries.find((e) => e.count === 1)!.rank;
       return {
         rank: HandRank.TWO_PAIR,
@@ -624,7 +626,7 @@ export default class MauBinh extends BaseGame<MauBinhState> {
     }
 
     // One pair
-    if (countEntries[0].count === 2) {
+    if (countEntries[0]?.count === 2) {
       let val = HandRank.PAIR * 1e8 + countEntries[0].rank * 1e4;
       const kickers = countEntries
         .filter((e) => e.count === 1)
@@ -715,11 +717,7 @@ export default class MauBinh extends BaseGame<MauBinhState> {
       }
     }
 
-    // Compute post-game analysis
-    this.state.postGameAnalysis = this.computePostGameAnalysis(
-      activePlayers.map((a) => a.player),
-      activePlayers.map((a) => a.index),
-    );
+    // Finalize game
 
     this.state.gamePhase = "ended";
   }
@@ -1244,9 +1242,78 @@ export default class MauBinh extends BaseGame<MauBinhState> {
     cards.sort((a, b) => decodeCard(b).rank - decodeCard(a).rank);
   }
 
+  private calculateTotalPointsForArrangement(
+    playerIndex: number,
+    arr: { front: Card[]; middle: Card[]; back: Card[] },
+  ): number {
+    const playersCopy: MauBinhPlayer[] = JSON.parse(
+      JSON.stringify(this.state.players),
+    );
+    const p = playersCopy[playerIndex];
+
+    // Set temp arrangement
+    p.front = arr.front;
+    p.middle = arr.middle;
+    p.back = arr.back;
+
+    // Check for instant win with this arrangement
+    p.instantWin = this.checkInstantWin(p.hand, p.front, p.middle, p.back);
+
+    // Check for fouled
+    const isValid = this.isValidArrangement(p.front, p.middle, p.back);
+    p.isFouled = !isValid;
+
+    let totalPoints = 0;
+    const activePlayersIndices = playersCopy
+      .map((pl, idx) => ({ pl, idx }))
+      .filter(({ pl }) => pl.id !== null)
+      .map(({ idx }) => idx);
+
+    // Compare against all other players
+    for (const otherIdx of activePlayersIndices) {
+      if (otherIdx === playerIndex) continue;
+      const result = this.compareTwoPlayers(
+        p,
+        playerIndex,
+        playersCopy[otherIdx],
+        otherIdx,
+      );
+      totalPoints += result.p1Total;
+    }
+
+    // "Scoop All" bonus logic
+    if (activePlayersIndices.length > 2 && !p.isFouled) {
+      // Check if won all 3 chi against EVERY other player
+      let wonAllAgainstEvery = true;
+      for (const otherIdx of activePlayersIndices) {
+        if (otherIdx === playerIndex) continue;
+        const result = this.compareTwoPlayers(
+          p,
+          playerIndex,
+          playersCopy[otherIdx],
+          otherIdx,
+        );
+        const win3 =
+          result.frontResult > 0 &&
+          result.middleResult > 0 &&
+          result.backResult > 0;
+        if (!win3) {
+          wonAllAgainstEvery = false;
+          break;
+        }
+      }
+
+      if (wonAllAgainstEvery) {
+        totalPoints += SpecialBonus.SCOOP_ALL;
+      }
+    }
+
+    return totalPoints;
+  }
+
   // ===================== POST-GAME ANALYSIS =====================
 
-  private computePostGameAnalysis(
+  computePostGameAnalysis(
     players: MauBinhPlayer[],
     indices: number[],
   ): PostGameAnalysis[] {
@@ -1260,46 +1327,46 @@ export default class MauBinh extends BaseGame<MauBinhState> {
 
       const suggestions = this.generateSuggestions(p.hand);
 
-      // Check if any suggestion could have been an Instant Win that the player missed
-      const missedInstantWin = suggestions.find(
-        (s) =>
-          this.checkInstantWin(p.hand, s.front, s.middle, s.back) !==
-          InstantWin.NONE,
-      );
+      // We want to find the arrangement that gives the most POINTS in the context of this specific game
+      const actualPoints = this.calculateTotalPointsForArrangement(indices[i], {
+        front: p.front,
+        middle: p.middle,
+        back: p.back,
+      });
 
-      // Find the "optimal" = arrangement with highest total evaluation
       let bestSuggestion = suggestions[0];
-      let bestScore = -Infinity;
+      let bestPoints = -Infinity;
 
-      if (missedInstantWin) {
-        bestSuggestion = missedInstantWin;
-        // Give Instant Win a very high score to ensure it's picked as optimal
-        bestScore = 1e12;
-      } else {
-        for (const s of suggestions) {
-          const bv = this.evaluate5CardHand(s.back).value;
-          const mv = this.evaluate5CardHand(s.middle).value;
-          const fv = this.evaluate3CardHand(s.front).value;
-          const score = bv + mv + fv;
-          if (score > bestScore) {
-            bestScore = score;
-            bestSuggestion = s;
-          }
+      for (const s of suggestions) {
+        const points = this.calculateTotalPointsForArrangement(indices[i], s);
+        if (points > bestPoints) {
+          bestPoints = points;
+          bestSuggestion = s;
         }
       }
 
+      // Fallback: if somehow suggestions are empty or bad, use current (though generateSuggestions should not be empty)
+      if (bestPoints === -Infinity) {
+        bestPoints = actualPoints;
+        bestSuggestion = this.makeSuggestion(
+          { front: p.front, middle: p.middle, back: p.back },
+          { en: "Current", vi: "Hiện tại" },
+        );
+      }
+
+      // Original strength-based scores for UI percentage if needed
       const actualFe = this.evaluate3CardHand(p.front);
       const actualMe = this.evaluate5CardHand(p.middle);
       const actualBe = this.evaluate5CardHand(p.back);
-      const actualScore = actualFe.value + actualMe.value + actualBe.value;
+      const actualStrength = actualFe.value + actualMe.value + actualBe.value;
 
-      // Only include if optimal is different from actual
       const optFe = this.evaluate3CardHand(bestSuggestion.front);
       const optMe = this.evaluate5CardHand(bestSuggestion.middle);
       const optBe = this.evaluate5CardHand(bestSuggestion.back);
+      const optStrength = optFe.value + optMe.value + optBe.value;
 
-      // If missed instant win, it's a huge difference (1e12 vs normal score)
-      if (Math.abs(bestScore - actualScore) > 1e4) {
+      // Only include if points are better OR if strength is significantly better (e.g. ties in points but better rank)
+      if (bestPoints > actualPoints || optStrength > actualStrength * 1.05) {
         analysis.push({
           playerIndex: indices[i],
           actual: { front: p.front, middle: p.middle, back: p.back },
@@ -1308,9 +1375,10 @@ export default class MauBinh extends BaseGame<MauBinhState> {
             middle: bestSuggestion.middle,
             back: bestSuggestion.back,
           },
-          // Cap score at optimal for normal UI display
-          actualScore: Math.round(actualScore / 1e4),
-          optimalScore: Math.round(Math.min(bestScore, 1e7) / 1e4), // Don't show 1e12 in UI
+          actualScore: Math.round(actualStrength / 1e4),
+          optimalScore: Math.round(optStrength / 1e4),
+          actualPoints,
+          optimalPoints: bestPoints,
           actualFrontRank: actualFe.rank,
           actualMiddleRank: actualMe.rank,
           actualBackRank: actualBe.rank,
@@ -1357,7 +1425,6 @@ export default class MauBinh extends BaseGame<MauBinhState> {
     this.clearTimer();
     this.state.gamePhase = "waiting";
     this.state.roundResults = [];
-    this.state.postGameAnalysis = [];
     this.state.timerEndsAt = 0;
 
     this.state.players.forEach((p) => {
@@ -1413,13 +1480,19 @@ export default class MauBinh extends BaseGame<MauBinhState> {
     });
   }
 
-  requestArrangeCards(front: Card[], middle: Card[], back: Card[]) {
+  requestArrangeCards(
+    front: Card[],
+    middle: Card[],
+    back: Card[],
+    isAuto: boolean,
+  ) {
     this.makeAction({
       type: "ARRANGE_CARDS",
       playerId: this.userId,
       front,
       middle,
       back,
+      isAuto,
     });
   }
 

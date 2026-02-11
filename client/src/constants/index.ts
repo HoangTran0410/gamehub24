@@ -69,7 +69,7 @@ export const updates: {
     en: "New game: Chinese Poker (Mậu Binh)",
     vi: "Game mới: Mậu Binh (Xập Xám)",
     gameId: "maubinh",
-    timestamp: Date.now(),
+    timestamp: 1770795531552,
   },
   {
     type: "new",

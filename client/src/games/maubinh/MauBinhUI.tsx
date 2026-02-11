@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
+import { motion } from "framer-motion";
 import MauBinh from "./MauBinh";
 import type {
   Card,
@@ -37,6 +38,9 @@ import {
   AlertTriangle,
   Lightbulb,
   Brain,
+  BarChart2,
+  History as HistoryIcon,
+  TrendingUp,
 } from "lucide-react";
 import type { GameUIProps } from "../types";
 import { createPortal } from "react-dom";
@@ -59,7 +63,11 @@ export default function MauBinhUI({ game: baseGame }: GameUIProps) {
   const { confirm: showConfirm } = useAlertStore();
 
   const [showRules, setShowRules] = useState(false);
+  const [selectedAnalysisIndex, setSelectedAnalysisIndex] = useState<
+    number | null
+  >(null);
   const [arrangingRow, setArrangingRow] = useState<RowKey>(RowKey.BACK);
+  const [isAuto, setIsAuto] = useState(false);
 
   // Player slots
   const [tempFront, setTempFront] = useState<Card[]>([]);
@@ -158,16 +166,29 @@ export default function MauBinhUI({ game: baseGame }: GameUIProps) {
         setTempFront([...tempFront, card]);
       }
 
+      setIsAuto(false);
       SoundManager.play("click");
     },
     [state.gamePhase, mySlot, arrangingRow, tempFront, tempMiddle, tempBack],
   );
 
-  const handleSubmit = useCallback(() => {
+  const handleSubmit = async () => {
     if (!isArrangementComplete) return;
-    game.requestArrangeCards(tempFront, tempMiddle, tempBack);
+
+    if (!isArrangementValid) {
+      const confirmed = await showConfirm(
+        ts({
+          en: "Your arrangement is invalid (Fouled). You might lose many points. Submit anyway?",
+          vi: "Bài của bạn đang bị Binh Lủng. Bạn có thể bị trừ rất nhiều điểm. Vẫn muốn nộp?",
+        }),
+        ts({ en: "Submit Anyway?", vi: "Vẫn nộp?" }),
+      );
+      if (!confirmed) return;
+    }
+
+    game.requestArrangeCards(tempFront, tempMiddle, tempBack, isAuto);
     SoundManager.play("click");
-  }, [isArrangementComplete, tempFront, tempMiddle, tempBack, game]);
+  };
 
   // Suggestion system
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -180,6 +201,7 @@ export default function MauBinhUI({ game: baseGame }: GameUIProps) {
     setTempFront(s.front);
     setTempMiddle(s.middle);
     setTempBack(s.back);
+    setIsAuto(true);
     setShowSuggestions(false);
     SoundManager.play("click");
   }, []);
@@ -189,6 +211,7 @@ export default function MauBinhUI({ game: baseGame }: GameUIProps) {
     setTempMiddle([]);
     setTempBack([]);
     setArrangingRow(RowKey.BACK);
+    setIsAuto(false);
   }, []);
 
   const handleDeclareInstantWin = useCallback(() => {
@@ -206,6 +229,14 @@ export default function MauBinhUI({ game: baseGame }: GameUIProps) {
     }
     return arr;
   }, [state.players, myIndex]);
+
+  const postGameAnalysis = useMemo(() => {
+    if (state.gamePhase !== "ended") return [];
+    return game.computePostGameAnalysis(
+      state.players,
+      state.players.map((_, i) => i),
+    );
+  }, [state.players, state.gamePhase, game]);
 
   // Render game rules modal
   const renderGameRules = () => (
@@ -232,7 +263,7 @@ export default function MauBinhUI({ game: baseGame }: GameUIProps) {
         </div>
 
         {/* Content */}
-        <div className="p-6 overflow-y-auto space-y-8 text-slate-300">
+        <div className="md:p-6 p-4 overflow-y-auto space-y-8 text-slate-300">
           {/* Objective */}
           <section>
             <p className="text-base text-slate-100 italic border-l-4 border-yellow-500 pl-4 py-1 bg-yellow-500/10 rounded-r">
@@ -447,6 +478,20 @@ export default function MauBinhUI({ game: baseGame }: GameUIProps) {
               ti={ti}
               onAddBot={() => game.requestAddBot(ap.index)}
               onRemove={() => game.requestRemovePlayer(ap.index)}
+              onShowAnalytics={(() => {
+                const analysis = postGameAnalysis.find(
+                  (a) => a.playerIndex === ap.index,
+                );
+                if (analysis && analysis.optimalScore > analysis.actualScore) {
+                  return () => {
+                    const idx = postGameAnalysis.findIndex(
+                      (a) => a.playerIndex === ap.index,
+                    );
+                    if (idx !== -1) setSelectedAnalysisIndex(idx);
+                  };
+                }
+                return undefined;
+              })()}
               game={game}
             />
           ))}
@@ -504,7 +549,7 @@ export default function MauBinhUI({ game: baseGame }: GameUIProps) {
 
           {/* Results */}
           {state.gamePhase === "ended" && state.roundResults.length > 0 && (
-            <div className="bg-black/60 px-3 py-2 rounded-xl border border-yellow-500/30 w-full max-w-xs">
+            <div className="bg-slate-900/80 px-3 py-2 rounded-xl border border-yellow-500/30 w-full max-w-xs">
               <h3 className="text-yellow-400 font-bold text-md mb-1 flex items-center justify-center gap-1">
                 <Trophy className="w-3 h-3" />
                 {ti({ en: "Results", vi: "Kết quả" })}
@@ -564,6 +609,20 @@ export default function MauBinhUI({ game: baseGame }: GameUIProps) {
               onRemove={() =>
                 game.requestRemovePlayer(arrangedPlayers[0].index)
               }
+              onShowAnalytics={(() => {
+                const analysis = postGameAnalysis.find(
+                  (a) => a.playerIndex === arrangedPlayers[0].index,
+                );
+                if (analysis && analysis.optimalScore > analysis.actualScore) {
+                  return () => {
+                    const idx = postGameAnalysis.findIndex(
+                      (a) => a.playerIndex === arrangedPlayers[0].index,
+                    );
+                    if (idx !== -1) setSelectedAnalysisIndex(idx);
+                  };
+                }
+                return undefined;
+              })()}
               game={game}
             />
           </div>
@@ -603,27 +662,30 @@ export default function MauBinhUI({ game: baseGame }: GameUIProps) {
                 ].map((row) => {
                   return (
                     <div
+                      key={row.key}
                       onClick={() => setArrangingRow(row.key)}
                       className={`p-2 px-0 rounded-lg border-2 cursor-pointer transition-all ${arrangingRow === row.key ? "border-red-500 bg-red-500/10" : "border-slate-700 bg-slate-800/50"}`}
                     >
-                      <div className="text-[10px] font-bold text-center mb-1">
-                        {row.title}
+                      <div className="text-[10px] font-bold text-center mb-2">
+                        <span>{row.title}</span>
+                        <br />
                         {row.eval && (
                           <span
-                            className={`ml-1 px-1.5 py-0.5 rounded-full border mb-0.5 ${getHandStyle(row.eval.rank)}`}
+                            className={`mt-2 px-1.5 py-0.5 rounded-full border ${getHandStyle(row.eval.rank)}`}
                           >
                             {ti(HAND_RANK_NAMES[row.eval.rank])}
                           </span>
                         )}
                       </div>
                       <div className="flex justify-center gap-0.5 min-h-[40px] flex-wrap">
-                        {row.cards.map((c, i) => (
-                          <MiniCard
-                            key={i}
-                            card={c}
-                            onClick={() => handleCardClick(c)}
-                            highlight
-                          />
+                        {row.cards.map((c) => (
+                          <motion.div key={c} layoutId={`card-${c}`} layout>
+                            <MiniCard
+                              card={c}
+                              onClick={() => handleCardClick(c)}
+                              highlight
+                            />
+                          </motion.div>
                         ))}
                         {Array(row.size - row.cards.length)
                           .fill(null)
@@ -641,14 +703,15 @@ export default function MauBinhUI({ game: baseGame }: GameUIProps) {
 
               {/* Remaining cards */}
               <div className="flex flex-wrap justify-center gap-1 px-1">
-                {remainingCards.map((c, i) => (
-                  <CardDisplay
-                    key={i}
-                    card={c}
-                    size="md"
-                    onClick={() => handleCardClick(c)}
-                    className="cursor-pointer hover:scale-110 hover:-translate-y-1 transition-all"
-                  />
+                {remainingCards.map((c) => (
+                  <motion.div key={c} layoutId={`card-${c}`} layout>
+                    <CardDisplay
+                      card={c}
+                      size="md"
+                      onClick={() => handleCardClick(c)}
+                      className="cursor-pointer hover:scale-110 hover:-translate-y-1 transition-all"
+                    />
+                  </motion.div>
                 ))}
               </div>
 
@@ -815,132 +878,57 @@ export default function MauBinhUI({ game: baseGame }: GameUIProps) {
 
         {/* Ended */}
         {state.gamePhase === "ended" && isHost && (
-          <>
-            <div className="w-full flex justify-center items-center gap-4 p-3">
-              <button
-                onClick={() => {
+          <div className="w-full flex justify-center items-center gap-4 p-3">
+            <button
+              onClick={() => {
+                handleClearArrangement();
+                game.requestStartGame();
+              }}
+              className="px-6 py-3 bg-green-600 hover:bg-green-500 rounded-xl font-bold text-lg shadow-lg shadow-green-900/40 flex items-center gap-2 transition-all transform hover:scale-105"
+            >
+              <Play className="w-5 h-5" />
+              {ti({ en: "Next Round", vi: "Ván tiếp" })}
+            </button>
+            <button
+              onClick={async () => {
+                if (
+                  await showConfirm(
+                    ts({
+                      en: "Reset all scores?",
+                      vi: "Reset điểm và chơi lại?",
+                    }),
+                    ts({ en: "Reset", vi: "Reset" }),
+                  )
+                ) {
                   handleClearArrangement();
-                  game.requestStartGame();
-                }}
-                className="px-6 py-3 bg-green-600 hover:bg-green-500 rounded-xl font-bold text-lg shadow-lg shadow-green-900/40 flex items-center gap-2 transition-all transform hover:scale-105"
-              >
-                <Play className="w-5 h-5" />
-                {ti({ en: "Next Round", vi: "Ván tiếp" })}
-              </button>
-              <button
-                onClick={async () => {
-                  if (
-                    await showConfirm(
-                      ts({
-                        en: "Reset all scores?",
-                        vi: "Reset điểm và chơi lại?",
-                      }),
-                      ts({ en: "Reset", vi: "Reset" }),
-                    )
-                  ) {
-                    handleClearArrangement();
-                    game.requestResetGame();
-                  }
-                }}
-                className="px-6 py-3 bg-slate-700 hover:bg-slate-600 rounded-xl font-bold text-lg border border-slate-600 flex items-center gap-2 text-slate-300 hover:text-white transition-all"
-              >
-                <RotateCcw className="w-5 h-5" />
-                {ti({ en: "Reset", vi: "Reset" })}
-              </button>
-            </div>
-
-            {/* Post-game Analysis */}
-            {state.postGameAnalysis && state.postGameAnalysis.length > 0 && (
-              <div className="mx-3 mb-2 bg-slate-800/80 rounded-xl border border-indigo-500/30 p-3">
-                <h4 className="text-indigo-300 font-bold text-xs mb-2 flex items-center gap-1">
-                  <Brain className="w-3 h-3" />
-                  {ti({ en: "Post-game Analysis", vi: "Phân tích ván đấu" })}
-                </h4>
-                {(state.postGameAnalysis as PostGameAnalysis[]).map(
-                  (a, idx) => {
-                    const p = state.players[a.playerIndex];
-                    const strength = Math.round(
-                      (a.actualScore / a.optimalScore) * 100,
-                    );
-                    return (
-                      <div
-                        key={idx}
-                        className="mb-3 last:mb-0 bg-slate-900/60 rounded-xl p-3 border border-slate-700/50"
-                      >
-                        <div className="flex justify-between items-center mb-2">
-                          <div className="text-[11px] text-white font-bold flex items-center gap-1.5">
-                            <div className="w-1.5 h-1.5 rounded-full bg-indigo-500"></div>
-                            {p.username}
-                          </div>
-                          <div className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-bold border border-indigo-500/30">
-                            {ti({ en: "Strength", vi: "Độ mạnh" })}: {strength}%
-                          </div>
-                        </div>
-
-                        {/* Rank comparison table */}
-                        <div className="space-y-1.5">
-                          {[
-                            {
-                              label: ts({ en: "Back", vi: "Đầu" }),
-                              actual: a.actualBackRank,
-                              optimal: a.optimalBackRank,
-                              color: "text-red-400",
-                            },
-                            {
-                              label: ts({ en: "Middle", vi: "Giữa" }),
-                              actual: a.actualMiddleRank,
-                              optimal: a.optimalMiddleRank,
-                              color: "text-blue-400",
-                            },
-                            {
-                              label: ts({ en: "Front", vi: "Cuối" }),
-                              actual: a.actualFrontRank,
-                              optimal: a.optimalFrontRank,
-                              color: "text-green-400",
-                            },
-                          ].map((row, rIdx) => (
-                            <div
-                              key={rIdx}
-                              className="grid grid-cols-7 items-center gap-1 text-[9px]"
-                            >
-                              <div
-                                className={`col-span-1 font-bold ${row.color}`}
-                              >
-                                {row.label}
-                              </div>
-                              <div className="col-span-3 bg-slate-800/80 rounded px-1.5 py-1 flex items-center justify-between border border-slate-700/30">
-                                <span className="text-slate-400 truncate">
-                                  {ti({ en: "You", vi: "Bạn" })}:
-                                </span>
-                                <span className="text-white font-medium">
-                                  {ti(HAND_RANK_NAMES[row.actual])}
-                                </span>
-                              </div>
-                              <div className="col-span-3 bg-indigo-900/30 rounded px-1.5 py-1 flex items-center justify-between border border-indigo-500/20">
-                                <span className="text-indigo-400/70 truncate">
-                                  {ti({ en: "Best", vi: "Tối ưu" })}:
-                                </span>
-                                <span className="text-indigo-200 font-bold">
-                                  {ti(HAND_RANK_NAMES[row.optimal])}
-                                  {row.optimal > row.actual && (
-                                    <span className="ml-1 text-green-400">
-                                      ↑
-                                    </span>
-                                  )}
-                                </span>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  },
-                )}
-              </div>
-            )}
-          </>
+                  game.requestResetGame();
+                }
+              }}
+              className="px-6 py-3 bg-slate-700 hover:bg-slate-600 rounded-xl font-bold text-lg border border-slate-600 flex items-center gap-2 text-slate-300 hover:text-white transition-all"
+            >
+              <RotateCcw className="w-5 h-5" />
+              {ti({ en: "Reset", vi: "Reset" })}
+            </button>
+          </div>
         )}
       </div>
+
+      {/* Analytics Modal */}
+      {selectedAnalysisIndex !== null &&
+        postGameAnalysis &&
+        postGameAnalysis[selectedAnalysisIndex] &&
+        createPortal(
+          <AnalyticsModal
+            analysis={postGameAnalysis[selectedAnalysisIndex]}
+            player={
+              state.players[postGameAnalysis[selectedAnalysisIndex].playerIndex]
+            }
+            ti={ti}
+            ts={ts}
+            onClose={() => setSelectedAnalysisIndex(null)}
+          />,
+          document.body,
+        )}
 
       {/* Rules Button */}
       <button
@@ -976,7 +964,7 @@ function Timer({
   // Timer sound and visual effect
   useEffect(() => {
     if (timeLeft <= 10 && timeLeft > 0 && !isReady) {
-      SoundManager.play(SOUND_PRESETS.tick2);
+      SoundManager.play(SOUND_PRESETS.tick);
     }
   }, [timeLeft, isReady]);
 
@@ -1012,6 +1000,7 @@ function PlayerSlot({
   ti,
   onAddBot,
   onRemove,
+  onShowAnalytics,
   game,
 }: {
   player: MauBinhPlayer;
@@ -1021,6 +1010,7 @@ function PlayerSlot({
   ti: (s: { en: string; vi: string }) => React.ReactNode;
   onAddBot: () => void;
   onRemove: () => void;
+  onShowAnalytics?: () => void;
   game: MauBinh;
 }) {
   const isEmpty = player.id === null;
@@ -1098,13 +1088,27 @@ function PlayerSlot({
         </div>
       )}
 
+      {/* Manual Bonus Badge */}
+      {showCards &&
+        !player.usedAuto &&
+        !player.isBot &&
+        !player.isFouled &&
+        player.score > 0 && (
+          <div className="mb-1 bg-emerald-900/50 border border-emerald-500/40 text-emerald-300 px-1.5 py-0.5 rounded-full text-xs font-bold flex items-center gap-0.5">
+            🧠 {ti({ en: "Manual +1", vi: "Thủ công +1" })}
+          </div>
+        )}
+
       {/* Cards — show when comparing/ended */}
       {showCards && player.back.length > 0 && (
         <div className="flex flex-col gap-0.5 items-center mt-1">
           {[player.back, player.middle, player.front].map((hand) => {
             const rank = game.evaluate5CardHand(hand).rank;
             return (
-              <div className="flex flex-col items-center gap-0.5">
+              <div
+                key={hand + ""}
+                className="flex flex-col items-center gap-0.5"
+              >
                 <div
                   className={`flex items-center gap-2 px-2 py-0.5 rounded-full border ${getHandStyle(rank)}`}
                 >
@@ -1124,17 +1128,6 @@ function PlayerSlot({
         </div>
       )}
 
-      {/* Manual Bonus Badge */}
-      {showCards &&
-        !player.usedAuto &&
-        !player.isBot &&
-        !player.isFouled &&
-        player.score > 0 && (
-          <div className="mt-1 bg-emerald-900/50 border border-emerald-500/40 text-emerald-300 px-1.5 py-0.5 rounded-full text-xs font-bold flex items-center gap-0.5">
-            🧠 {ti({ en: "Manual +1", vi: "Thủ công +1" })}
-          </div>
-        )}
-
       {/* Cards — card backs during arranging */}
       {gamePhase === "arranging" && !isSelf && player.hand.length > 0 && (
         <div className="flex flex-wrap justify-center -space-x-1 max-w-[60px] mt-1">
@@ -1148,6 +1141,23 @@ function PlayerSlot({
             ))}
         </div>
       )}
+
+      {/* Analytics Button at the very bottom */}
+      {gamePhase === "ended" &&
+        (onShowAnalytics ? (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onShowAnalytics();
+            }}
+            className="mt-3 w-full px-3 py-1.5 bg-linear-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1.5 transition-all shadow-lg shadow-indigo-900/40 ring-1 ring-indigo-400/50 hover:ring-indigo-300 animate-pulse-slow group"
+          >
+            <Sparkles className="w-3 h-3 text-yellow-300 group-hover:scale-125 transition-transform" />
+            <span className="text-white drop-shadow-sm">
+              {ti({ en: "Better way?", vi: "Cách xếp tốt hơn?" })}
+            </span>
+          </button>
+        ) : null)}
 
       {/* Host controls */}
       {isHost && gamePhase === "waiting" && player.isBot && (
@@ -1186,7 +1196,7 @@ function CardDisplay({
   return (
     <div
       onClick={onClick}
-      className={`${sizeClasses[size]} bg-white rounded-md shadow-lg border border-slate-300 flex flex-col items-center justify-between p-0.5 select-none ${className}`}
+      className={`${sizeClasses[size]} bg-white rounded-md shadow-lg border border-slate-300 flex flex-col items-center justify-between p-0.5 select-none animate-[cardPlay_0.3s_ease-out_forwards] ${className}`}
     >
       <div
         className={`self-start font-bold leading-none ${isRed ? "text-red-600" : "text-slate-900"}`}
@@ -1216,7 +1226,7 @@ function MiniCard({
   return (
     <div
       onClick={onClick}
-      className={`w-8 h-11 bg-white rounded-sm shadow border flex flex-col items-center justify-center select-none text-xs font-bold leading-tight ${
+      className={`w-8 h-11 bg-white rounded-sm shadow border flex flex-col items-center justify-center select-none text-xs font-bold leading-tight animate-[cardPlay_0.3s_ease-out_forwards] ${
         highlight
           ? "ring-1 ring-yellow-400 cursor-pointer hover:scale-110 transition-transform"
           : ""
@@ -1237,7 +1247,7 @@ function TinyCard({ card }: { card: Card }) {
   const isRed = suit === Suit.HEART || suit === Suit.DIAMOND;
 
   return (
-    <div className="w-6 h-10 bg-white rounded-sm border border-slate-300 flex flex-col items-center justify-center select-none leading-none">
+    <div className="w-6 h-10 bg-white rounded-sm border border-slate-300 flex flex-col items-center justify-center select-none leading-none animate-[cardPlay_0.3s_ease-out_forwards]">
       <span
         className={`text-xs font-bold ${isRed ? "text-red-600" : "text-slate-900"}`}
       >
@@ -1291,3 +1301,183 @@ const getHandIconColor = (rank?: HandRank) => {
       return "text-slate-400";
   }
 };
+
+// ===================== ANALYTICS COMPONENTS =====================
+
+function PlayerAnalysisContent({
+  analysis,
+  player,
+  ti,
+  ts,
+}: {
+  analysis: PostGameAnalysis;
+  player: MauBinhPlayer;
+  ti: (s: { en: string; vi: string }) => React.ReactNode;
+  ts: (s: { en: string; vi: string }) => string;
+}) {
+  const strength = Math.round(
+    (analysis.actualScore / analysis.optimalScore) * 100,
+  );
+
+  return (
+    <div className="bg-slate-900/60 rounded-xl p-3 w-full @md:max-w-sm">
+      <div className="flex justify-between items-center mb-2">
+        <div className="text-md text-white font-bold flex items-center gap-1.5">
+          {player.username}
+        </div>
+        <div className="flex items-center gap-1 flex-wrap justify-end">
+          <div className="text-xs px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-300 font-bold border border-orange-500/30">
+            {ti({ en: "Better than", vi: "Tốt hơn" })} {100 - strength}%
+          </div>
+          {analysis.optimalPoints > analysis.actualPoints && (
+            <div className="text-xs px-2 py-0.5 rounded-full bg-green-500/20 text-green-400 font-bold border border-green-500/30 flex items-center gap-1">
+              <TrendingUp className="w-3 h-3" />+
+              {analysis.optimalPoints - analysis.actualPoints}
+              <span className="text-[8px] opacity-70 ml-0.5">pts</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Arrangements Comparison */}
+      <div className="mt-4">
+        <div className="grid grid-cols-2 gap-2 mb-2">
+          <div className="flex flex-col gap-1">
+            <div className="text-xs font-bold text-slate-400 uppercase flex items-center gap-1">
+              <HistoryIcon className="w-3 h-3" />
+              {ti({ en: "Current", vi: "Hiện tại" })}
+            </div>
+            <div
+              className={`text-xs font-mono font-bold ${analysis.actualPoints >= 0 ? "text-green-400" : "text-red-400"}`}
+            >
+              {analysis.actualPoints > 0 ? "+" : ""}
+              {analysis.actualPoints} pts
+            </div>
+          </div>
+          <div className="flex flex-col items-end">
+            <div className="text-xs font-bold text-indigo-400 uppercase flex items-center gap-1">
+              <Sparkles className="w-3 h-3" />
+              {ti({ en: "Optimal", vi: "Tối ưu" })}
+            </div>
+            <div className="text-xs font-mono font-bold text-indigo-300">
+              {analysis.optimalPoints > 0 ? "+" : ""}
+              {analysis.optimalPoints} pts
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-1">
+          {[
+            {
+              label: ts({ en: "Back", vi: "Đầu" }),
+              actual: analysis.actual.back,
+              actualRank: analysis.actualBackRank,
+              optimal: analysis.optimal.back,
+              optimalRank: analysis.optimalBackRank,
+            },
+            {
+              label: ts({ en: "Middle", vi: "Giữa" }),
+              actual: analysis.actual.middle,
+              actualRank: analysis.actualMiddleRank,
+              optimal: analysis.optimal.middle,
+              optimalRank: analysis.optimalMiddleRank,
+            },
+            {
+              label: ts({ en: "Front", vi: "Cuối" }),
+              actual: analysis.actual.front,
+              actualRank: analysis.actualFrontRank,
+              optimal: analysis.optimal.front,
+              optimalRank: analysis.optimalFrontRank,
+            },
+          ].map((row, idx) => (
+            <div key={idx} className="grid grid-cols-2 gap-2">
+              {/* Actual */}
+              <div className="bg-slate-800/40 p-1 rounded-lg border border-slate-700/30 relative">
+                <span className="absolute -top-1 -left-1 px-1 bg-slate-700 text-[8px] rounded font-bold text-slate-400 z-10 border border-slate-600/50">
+                  {row.label}
+                </span>
+                <div className="flex flex-col items-center gap-1">
+                  <div
+                    className={`px-1.5 py-0.5 rounded-full border text-[10px] font-bold leading-none ${getHandStyle(row.actualRank)}`}
+                  >
+                    {ti(HAND_RANK_NAMES[row.actualRank])}
+                  </div>
+                  <div className="flex -space-x-1.5">
+                    {row.actual.map((c, i) => (
+                      <TinyCard key={i} card={c} />
+                    ))}
+                  </div>
+                </div>
+              </div>
+              {/* Optimal */}
+              <div className="bg-indigo-900/20 p-1 rounded-lg border border-indigo-500/20 relative">
+                <span className="absolute -top-1 -right-1 px-1 bg-indigo-800 text-[8px] rounded font-bold text-indigo-300 z-10 border border-indigo-500/30">
+                  {row.label}
+                </span>
+                <div className="flex flex-col items-center gap-1">
+                  <div
+                    className={`px-1.5 py-0.5 rounded-full border text-[10px] font-bold leading-none ${getHandStyle(row.optimalRank)}`}
+                  >
+                    {ti(HAND_RANK_NAMES[row.optimalRank])}
+                    {row.optimalRank > row.actualRank && (
+                      <span className="ml-0.5 text-green-400">↑</span>
+                    )}
+                  </div>
+                  <div className="flex -space-x-1.5">
+                    {row.optimal.map((c, i) => (
+                      <TinyCard key={i} card={c} />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AnalyticsModal({
+  analysis,
+  player,
+  ti,
+  ts,
+  onClose,
+}: {
+  analysis: PostGameAnalysis;
+  player: MauBinhPlayer;
+  ti: (s: { en: string; vi: string }) => React.ReactNode;
+  ts: (s: { en: string; vi: string }) => string;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="relative bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/50">
+          <h3 className="text-xl font-bold flex items-center gap-2 text-indigo-400">
+            <BarChart2 className="w-6 h-6" />
+            {ti({ en: "Cards Analytics", vi: "Phân tích xếp bài" })}
+          </h3>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-slate-800 rounded-full transition-colors text-slate-400 hover:text-white"
+          >
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="p-2 overflow-y-auto custom-scrollbar">
+          <PlayerAnalysisContent
+            analysis={analysis}
+            player={player}
+            ti={ti}
+            ts={ts}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -163,8 +163,10 @@ export interface PostGameAnalysis {
   playerIndex: number;
   actual: { front: Card[]; middle: Card[]; back: Card[] };
   optimal: { front: Card[]; middle: Card[]; back: Card[] };
-  actualScore: number;
-  optimalScore: number;
+  actualScore: number; // Raw hand strength sum
+  optimalScore: number; // Raw hand strength sum
+  actualPoints: number; // Actual game points
+  optimalPoints: number; // Actual game points
   actualFrontRank: HandRank;
   actualMiddleRank: HandRank;
   actualBackRank: HandRank;
@@ -216,7 +218,6 @@ export interface MauBinhState {
   timerEndsAt: number; // Timestamp when arranging phase ends
   roundResults: RoundResult[];
   roundNumber: number;
-  postGameAnalysis: PostGameAnalysis[];
 }
 
 // Actions
@@ -229,6 +230,7 @@ export interface ArrangeCardsAction {
   front: Card[];
   middle: Card[];
   back: Card[];
+  isAuto: boolean;
 }
 export interface AutoArrangeAction {
   type: "AUTO_ARRANGE";
