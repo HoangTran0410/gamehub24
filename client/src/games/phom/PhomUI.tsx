@@ -74,6 +74,7 @@ export default function PhomUI({ game: baseGame }: GameUIProps) {
   // Track previous state values for animation detection
   const prevDrawPileCount = usePrevious(state.drawPile.length);
   const prevHandCounts = usePrevious(state.players.map((p) => p.hand.length));
+  const prevHands = usePrevious(state.players.map((p) => [...p.hand]));
   const prevLastDiscard = usePrevious(state.lastDiscardedCard);
   const prevTurnIndex = usePrevious(state.currentTurnIndex);
 
@@ -114,9 +115,9 @@ export default function PhomUI({ game: baseGame }: GameUIProps) {
       if (gainerIndex !== -1) {
         const drawnCard =
           gainerIndex === myIndex
-            ? state.players[gainerIndex].hand[
-                state.players[gainerIndex].hand.length - 1
-              ]
+            ? state.players[gainerIndex].hand.find(
+                (c) => !prevHands?.[gainerIndex]?.includes(c),
+              )
             : undefined;
         setFlyingCard({
           fromPlayerIndex: -1, // -1 means draw pile
@@ -149,6 +150,7 @@ export default function PhomUI({ game: baseGame }: GameUIProps) {
     myIndex,
     prevDrawPileCount,
     prevHandCounts,
+    prevHands,
     prevLastDiscard,
     prevTurnIndex,
   ]);
@@ -720,8 +722,8 @@ export default function PhomUI({ game: baseGame }: GameUIProps) {
             const phomsInHand = game.getPhomsPublic(mySlot.hand);
             const phomCardSet = new Set(phomsInHand.flatMap((p) => p.cards));
             const trashCards = mySlot.hand.filter((c) => !phomCardSet.has(c));
-            const suggestions = game.getDiscardSuggestionsPublic(mySlot.hand);
-            const bestDiscard = suggestions[0];
+            // const suggestions = game.getDiscardSuggestionsPublic(mySlot.hand);
+            // const bestDiscard = suggestions[0];
 
             const phomColors = [
               {
@@ -823,9 +825,10 @@ export default function PhomUI({ game: baseGame }: GameUIProps) {
                               !isMyTurn || state.turnPhase === "drawing"
                             }
                             isSuggested={
-                              state.turnPhase === "discarding" &&
-                              isMyTurn &&
-                              card === bestDiscard
+                              // state.turnPhase === "discarding" &&
+                              // isMyTurn &&
+                              // card === bestDiscard
+                              false
                             }
                             isHighlighted={highlightedCard === card}
                           />
@@ -857,13 +860,14 @@ export default function PhomUI({ game: baseGame }: GameUIProps) {
           <button
             onClick={async () => {
               if (
-                await showConfirm(
+                game.state.gamePhase === "ended" ||
+                (await showConfirm(
                   ts({
                     en: "Current game progress will be lost",
                     vi: "Tiến trình hiện tại sẽ mất",
                   }),
                   ts({ en: "New Game?", vi: "Ván mới?" }),
-                )
+                ))
               )
                 game.requestNewGame();
             }}
