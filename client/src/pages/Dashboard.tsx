@@ -16,9 +16,10 @@ import {
   AlertTriangle,
   Activity,
   Users,
-  MessageSquare,
-  Layout,
   Search,
+  Layout,
+  ExternalLink,
+  MessageSquare,
 } from "lucide-react";
 import { getServerUrl } from "../services/socket";
 import { formatTimeAgo } from "../utils";
@@ -111,7 +112,7 @@ export default function Dashboard() {
   } | null>(null);
 
   const [activeTab, setActiveTab] = useState<
-    "overview" | "rooms" | "messenger" | "analytics" | "moderation" | "security"
+    "overview" | "rooms" | "messenger" | "moderation" | "security"
   >("overview");
 
   const [reportedMessages, setReportedMessages] = useState<ChatMessage[]>([]);
@@ -127,6 +128,9 @@ export default function Dashboard() {
   const [chatSortMode, setChatSortMode] = useState<"recent" | "count">(
     "recent",
   );
+  const [moderationSubTab, setModerationSubTab] = useState<
+    "reported" | "deleted"
+  >("reported");
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -438,7 +442,7 @@ export default function Dashboard() {
     : [];
 
   return (
-    <div className="min-h-screen bg-background-primary text-text-primary p-6 lg:p-10 font-body overflow-x-hidden">
+    <div className="min-h-screen bg-background-primary text-text-primary p-4 lg:p-10 font-body overflow-x-hidden">
       {/* Header */}
       <div className="max-w-7xl mx-auto mb-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
@@ -447,11 +451,11 @@ export default function Dashboard() {
           </h1>
           <p className="text-text-muted flex items-center gap-2 text-sm">
             <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-            Live monitoring and moderation system
+            Live monitoring and moderation system for Gamehub24
           </p>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 flex-wrap justify-end">
           {/* to lobby button */}
           <button
             onClick={() => {
@@ -480,7 +484,7 @@ export default function Dashboard() {
       </div>
 
       {/* Navigation Tabs */}
-      <div className="max-w-7xl mx-auto mb-8 border-b border-white/10 flex gap-8">
+      <div className="max-w-7xl mx-auto mb-8 pt-3 border-b border-white/10 flex gap-4 md:gap-8 overflow-x-auto flex-nowrap custom-scrollbar pb-1">
         {[
           {
             id: "overview",
@@ -497,11 +501,7 @@ export default function Dashboard() {
             label: "Chat Explorer",
             icon: <MessageSquare className="w-4 h-4" />,
           },
-          {
-            id: "analytics",
-            label: "Analytics",
-            icon: <BarChart2 className="w-4 h-4" />,
-          },
+
           {
             id: "moderation",
             label: "Moderation",
@@ -509,7 +509,7 @@ export default function Dashboard() {
               <div className="relative">
                 <Shield className="w-4 h-4" />
                 {reportedMessages.some(
-                  (m) => m.reports && m.reports.length > 0,
+                  (m) => m.reports && m.reports.length > 0 && !m.isDeleted,
                 ) && (
                   <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full" />
                 )}
@@ -525,7 +525,7 @@ export default function Dashboard() {
           <button
             key={t.id}
             onClick={() => setActiveTab(t.id as any)}
-            className={`pb-4 px-2 text-sm font-bold flex items-center gap-2 transition-all relative ${
+            className={`pb-4 px-2 text-sm font-bold flex items-center gap-2 transition-all relative whitespace-nowrap shrink-0 ${
               activeTab === t.id
                 ? "text-primary border-b-2 border-primary"
                 : "text-text-muted hover:text-text-secondary"
@@ -592,19 +592,66 @@ export default function Dashboard() {
                 />
               </div>
 
-              {/* System log commented out as requested by user previously */}
-              {/* <div className="bg-background-secondary/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6 shadow-xl">
-                <h2 className="text-lg font-bold mb-6 flex items-center gap-3">
-                  <Activity className="w-5 h-5 text-primary" />
-                  Live System Log
-                </h2>
-                <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
-                  <p className="text-xs text-text-muted italic">
-                    System running normally. No issues detected in the last sync
-                    window.
-                  </p>
+              {data?.stats.daily && <DailyGraph data={data.stats.daily} />}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="bg-background-secondary/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6 shadow-xl">
+                  <h2 className="text-lg font-bold mb-4 flex items-center gap-3">
+                    <BarChart2 className="w-5 h-5 text-amber-400" />
+                    Lifetime Game Statistics
+                  </h2>
+                  <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                    {sortedGameStats.map(([game, count]) => (
+                      <div
+                        key={game}
+                        className="flex items-center justify-between group p-2 rounded-lg hover:bg-white/5 transition-all"
+                      >
+                        <span className="text-sm font-medium text-slate-300 group-hover:text-white transition-colors capitalize">
+                          {game}
+                        </span>
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm font-bold font-mono text-primary">
+                            {count}
+                          </span>
+                          <span className="text-[10px] text-text-muted">
+                            plays
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div> */}
+
+                <div className="bg-background-secondary/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6 shadow-xl">
+                  <h2 className="text-lg font-bold mb-6 flex items-center gap-3">
+                    <Database className="w-5 h-5 text-slate-400" />
+                    Machine Resources
+                  </h2>
+                  <div className="space-y-6">
+                    <ResourceBar
+                      label="RSS Memory"
+                      value={formatBytes(data?.server.memory.rss || 0)}
+                      percent={Math.min(
+                        100,
+                        ((data?.server.memory.rss || 0) /
+                          (2 * 1024 * 1024 * 1024)) *
+                          100,
+                      )}
+                      color="blue"
+                    />
+                    <ResourceBar
+                      label="Heap Used"
+                      value={formatBytes(data?.server.memory.heapUsed || 0)}
+                      percent={
+                        ((data?.server.memory.heapUsed || 0) /
+                          (data?.server.memory.heapTotal || 1)) *
+                        100
+                      }
+                      color="emerald"
+                    />
+                  </div>
+                </div>
+              </div>
             </motion.div>
           )}
 
@@ -723,23 +770,6 @@ export default function Dashboard() {
               exit={{ opacity: 0, y: -20 }}
               className="space-y-8"
             >
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                <AnalyticsCard
-                  title="Top Chatters"
-                  icon={<TrendingUp className="w-4 h-4 text-emerald-400" />}
-                  data={sortedUsers}
-                  total={data?.chats.totalMessages || 1}
-                  color="emerald"
-                />
-                <AnalyticsCard
-                  title="Hot Rooms"
-                  icon={<TrendingUp className="w-4 h-4 text-blue-400" />}
-                  data={topChatRooms}
-                  total={data?.chats.totalMessages || 1}
-                  color="blue"
-                />
-              </div>
-
               <div className="bg-background-secondary/50 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden shadow-2xl flex flex-col md:flex-row h-[600px]">
                 {/* Rooms Sidebar */}
                 <div className="w-full md:w-64 border-r border-white/10 flex flex-col bg-white/2">
@@ -891,9 +921,9 @@ export default function Dashboard() {
                                 return (
                                   <div
                                     key={msg.id || i}
-                                    className={`flex flex-col ${
+                                    className={`flex flex-col relative group/msg ${
                                       isSystem ? "items-center" : "items-start"
-                                    }`}
+                                    } ${msg.isDeleted ? "opacity-50" : ""}`}
                                   >
                                     {!isSystem && (
                                       <div className="flex items-center gap-2 mb-1 px-1">
@@ -905,6 +935,17 @@ export default function Dashboard() {
                                             {msg.gameType}
                                           </span>
                                         )}
+                                        {msg.isDeleted && (
+                                          <span className="text-[8px] px-1 bg-red-500/20 border border-red-500/30 rounded text-red-400 font-bold uppercase">
+                                            Deleted
+                                          </span>
+                                        )}
+                                        {msg.reports &&
+                                          msg.reports.length > 0 && (
+                                            <span className="text-[8px] px-1 bg-amber-500/20 border border-amber-500/30 rounded text-amber-400 font-bold uppercase">
+                                              Reported ({msg.reports.length})
+                                            </span>
+                                          )}
                                         <span className="text-[9px] text-text-muted font-mono opacity-40">
                                           {new Date(
                                             msg.timestamp,
@@ -915,14 +956,81 @@ export default function Dashboard() {
                                         </span>
                                       </div>
                                     )}
-                                    <div
-                                      className={`max-w-[80%] p-3 rounded-2xl text-sm ${
-                                        isSystem
-                                          ? "bg-white/5 border border-white/5 text-amber-400 italic text-xs py-1.5"
-                                          : "bg-white/5 border border-white/10 text-slate-200"
-                                      }`}
-                                    >
-                                      {msg.message}
+                                    <div className="flex items-center gap-3 w-full group">
+                                      <div
+                                        className={`max-w-[80%] p-3 rounded-2xl text-sm ${
+                                          isSystem
+                                            ? "bg-white/5 border border-white/5 text-amber-400 italic text-xs py-1.5"
+                                            : (msg.reports?.length || 0) > 0
+                                              ? "bg-red-500/5 border border-red-500/20 text-slate-200 shadow-[0_0_15px_-5px_rgba(239,68,68,0.2)]"
+                                              : "bg-white/5 border border-white/10 text-slate-200"
+                                        }`}
+                                      >
+                                        {msg.message}
+                                      </div>
+                                      <div className="flex items-center gap-2 group-hover:opacity-100 opacity-0 transition-opacity">
+                                        {!isSystem && (
+                                          <>
+                                            {/* Clear Reports Button */}
+                                            {msg.reports &&
+                                              msg.reports.length > 0 && (
+                                                <button
+                                                  onClick={() =>
+                                                    handleModerationAction(
+                                                      msg.id,
+                                                      "clear",
+                                                    ).then(() =>
+                                                      fetchRoomMessages(
+                                                        selectedMessengerRoom,
+                                                      ),
+                                                    )
+                                                  }
+                                                  className="p-1.5 hover:bg-emerald-500/20 text-emerald-400/50 hover:text-emerald-400 rounded-lg transition-all border border-transparent hover:border-emerald-500/20"
+                                                  title="Clear Reports"
+                                                >
+                                                  <CheckCircle className="w-3.5 h-3.5" />
+                                                </button>
+                                              )}
+
+                                            {/* Delete/Restore Toggle */}
+                                            {!msg.isDeleted ? (
+                                              <button
+                                                onClick={() =>
+                                                  handleModerationAction(
+                                                    msg.id,
+                                                    "delete",
+                                                  ).then(() =>
+                                                    fetchRoomMessages(
+                                                      selectedMessengerRoom,
+                                                    ),
+                                                  )
+                                                }
+                                                className="p-1.5 hover:bg-red-500/20 text-red-400/50 hover:text-red-400 rounded-lg transition-all border border-transparent hover:border-red-500/20"
+                                                title="Quick Delete"
+                                              >
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                              </button>
+                                            ) : (
+                                              <button
+                                                onClick={() =>
+                                                  handleModerationAction(
+                                                    msg.id,
+                                                    "restore",
+                                                  ).then(() =>
+                                                    fetchRoomMessages(
+                                                      selectedMessengerRoom,
+                                                    ),
+                                                  )
+                                                }
+                                                className="p-1.5 hover:bg-blue-500/20 text-blue-400/50 hover:text-blue-400 rounded-lg transition-all border border-transparent hover:border-blue-500/20"
+                                                title="Restore Message"
+                                              >
+                                                <RotateCcw className="w-3.5 h-3.5" />
+                                              </button>
+                                            )}
+                                          </>
+                                        )}
+                                      </div>
                                     </div>
                                   </div>
                                 );
@@ -941,45 +1049,22 @@ export default function Dashboard() {
                   )}
                 </div>
               </div>
-            </motion.div>
-          )}
 
-          {activeTab === "analytics" && (
-            <motion.div
-              key="analytics"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="space-y-8"
-            >
-              {data?.stats.daily && <DailyGraph data={data.stats.daily} />}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="bg-background-secondary/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6 shadow-xl">
-                  <h2 className="text-lg font-bold mb-4 flex items-center gap-3">
-                    <BarChart2 className="w-5 h-5 text-amber-400" />
-                    Lifetime Game Statistics
-                  </h2>
-                  <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
-                    {sortedGameStats.map(([game, count]) => (
-                      <div
-                        key={game}
-                        className="flex items-center justify-between group p-2 rounded-lg hover:bg-white/5 transition-all"
-                      >
-                        <span className="text-sm font-medium text-slate-300 group-hover:text-white transition-colors capitalize">
-                          {game}
-                        </span>
-                        <div className="flex items-center gap-3">
-                          <span className="text-sm font-bold font-mono text-primary">
-                            {count}
-                          </span>
-                          <span className="text-[10px] text-text-muted">
-                            plays
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                <AnalyticsCard
+                  title="Top Chatters"
+                  icon={<TrendingUp className="w-4 h-4 text-emerald-400" />}
+                  data={sortedUsers}
+                  total={data?.chats.totalMessages || 1}
+                  color="emerald"
+                />
+                <AnalyticsCard
+                  title="Hot Rooms"
+                  icon={<TrendingUp className="w-4 h-4 text-blue-400" />}
+                  data={topChatRooms}
+                  total={data?.chats.totalMessages || 1}
+                  color="blue"
+                />
               </div>
             </motion.div>
           )}
@@ -994,13 +1079,34 @@ export default function Dashboard() {
             >
               <div className="bg-background-secondary/50 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden shadow-2xl">
                 <div className="p-6 border-b border-white/10 flex items-center justify-between bg-white/2">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-red-500/20 rounded-lg text-red-400">
-                      <Shield className="w-5 h-5" />
+                  <div className="flex items-center gap-8">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-red-500/20 rounded-lg text-red-400">
+                        <Shield className="w-5 h-5" />
+                      </div>
+                      <h2 className="text-xl font-bold text-white">
+                        Moderation center
+                      </h2>
                     </div>
-                    <h2 className="text-xl font-bold text-white">
-                      Reported Messages
-                    </h2>
+
+                    <div className="flex bg-white/5 rounded-xl p-1">
+                      {[
+                        { id: "reported", label: "Reported" },
+                        { id: "deleted", label: "Deleted msg" },
+                      ].map((sub) => (
+                        <button
+                          key={sub.id}
+                          onClick={() => setModerationSubTab(sub.id as any)}
+                          className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                            moderationSubTab === sub.id
+                              ? "bg-primary text-white shadow-lg"
+                              : "text-text-muted hover:text-white"
+                          }`}
+                        >
+                          {sub.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                   <button
                     onClick={fetchModerationReports}
@@ -1028,6 +1134,11 @@ export default function Dashboard() {
                     </thead>
                     <tbody className="divide-y divide-white/5">
                       {reportedMessages
+                        .filter((m) =>
+                          moderationSubTab === "reported"
+                            ? (m.reports?.length || 0) > 0 && !m.isDeleted
+                            : m.isDeleted,
+                        )
                         .sort(
                           (a, b) =>
                             (b.reports?.length || 0) - (a.reports?.length || 0),
@@ -1076,6 +1187,17 @@ export default function Dashboard() {
                             </td>
                             <td className="px-6 py-4 text-right">
                               <div className="flex justify-end gap-2">
+                                <button
+                                  onClick={() => {
+                                    setActiveTab("messenger");
+                                    setSelectedMessengerRoom(msg.roomId);
+                                    fetchRoomMessages(msg.roomId);
+                                  }}
+                                  className="p-2 hover:bg-primary/20 text-primary rounded-lg transition-colors border border-primary/20"
+                                  title="Navigate to Chat"
+                                >
+                                  <ExternalLink className="w-4 h-4" />
+                                </button>
                                 {!msg.isDeleted ? (
                                   <>
                                     <button
@@ -1201,38 +1323,6 @@ export default function Dashboard() {
             </motion.div>
           )}
         </AnimatePresence>
-
-        {/* machine resources always visible at bottom or moved to separate section */}
-        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-6 mt-12 mb-10">
-          <div className="bg-background-secondary/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6 shadow-xl">
-            <h2 className="text-lg font-bold mb-6 flex items-center gap-3">
-              <Database className="w-5 h-5 text-slate-400" />
-              Machine Resources
-            </h2>
-            <div className="space-y-6">
-              <ResourceBar
-                label="RSS Memory"
-                value={formatBytes(data?.server.memory.rss || 0)}
-                percent={Math.min(
-                  100,
-                  ((data?.server.memory.rss || 0) / (2 * 1024 * 1024 * 1024)) *
-                    100,
-                )}
-                color="blue"
-              />
-              <ResourceBar
-                label="Heap Used"
-                value={formatBytes(data?.server.memory.heapUsed || 0)}
-                percent={
-                  ((data?.server.memory.heapUsed || 0) /
-                    (data?.server.memory.heapTotal || 1)) *
-                  100
-                }
-                color="emerald"
-              />
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   );

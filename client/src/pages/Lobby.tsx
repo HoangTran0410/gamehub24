@@ -248,7 +248,7 @@ export default function Lobby() {
 
           {/* Games Gallery */}
           <section>
-            {recentGameIds.length > 0 && !searchQuery && !selectedCategory && (
+            {recentGameIds.length > 0 && (
               <div className="animate-fadeIn mb-16">
                 <div className="flex items-center gap-2 mb-4">
                   <RotateCcw className="w-5 h-5 text-primary" />

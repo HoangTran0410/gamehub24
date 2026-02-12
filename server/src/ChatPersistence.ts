@@ -87,7 +87,11 @@ export class ChatPersistence {
     }
   }
 
-  getRecentMessages(roomId: string, limit: number = 20): ChatMessage[] {
+  getRecentMessages(
+    roomId: string,
+    limit: number = 20,
+    includeDeleted: boolean = false,
+  ): ChatMessage[] {
     try {
       const allMessages: ChatMessage[] = [];
 
@@ -124,7 +128,7 @@ export class ChatPersistence {
               ...msg,
               ...moderationStore.getModeration(msg.id),
             }))
-            .filter((msg) => !msg.isDeleted); // Filter out deleted messages
+            .filter((msg) => includeDeleted || !msg.isDeleted); // Filter out deleted messages unless requested
 
           // We need the NEWEST messages.
           // Reverse messages from file so [0] is newest in that file
@@ -283,7 +287,11 @@ export class ChatPersistence {
     }
   }
 
-  getLogMessages(dateStr: string, roomId: string): ChatMessage[] {
+  getLogMessages(
+    dateStr: string,
+    roomId: string,
+    includeDeleted: boolean = false,
+  ): ChatMessage[] {
     try {
       const filePath = this.getFilePath(roomId, dateStr);
       if (!fs.existsSync(filePath)) return [];
@@ -299,7 +307,12 @@ export class ChatPersistence {
             return null;
           }
         })
-        .filter((msg): msg is ChatMessage => msg !== null);
+        .filter((msg): msg is ChatMessage => msg !== null)
+        .map((msg) => ({
+          ...msg,
+          ...moderationStore.getModeration(msg.id),
+        }))
+        .filter((msg) => includeDeleted || !msg.isDeleted);
     } catch (error) {
       console.error("[ChatPersistence] Error getting log messages:", error);
       return [];
