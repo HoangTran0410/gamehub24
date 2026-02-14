@@ -70,7 +70,7 @@ export const updates: {
     en: "Thirteen: Better Bot + logic chopping",
     vi: "Tiến lên: Bot xịn hơn + logic chặt",
     gameId: "thirteen",
-    timestamp: 1770970731524,
+    timestamp: 1771057827960,
   },
   {
     type: "new",

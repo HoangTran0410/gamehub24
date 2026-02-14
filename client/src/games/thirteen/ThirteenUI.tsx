@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import Thirteen from "./Thirteen";
 import type { Card, PlayerSlot } from "./types";
-import { RANK_DISPLAY, Suit, decodeCard } from "./types";
+import { RANK_DISPLAY, Suit, decodeCard, CombinationType } from "./types";
 import { useRoomStore } from "../../stores/roomStore";
 import {
   Play,
@@ -42,6 +42,7 @@ export default function ThirteenUI({ game: baseGame }: GameUIProps) {
   const [highlightedCards, setHighlightedCards] = useState<number[]>([]);
   const [expandPlays, setExpandPlays] = useState(false);
   const [showRules, setShowRules] = useState(false);
+  const [localPattern, setLocalPattern] = useState<any>("random");
   const myHandRef = useRef<HTMLDivElement>(null);
   const { username } = useUserStore();
   const { ti, ts } = useLanguage();
@@ -445,6 +446,12 @@ export default function ThirteenUI({ game: baseGame }: GameUIProps) {
               <ul className="list-disc pl-5 space-y-1">
                 <li>
                   {ti({
+                    en: "First round starts with 3 spades. Next round winner play first.",
+                    vi: "Ván đầu 3 bích đi trước. Ván sau ai thắng đi trước.",
+                  })}
+                </li>
+                <li>
+                  {ti({
                     en: "Play a combination that is higher (better rank/suit) than the previous one to beat it.",
                     vi: "Đánh bộ bài cao hơn (về giá trị/chất) để chặn bài trước đó.",
                   })}
@@ -525,14 +532,78 @@ export default function ThirteenUI({ game: baseGame }: GameUIProps) {
                 vi: "Đang chờ người chơi...",
               })}
             </span>
+
             {isHost && canStart && (
-              <button
-                onClick={() => game.requestStartGame()}
-                className="px-6 py-2 @md:px-8 @md:py-3 bg-slate-600 hover:bg-slate-500 rounded-lg @md:rounded-xl font-medium @md:font-bold flex items-center gap-2"
-              >
-                <Play className="w-4 h-4 @md:w-5 @md:h-5" />
-                {ts({ en: "Start Game", vi: "Bắt đầu" })}
-              </button>
+              <div className="flex flex-col items-center gap-3">
+                {/* Hand Pattern Selector for Host (Testing only with bots) */}
+                {state.players
+                  .filter((p) => p.id !== null && p.id !== game.getUserId())
+                  .every((p) => p.isBot) && (
+                  <div className="flex flex-col items-center gap-2 bg-slate-800 rounded-2xl p-2">
+                    <span className="text-slate-400 text-sm text-center">
+                      {ts({
+                        en: "Choose cards to play (Testing only with bots)",
+                        vi: "Chọn bài muốn chơi (Chỉ có khi chơi với bot)",
+                      })}
+                      :
+                    </span>
+                    <div className="flex flex-wrap justify-center gap-2 mb-2">
+                      {[
+                        { id: "random", vi: "Ngẫu nhiên", en: "Random" },
+                        { id: CombinationType.PAIR, vi: "Đôi", en: "Pair" },
+                        {
+                          id: CombinationType.TRIPLE,
+                          vi: "Ba (Sám)",
+                          en: "Triple",
+                        },
+                        {
+                          id: CombinationType.STRAIGHT,
+                          vi: "Sảnh",
+                          en: "Straight",
+                        },
+                        {
+                          id: CombinationType.FOUR_OF_KIND,
+                          vi: "Tứ quý",
+                          en: "Quad",
+                        },
+                        {
+                          id: CombinationType.THREE_CONSECUTIVE_PAIRS,
+                          vi: "3 Đôi thông",
+                          en: "3 Pairs",
+                        },
+                        {
+                          id: CombinationType.FOUR_CONSECUTIVE_PAIRS,
+                          vi: "4 Đôi thông",
+                          en: "4 Pairs",
+                        },
+                      ].map((p) => (
+                        <button
+                          key={p.id}
+                          onClick={() => {
+                            game.setHandPattern(p.id as any);
+                            setLocalPattern(p.id);
+                          }}
+                          className={`px-3 py-1 text-xs rounded-full border transition-all ${
+                            localPattern === p.id
+                              ? "bg-primary-600 border-primary-500 text-white"
+                              : "bg-slate-700 border-slate-600 text-slate-300 hover:bg-slate-600"
+                          }`}
+                        >
+                          {ts(p as any)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <button
+                  onClick={() => game.requestStartGame()}
+                  className="px-6 py-2 @md:px-8 @md:py-3 bg-slate-600 hover:bg-slate-500 rounded-lg @md:rounded-xl font-medium @md:font-bold flex items-center gap-2"
+                >
+                  <Play className="w-4 h-4 @md:w-5 @md:h-5" />
+                  {ts({ en: "Start Game", vi: "Bắt đầu" })}
+                </button>
+              </div>
             )}
             {isHost && !canStart && (
               <span className="text-xs @md:text-sm text-slate-500">
@@ -770,6 +841,7 @@ function CardDisplay({
         w-16 h-24 @md:w-20 @md:h-28
         bg-white rounded-lg @md:rounded-xl shadow-lg
         border-2 transition-all duration-300 font-bold shrink-0
+        select-none
         ${
           selected
             ? "border-green-500 ring-2 ring-green-400 shadow-green-500/30 shadow-xl"
@@ -820,6 +892,7 @@ function TableCard({
       style={{ animationDelay: `${delay}ms` }}
       className={`
         ${marginLeft}
+        select-none
         w-12 h-18 @md:w-16 @md:h-24
         bg-white rounded-lg @md:rounded-xl shadow-lg
         border-2 border-slate-200 font-bold shrink-0 relative
@@ -880,7 +953,7 @@ function PlayerSlotDisplay({
         }
         rounded-lg @md:rounded-xl transition-all border-2
         ${
-          slot.passed && gamePhase === "playing"
+          (slot.passed || slot.hand.length === 0) && gamePhase === "playing"
             ? "border-slate-600 bg-slate-900/70 opacity-50"
             : isCurrentTurn && gamePhase === "playing"
               ? "border-primary-600 bg-primary-500/10 animate-bounce"

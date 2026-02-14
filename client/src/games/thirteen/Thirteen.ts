@@ -6,11 +6,11 @@ import {
   type Combination,
   type PlayerSlot,
   Suit,
-  Rank,
   CombinationType,
   CombinationName,
   encodeCard,
   decodeCard,
+  Rank,
 } from "./types";
 import type { Player } from "../../stores/roomStore";
 
@@ -105,6 +105,12 @@ export default class Thirteen extends BaseGame<ThirteenState> {
     return deck;
   }
 
+  private selectedHandPattern: string = "random";
+
+  public setHandPattern(pattern: string): void {
+    this.selectedHandPattern = pattern;
+  }
+
   private shuffleDeck(deck: Card[]): Card[] {
     const shuffled = [...deck];
     for (let i = shuffled.length - 1; i > 0; i--) {
@@ -115,10 +121,29 @@ export default class Thirteen extends BaseGame<ThirteenState> {
   }
 
   private dealCards(): void {
-    const deck = this.shuffleDeck(this.createDeck());
-    // const activePlayers = this.state.players.filter((p) => p.id !== null);
-    const cardsPerPlayer = 13; // Math.floor(deck.length / activePlayers.length);
+    let deck = this.createDeck();
 
+    if (this.selectedHandPattern !== "random") {
+      const { patternCards, remainingDeck } = this.extractPattern(
+        deck,
+        this.selectedHandPattern,
+      );
+      // Ensure patternCards are added first, then fill up to 13 with shuffled remaining
+      const initialHand = [
+        ...patternCards,
+        ...this.shuffleDeck(remainingDeck).slice(0, 13 - patternCards.length),
+      ];
+      // Add the rest of the cards to the deck for other players
+      const usedCards = new Set(initialHand);
+      const leftover = this.shuffleDeck(
+        this.createDeck().filter((c) => !usedCards.has(c)),
+      );
+      deck = [...initialHand, ...leftover];
+    } else {
+      deck = this.shuffleDeck(deck);
+    }
+
+    const cardsPerPlayer = 13;
     let cardIndex = 0;
     for (const player of this.state.players) {
       if (player.id !== null) {
@@ -127,6 +152,127 @@ export default class Thirteen extends BaseGame<ThirteenState> {
         cardIndex += cardsPerPlayer;
       }
     }
+  }
+
+  private extractPattern(
+    deck: Card[],
+    pattern: string,
+  ): { patternCards: Card[]; remainingDeck: Card[] } {
+    let patternCards: Card[] = [];
+
+    const byRank = this.groupByRank(deck);
+    const availableRanks = Object.keys(byRank)
+      .map(Number)
+      .sort(() => Math.random() - 0.5);
+
+    switch (pattern) {
+      case CombinationType.FOUR_OF_KIND: {
+        for (const rank of availableRanks) {
+          if (byRank[rank].length === 4) {
+            patternCards = byRank[rank];
+            break;
+          }
+        }
+        break;
+      }
+      case CombinationType.TRIPLE: {
+        for (const rank of availableRanks) {
+          if (byRank[rank].length >= 3) {
+            patternCards = byRank[rank].slice(0, 3);
+            break;
+          }
+        }
+        break;
+      }
+      case CombinationType.PAIR: {
+        for (const rank of availableRanks) {
+          if (byRank[rank].length >= 2) {
+            patternCards = byRank[rank].slice(0, 2);
+            break;
+          }
+        }
+        break;
+      }
+      case CombinationType.THREE_CONSECUTIVE_PAIRS: {
+        // Try random starting rank for consecutive pairs
+        const startRanks = Array.from(
+          { length: Rank.KING - Rank.THREE + 1 },
+          (_, i) => i + Rank.THREE,
+        ).sort(() => Math.random() - 0.5);
+
+        for (const r of startRanks) {
+          if (
+            r + 2 <= Rank.KING &&
+            byRank[r]?.length >= 2 &&
+            byRank[r + 1]?.length >= 2 &&
+            byRank[r + 2]?.length >= 2
+          ) {
+            patternCards = [
+              ...byRank[r].slice(0, 2),
+              ...byRank[r + 1].slice(0, 2),
+              ...byRank[r + 2].slice(0, 2),
+            ];
+            break;
+          }
+        }
+        break;
+      }
+      case CombinationType.FOUR_CONSECUTIVE_PAIRS: {
+        const startRanks = Array.from(
+          { length: Rank.QUEEN - Rank.THREE + 1 },
+          (_, i) => i + Rank.THREE,
+        ).sort(() => Math.random() - 0.5);
+
+        for (const r of startRanks) {
+          if (
+            r + 3 <= Rank.KING &&
+            byRank[r]?.length >= 2 &&
+            byRank[r + 1]?.length >= 2 &&
+            byRank[r + 2]?.length >= 2 &&
+            byRank[r + 3]?.length >= 2
+          ) {
+            patternCards = [
+              ...byRank[r].slice(0, 2),
+              ...byRank[r + 1].slice(0, 2),
+              ...byRank[r + 2].slice(0, 2),
+              ...byRank[r + 3].slice(0, 2),
+            ];
+            break;
+          }
+        }
+        break;
+      }
+      case CombinationType.STRAIGHT: {
+        // Try to generate a random length straight
+        const length = Math.floor(Math.random() * 5) + 3; // 3 to 7 cards
+        const startRanks = Array.from(
+          { length: Rank.ACE - length + 1 - Rank.THREE + 1 },
+          (_, i) => i + Rank.THREE,
+        ).sort(() => Math.random() - 0.5);
+
+        for (const startRank of startRanks) {
+          let found = true;
+          const selected: Card[] = [];
+          for (let i = 0; i < length; i++) {
+            if (byRank[startRank + i]?.length > 0) {
+              selected.push(byRank[startRank + i][0]);
+            } else {
+              found = false;
+              break;
+            }
+          }
+          if (found) {
+            patternCards = selected;
+            break;
+          }
+        }
+        break;
+      }
+    }
+
+    const used = new Set(patternCards);
+    const remainingDeck = deck.filter((c) => !used.has(c));
+    return { patternCards, remainingDeck };
   }
 
   private sortHand(hand: Card[]): void {
@@ -356,13 +502,6 @@ export default class Thirteen extends BaseGame<ThirteenState> {
     this.state.lastPlayedBy = playerId;
     this.state.lastCombination = combination;
 
-    // Reset passed flags for other players
-    if (this.state.currentTrick.length == 0) {
-      this.state.players.forEach((p) => {
-        if (p.id !== playerId) p.passed = false;
-      });
-    }
-
     // Check if player finished their hand
     if (player.hand.length === 0) {
       // Add to rankings if not already there
@@ -408,8 +547,10 @@ export default class Thirteen extends BaseGame<ThirteenState> {
       }
     }
 
-    // Move to next player
-    this.advanceTurn();
+    // Move to next player or resolve trick end
+    if (!this.resolveTrickEnd()) {
+      this.advanceTurn();
+    }
 
     // Check for bot turn
     this.checkBotTurn();
@@ -427,32 +568,7 @@ export default class Thirteen extends BaseGame<ThirteenState> {
 
     this.state.players[playerIndex].passed = true;
 
-    // Check if all others passed
-    const activePlayers = this.state.players.filter(
-      (p) => p.id !== null && p.hand.length > 0,
-    );
-    const allOthersPassed = activePlayers.every(
-      (p) => p.id === this.state.lastPlayedBy || p.passed,
-    );
-
-    if (allOthersPassed && this.state.lastPlayedBy) {
-      // Winner of trick starts new trick
-      this.state.currentTrick = [];
-      this.state.lastCombination = null;
-      this.state.players.forEach((p) => (p.passed = false));
-      const winnerIndex = this.state.players.findIndex(
-        (p) => p.id === this.state.lastPlayedBy,
-      );
-
-      // If the trick winner already finished (has no cards), find the next player with cards
-      const winnerPlayer = this.state.players[winnerIndex];
-      if (winnerPlayer && winnerPlayer.hand.length === 0) {
-        this.state.currentTurnIndex = winnerIndex;
-        this.advanceTurn();
-      } else {
-        this.state.currentTurnIndex = winnerIndex;
-      }
-    } else {
+    if (!this.resolveTrickEnd()) {
       this.advanceTurn();
     }
 
@@ -473,6 +589,48 @@ export default class Thirteen extends BaseGame<ThirteenState> {
     }
 
     this.state.currentTurnIndex = nextIndex;
+  }
+
+  /**
+   * Checks if the current trick is over (all other active players passed)
+   * and resets the game state for a new trick if it is.
+   * Returns true if the trick was resolved/reset.
+   */
+  private resolveTrickEnd(): boolean {
+    if (!this.state.lastPlayedBy) return false;
+
+    // Active players are those who still have cards
+    const activePlayers = this.state.players.filter(
+      (p) => p.id !== null && p.hand.length > 0,
+    );
+
+    // Trick is over if all other active players have passed
+    const allOthersPassed = activePlayers.every(
+      (p) => p.id === this.state.lastPlayedBy || p.passed,
+    );
+
+    if (allOthersPassed) {
+      // Current trick winner starts the new trick
+      this.state.currentTrick = [];
+      this.state.lastCombination = null;
+      this.state.players.forEach((p) => (p.passed = false));
+
+      const winnerIndex = this.state.players.findIndex(
+        (p) => p.id === this.state.lastPlayedBy,
+      );
+
+      if (winnerIndex !== -1) {
+        this.state.currentTurnIndex = winnerIndex;
+        // If the winner already finished their hand, find the next active player
+        const winnerPlayer = this.state.players[winnerIndex];
+        if (winnerPlayer.hand.length === 0) {
+          this.advanceTurn();
+        }
+      }
+      return true;
+    }
+
+    return false;
   }
 
   private playerHasCards(player: PlayerSlot, cards: Card[]): boolean {
@@ -604,6 +762,8 @@ export default class Thirteen extends BaseGame<ThirteenState> {
       gamePhase: "waiting",
       newGameRequest: null,
     };
+
+    this.selectedHandPattern = "random";
   }
 
   checkGameEnd(): GameResult | null {
@@ -806,20 +966,12 @@ export default class Thirteen extends BaseGame<ThirteenState> {
   // ============== Bot Strategy ==============
 
   private findBestOpeningPlay(hand: Card[]): Card[] {
-    // 0. Special strong combinations (instant win in some variations, or just very strong)
-
-    // Check for 3 consecutive pairs (Sám cô) - can chop 2s
-    const threePairs = this.findThreeConsecutivePairs(hand);
-    if (threePairs.length > 0) {
-      // Prioritize this as it's very strong
-      return threePairs[0];
-    }
-
-    // Check for Four of a Kind (Tứ quý) - can chop 2s
-    const fourOfKinds = this.findFourOfAKind(hand);
-    if (fourOfKinds.length > 0) {
-      return fourOfKinds[0];
-    }
+    const opponentNearFinish = this.state.players.some(
+      (p, index) =>
+        index !== this.state.currentTurnIndex &&
+        p.id !== null &&
+        p.hand.length === 1,
+    );
 
     // 1. Try to find straights (longest first)
     const straights = this.findStraights(hand);
@@ -843,7 +995,27 @@ export default class Thirteen extends BaseGame<ThirteenState> {
       return pairs[0];
     }
 
-    // 4. Default to lowest single
+    // 4. Special strong combinations (only play as opening if hand is small, near finish, or as last resort)
+    if (hand.length < 7 || opponentNearFinish) {
+      // Check for 3 consecutive pairs
+      const threePairs = this.findThreeConsecutivePairs(hand);
+      if (threePairs.length > 0) {
+        return threePairs[0];
+      }
+
+      // Check for Four of a Kind
+      const fourOfKinds = this.findFourOfAKind(hand);
+      if (fourOfKinds.length > 0) {
+        return fourOfKinds[0];
+      }
+    }
+
+    // 5. Default to single card
+    if (opponentNearFinish) {
+      // If someone is about to win, play the highest card (chốt)
+      return [hand[hand.length - 1]];
+    }
+    // Otherwise play the lowest single
     return [hand[0]];
   }
 
@@ -864,6 +1036,7 @@ export default class Thirteen extends BaseGame<ThirteenState> {
 
     // Filter based on game state (must beat last combination if exists)
     const validCandidates = candidates.filter((cards) => {
+      // getCombination detects it correctly
       // 1. Must contain the pivot card (already guaranteed)
 
       // 2. If defending, must beat the last combination
@@ -917,7 +1090,6 @@ export default class Thirteen extends BaseGame<ThirteenState> {
       // Add all triples containing pivot
       // For simplicity, just add the set of 3 if length is 3.
       // If 4, we have combinations. But priority is Quad.
-      // If we strictly follow "attacking", Quad > Triple.
       // If defending against Triple, we need Triple.
 
       // Let's generate all subsets containing pivot
@@ -992,17 +1164,32 @@ export default class Thirteen extends BaseGame<ThirteenState> {
 
           // If sequence length >= 3 and contains pivotRank
           if (sequenceRanks.length >= 3 && sequenceRanks.includes(pivotRank)) {
-            // Build a straight
-            const straight: Card[] = [];
-            for (const r of sequenceRanks) {
-              if (r === pivotRank) {
-                straight.push(pivotCard);
-              } else {
-                // Pick the smallest card of that rank
-                straight.push(grouped[r][0]);
+            // To correctly beat the table, we need to consider all available cards
+            // for the HIGHEST rank in the sequence, as that determines the straight's value.
+            const highestRank = sequenceRanks[sequenceRanks.length - 1];
+            const intermediateRanks = sequenceRanks.slice(0, -1);
+
+            // If the highest rank is the pivot, we only have one option for it
+            const highestRankCards =
+              highestRank === pivotRank ? [pivotCard] : grouped[highestRank];
+
+            for (const lastCard of highestRankCards) {
+              const straight: Card[] = [lastCard];
+              let possible = true;
+
+              for (const r of intermediateRanks) {
+                if (r === pivotRank) {
+                  straight.push(pivotCard);
+                } else {
+                  // Use the lowest card for intermediate ranks to "save" better cards
+                  straight.push(grouped[r][0]);
+                }
+              }
+
+              if (possible) {
+                straights.push(straight.sort((a, b) => a - b));
               }
             }
-            straights.push(straight);
           }
         } else {
           break;
@@ -1024,7 +1211,6 @@ export default class Thirteen extends BaseGame<ThirteenState> {
     const results: Card[][] = [];
 
     for (let i = 0; i <= ranks.length - count; i++) {
-      let isConsec = true;
       const currentSet: Card[] = [];
 
       for (let j = 0; j < count; j++) {
@@ -1035,14 +1221,25 @@ export default class Thirteen extends BaseGame<ThirteenState> {
           r === Rank.TWO ||
           grouped[r].length < 2
         ) {
-          isConsec = false;
           break;
         }
-        currentSet.push(...grouped[r].slice(0, 2));
-      }
 
-      if (isConsec) {
-        results.push(currentSet);
+        if (j === count - 1) {
+          // Highest rank: generate all possible pairs for this rank
+          const pairsAtRank: Card[][] = [];
+          for (let m = 0; m < grouped[r].length; m++) {
+            for (let n = m + 1; n < grouped[r].length; n++) {
+              pairsAtRank.push([grouped[r][m], grouped[r][n]]);
+            }
+          }
+          // We'll handle multiple candidates below
+          for (const topPair of pairsAtRank) {
+            results.push([...currentSet, ...topPair]);
+          }
+        } else {
+          // Intermediate rank: take lowest pair
+          currentSet.push(...grouped[r].slice(0, 2));
+        }
       }
     }
     return results;
@@ -1264,26 +1461,49 @@ export default class Thirteen extends BaseGame<ThirteenState> {
 
     // Check type mismatch
     if (combination.type !== lastCombo.type) {
-      // Special case: four of a kind can beat single 2
+      const lastCards =
+        this.state.currentTrick[this.state.currentTrick.length - 1].cards;
+      const lastRank = decodeCard(lastCards[0]).rank;
+
+      // Special case: Single 2 can be beaten by Quad or 3+ Consecutive Pairs
+      if (lastCombo.type === CombinationType.SINGLE && lastRank === Rank.TWO) {
+        if (
+          combination.type === CombinationType.FOUR_OF_KIND ||
+          combination.type === CombinationType.THREE_CONSECUTIVE_PAIRS ||
+          combination.type === CombinationType.FOUR_CONSECUTIVE_PAIRS
+        ) {
+          return { valid: true };
+        }
+      }
+
+      // Special case: Pair of 2s can be beaten by Quad or 4+ Consecutive Pairs
+      if (lastCombo.type === CombinationType.PAIR && lastRank === Rank.TWO) {
+        if (
+          combination.type === CombinationType.FOUR_OF_KIND ||
+          combination.type === CombinationType.FOUR_CONSECUTIVE_PAIRS
+        ) {
+          return { valid: true };
+        }
+      }
+
+      // Special case: 3 Consecutive Pairs can be beaten by Quad or 4 Consecutive Pairs
+      if (lastCombo.type === CombinationType.THREE_CONSECUTIVE_PAIRS) {
+        if (
+          combination.type === CombinationType.FOUR_OF_KIND ||
+          combination.type === CombinationType.FOUR_CONSECUTIVE_PAIRS
+        ) {
+          return { valid: true };
+        }
+      }
+
+      // Special case: Quad can be beaten by 4 Consecutive Pairs
       if (
-        combination.type === CombinationType.FOUR_OF_KIND &&
-        lastCombo.type === CombinationType.SINGLE &&
-        decodeCard(
-          this.state.currentTrick[this.state.currentTrick.length - 1].cards[0],
-        ).rank === Rank.TWO
+        lastCombo.type === CombinationType.FOUR_OF_KIND &&
+        combination.type === CombinationType.FOUR_CONSECUTIVE_PAIRS
       ) {
         return { valid: true };
       }
-      // Special case: three consecutive pairs (sám cô) can beat single 2
-      if (
-        combination.type === CombinationType.THREE_CONSECUTIVE_PAIRS &&
-        lastCombo.type === CombinationType.SINGLE &&
-        decodeCard(
-          this.state.currentTrick[this.state.currentTrick.length - 1].cards[0],
-        ).rank === Rank.TWO
-      ) {
-        return { valid: true };
-      }
+
       return {
         valid: false,
         error: {
