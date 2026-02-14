@@ -18,6 +18,7 @@ import {
   Club,
   Diamond,
   Heart,
+  Brain,
 } from "lucide-react";
 import { useUserStore } from "../../stores/userStore";
 import { useAlertStore } from "../../stores/alertStore";
@@ -74,11 +75,12 @@ export default function ThirteenUI({ game: baseGame }: GameUIProps) {
     return game.onUpdate((_newState) => {
       setSelectedCards([]);
       setHighlightedCards([]);
+      setLocalPattern(game.getHandPattern());
     });
   }, [game]);
 
   const handleCardClick = (index: number) => {
-    if (!isMyTurn || state.gamePhase !== "playing" || !mySlot) return;
+    if (state.gamePhase !== "playing" || !mySlot) return;
 
     // Check if clicking a highlighted card
     if (highlightedCards.includes(index) && !selectedCards.includes(index)) {
@@ -660,7 +662,7 @@ export default function ThirteenUI({ game: baseGame }: GameUIProps) {
                     selected={selectedCards.includes(index)}
                     highlighted={highlightedCards.includes(index)}
                     onClick={() => handleCardClick(index)}
-                    disabled={!isMyTurn}
+                    // disabled={!isMyTurn}
                     index={index}
                     rotation={rotation}
                     translateX={translateX}
@@ -1001,6 +1003,40 @@ function PlayerSlotDisplay({
               <User className="w-5 h-5 text-green-400" />
             )}
             <span className="text-xs font-medium">{slot.username}</span>
+            {slot.isBot && slot.persona && (
+              <div
+                className={`
+                  flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider
+                  ${
+                    slot.persona === "aggressive"
+                      ? "bg-red-500/20 text-red-400 border border-red-500/30"
+                      : slot.persona === "cautious"
+                        ? "bg-green-500/20 text-green-400 border border-green-500/30"
+                        : "bg-slate-500/20 text-slate-300 border border-slate-500/30"
+                  }
+                `}
+                title={ts({
+                  en: `Persona: ${slot.persona}`,
+                  vi: `Tính cách: ${slot.persona}`,
+                })}
+              >
+                <Brain className="w-2.5 h-2.5" />
+                {ts({
+                  en:
+                    slot.persona === "aggressive"
+                      ? "Aggro"
+                      : slot.persona === "cautious"
+                        ? "Safe"
+                        : "Basic",
+                  vi:
+                    slot.persona === "aggressive"
+                      ? "Hăng"
+                      : slot.persona === "cautious"
+                        ? "Kỹ"
+                        : "Vừa",
+                })}
+              </div>
+            )}
             {rankBadge && (
               <span className="text-sm" title={`Rank: ${rankBadge}`}>
                 {rankBadge}

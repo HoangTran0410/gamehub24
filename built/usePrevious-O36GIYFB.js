@@ -1,1 +1,0 @@
-import{b as r}from"./react-vendor-BLBa7-IT.js";function e(e,t){const u=r.useRef(e),c=r.useRef(t);return r.useEffect(()=>{c.current=t},[t]),r.useEffect(()=>{c.current&&u.current!==e&&c.current(u.current,e),u.current=e},[e]),u.current}export{e as u};

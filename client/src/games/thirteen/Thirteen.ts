@@ -11,6 +11,7 @@ import {
   encodeCard,
   decodeCard,
   Rank,
+  type BotPersona,
 } from "./types";
 import type { Player } from "../../stores/roomStore";
 
@@ -109,6 +110,10 @@ export default class Thirteen extends BaseGame<ThirteenState> {
 
   public setHandPattern(pattern: string): void {
     this.selectedHandPattern = pattern;
+  }
+
+  public getHandPattern(): string {
+    return this.selectedHandPattern;
   }
 
   private shuffleDeck(deck: Card[]): Card[] {
@@ -244,7 +249,7 @@ export default class Thirteen extends BaseGame<ThirteenState> {
       }
       case CombinationType.STRAIGHT: {
         // Try to generate a random length straight
-        const length = Math.floor(Math.random() * 5) + 3; // 3 to 7 cards
+        const length = Math.floor(Math.random() * 5) + 5; // 5 to 9 cards
         const startRanks = Array.from(
           { length: Rank.ACE - length + 1 - Rank.THREE + 1 },
           (_, i) => i + Rank.THREE,
@@ -710,6 +715,15 @@ export default class Thirteen extends BaseGame<ThirteenState> {
 
     this.dealCards();
     this.state.gamePhase = "playing";
+
+    // Assign random personas to bots
+    const personas: BotPersona[] = ["cautious", "aggressive", "balanced"];
+    this.state.players.forEach((p) => {
+      if (p.isBot) {
+        p.persona = personas[Math.floor(Math.random() * personas.length)];
+      }
+    });
+
     this.state.currentTurnIndex = this.findStartingPlayer();
     this.state.currentTrick = [];
     this.state.lastCombination = null;
@@ -790,6 +804,9 @@ export default class Thirteen extends BaseGame<ThirteenState> {
           slot.hand = [];
           slot.passed = false;
         }
+
+        // reset hand pattern if there are real players
+        if (!slot.isHost) this.setHandPattern("random");
       }
     }
   }
@@ -811,30 +828,41 @@ export default class Thirteen extends BaseGame<ThirteenState> {
     if (!bot.id) return;
 
     // Try to find a valid play
-    const validPlay = this.findValidPlay(bot.hand);
+    const validPlay = this.findValidPlay(bot.hand, bot.persona || "balanced");
 
     if (validPlay) {
       this.handlePlayCards(bot.id, validPlay);
     } else if (this.state.lastCombination) {
-      // Pass if can't beat
+      // Pass if can't beat (or chooses to pass based on persona)
       this.handlePass(bot.id);
     } else {
       // Must play if starting new trick
-      // Strategy: if many cards, play lowest. If few cards, play highest (to finish fast).
-      if (bot.hand.length < 4) {
-        this.handlePlayCards(bot.id, [bot.hand[bot.hand.length - 1]]);
-      } else {
-        this.handlePlayCards(bot.id, [bot.hand[0]]);
-      }
+      // Always play lowest (Tẩu rác) unless blocking
+      this.handlePlayCards(bot.id, [bot.hand[0]]);
     }
   }
 
-  private findValidPlay(hand: Card[]): Card[] | null {
+  private findValidPlay(hand: Card[], persona: BotPersona): Card[] | null {
     const lastCombo = this.state.lastCombination;
+
+    // Cautious bot might pass if the table is already quite high
+    if (persona === "cautious" && lastCombo) {
+      const opponentNearFinish = this.isOpponentNearFinish();
+
+      // If table is Ace or 2, cautious bot usually passes unless it's a finisher
+      // OR unless someone is about to win (must defend!)
+      if (
+        lastCombo.value >= Rank.ACE &&
+        hand.length > 3 &&
+        !opponentNearFinish
+      ) {
+        return null; // Voluntary pass
+      }
+    }
 
     if (!lastCombo) {
       // Starting new trick - find best opening play
-      return this.findBestOpeningPlay(hand);
+      return this.findBestOpeningPlay(hand, persona);
     }
 
     // Try to find matching combination that beats the last
@@ -965,57 +993,64 @@ export default class Thirteen extends BaseGame<ThirteenState> {
 
   // ============== Bot Strategy ==============
 
-  private findBestOpeningPlay(hand: Card[]): Card[] {
-    const opponentNearFinish = this.state.players.some(
+  private isOpponentNearFinish(len = 2): boolean {
+    return this.state.players.some(
       (p, index) =>
         index !== this.state.currentTurnIndex &&
         p.id !== null &&
-        p.hand.length === 1,
+        p.hand.length === len,
     );
+  }
+
+  private findBestOpeningPlay(hand: Card[], persona: BotPersona): Card[] {
+    const opponentNearFinish = this.isOpponentNearFinish();
 
     // 1. Try to find straights (longest first)
     const straights = this.findStraights(hand);
     if (straights.length > 0) {
-      // Prefer the longest straight
+      // Aggressive bot prefers longer straights to gain control
+      // Cautious bot might play shorter ones to "tẩu rác" if it has many
       straights.sort((a, b) => b.length - a.length);
       return straights[0];
     }
 
-    // 2. Try to find triples
-    const triples = this.findTriples(hand);
+    // 2. Try to find triples (excluding 2s unless near finish or finishing)
+    const isEndGame = hand.length < 5;
+    const excludeTwos = !opponentNearFinish && !isEndGame;
+    const triples = this.findTriples(hand, excludeTwos);
     if (triples.length > 0) {
-      // Play lowest triple
       return triples[0];
     }
 
-    // 3. Try to find pairs
-    const pairs = this.findPairs(hand);
+    // 3. Try to find pairs (excluding 2s unless near finish or finishing)
+    const pairs = this.findPairs(hand, excludeTwos);
     if (pairs.length > 0) {
-      // Play lowest pair
       return pairs[0];
     }
 
-    // 4. Special strong combinations (only play as opening if hand is small, near finish, or as last resort)
-    if (hand.length < 7 || opponentNearFinish) {
-      // Check for 3 consecutive pairs
-      const threePairs = this.findThreeConsecutivePairs(hand);
-      if (threePairs.length > 0) {
-        return threePairs[0];
-      }
+    // 4. Special strong combinations (Hàng)
+    // Cautious saves them for the absolute end.
+    // Aggressive might use them to lead if it has no sets.
+    const shouldPlayHang =
+      opponentNearFinish ||
+      (persona === "aggressive" && hand.length < 8) ||
+      hand.length < 5;
 
-      // Check for Four of a Kind
+    if (shouldPlayHang) {
+      const threePairs = this.findThreeConsecutivePairs(hand);
+      if (threePairs.length > 0) return threePairs[0];
+
       const fourOfKinds = this.findFourOfAKind(hand);
-      if (fourOfKinds.length > 0) {
-        return fourOfKinds[0];
-      }
+      if (fourOfKinds.length > 0) return fourOfKinds[0];
     }
 
-    // 5. Default to single card
+    // 5. Default to single card (Tẩu rác)
     if (opponentNearFinish) {
-      // If someone is about to win, play the highest card (chốt)
+      // Chốt
       return [hand[hand.length - 1]];
     }
-    // Otherwise play the lowest single
+
+    // Default: play lowest single to "tẩu rác"
     return [hand[0]];
   }
 
@@ -1254,10 +1289,11 @@ export default class Thirteen extends BaseGame<ThirteenState> {
   }
 
   // Helper for bot (legacy/simple)
-  private findPairs(hand: Card[]): Card[][] {
+  private findPairs(hand: Card[], excludeTwos = false): Card[][] {
     const grouped = this.groupByRank(hand);
     const pairs: Card[][] = [];
-    for (const cards of Object.values(grouped)) {
+    for (const [rank, cards] of Object.entries(grouped)) {
+      if (excludeTwos && Number(rank) === Rank.TWO) continue;
       if (cards.length >= 2) {
         pairs.push(cards.slice(0, 2)); // Just return the first pair
       }
@@ -1265,10 +1301,11 @@ export default class Thirteen extends BaseGame<ThirteenState> {
     return pairs.sort((a, b) => decodeCard(a[0]).rank - decodeCard(b[0]).rank);
   }
 
-  private findTriples(hand: Card[]): Card[][] {
+  private findTriples(hand: Card[], excludeTwos = false): Card[][] {
     const grouped = this.groupByRank(hand);
     const triples: Card[][] = [];
-    for (const cards of Object.values(grouped)) {
+    for (const [rank, cards] of Object.entries(grouped)) {
+      if (excludeTwos && Number(rank) === Rank.TWO) continue;
       if (cards.length >= 3) {
         triples.push(cards.slice(0, 3));
       }

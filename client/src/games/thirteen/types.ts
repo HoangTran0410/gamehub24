@@ -95,6 +95,8 @@ export interface Combination {
   value: number;
 }
 
+export type BotPersona = "cautious" | "aggressive" | "balanced";
+
 // Player slot in the game
 export interface PlayerSlot {
   id: string | null; // null if empty
@@ -103,6 +105,7 @@ export interface PlayerSlot {
   isBot: boolean;
   isHost: boolean;
   passed: boolean; // Has passed in current trick
+  persona?: BotPersona;
 }
 
 export type GamePhase = "waiting" | "playing" | "ended";
