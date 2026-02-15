@@ -993,12 +993,12 @@ export default class Thirteen extends BaseGame<ThirteenState> {
 
   // ============== Bot Strategy ==============
 
-  private isOpponentNearFinish(len = 2): boolean {
+  private isOpponentNearFinish(len = 3): boolean {
     return this.state.players.some(
       (p, index) =>
         index !== this.state.currentTurnIndex &&
         p.id !== null &&
-        p.hand.length === len,
+        p.hand.length <= len,
     );
   }
 
