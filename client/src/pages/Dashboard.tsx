@@ -21,6 +21,8 @@ import {
   ExternalLink,
   MessageSquare,
   ChevronLeft,
+  ChevronUp,
+  ChevronDown,
 } from "lucide-react";
 import { getServerUrl } from "../services/socket";
 import { formatTimeAgo } from "../utils";
@@ -111,6 +113,15 @@ export default function Dashboard() {
     type: "success" | "error";
     text: string;
   } | null>(null);
+
+  const [analyticsRange, setAnalyticsRange] = useState<
+    "today" | "yesterday" | "7d" | "14d" | "30d" | "all"
+  >("7d");
+
+  const [gameStatsSort, setGameStatsSort] = useState<{
+    key: "game" | "plays" | "dataTransfer";
+    direction: "asc" | "desc";
+  }>({ key: "plays", direction: "desc" });
 
   const [activeTab, setActiveTab] = useState<
     "overview" | "rooms" | "messenger" | "moderation" | "security"
@@ -341,6 +352,76 @@ export default function Dashboard() {
     }
   }, [token]);
 
+  const filteredDailyData = useMemo(() => {
+    if (!data?.stats.daily) return {};
+    if (analyticsRange === "all") return data.stats.daily;
+
+    const now = new Date();
+    let startDate: Date;
+
+    if (analyticsRange === "today") {
+      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    } else if (analyticsRange === "yesterday") {
+      startDate = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate() - 1,
+      );
+      const endDate = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate(),
+      );
+      return Object.fromEntries(
+        Object.entries(data.stats.daily).filter(([date]) => {
+          const d = new Date(date);
+          return d >= startDate && d < endDate;
+        }),
+      );
+    } else {
+      const days = parseInt(analyticsRange);
+      startDate = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate() - days,
+      );
+    }
+
+    return Object.fromEntries(
+      Object.entries(data.stats.daily).filter(
+        ([date]) => new Date(date) >= startDate,
+      ),
+    );
+  }, [data?.stats.daily, analyticsRange]);
+
+  const aggregatedGameStats = useMemo(() => {
+    const stats: Record<string, { plays: number; dataTransfer: number }> = {};
+
+    Object.values(filteredDailyData).forEach((day) => {
+      Object.entries(day.plays).forEach(([game, count]) => {
+        if (!stats[game]) stats[game] = { plays: 0, dataTransfer: 0 };
+        stats[game].plays += count;
+      });
+      Object.entries(day.dataTransfer).forEach(([game, bytes]) => {
+        if (!stats[game]) stats[game] = { plays: 0, dataTransfer: 0 };
+        stats[game].dataTransfer += bytes;
+      });
+    });
+
+    return Object.entries(stats).sort(([gameA, statsA], [gameB, statsB]) => {
+      const { key, direction } = gameStatsSort;
+      let comparison = 0;
+
+      if (key === "game") {
+        comparison = gameA.localeCompare(gameB);
+      } else {
+        comparison = (statsA as any)[key] - (statsB as any)[key];
+      }
+
+      return direction === "asc" ? comparison : -comparison;
+    });
+  }, [filteredDailyData, gameStatsSort]);
+
   // Login Screen
   if (!token) {
     return (
@@ -436,10 +517,6 @@ export default function Dashboard() {
     ? Object.entries(data.chats.messagesByRoom)
         .sort(([, a], [, b]) => b - a)
         .slice(0, 5)
-    : [];
-
-  const sortedGameStats = data?.stats?.plays
-    ? Object.entries(data.stats.plays).sort(([, a], [, b]) => b - a)
     : [];
 
   return (
@@ -593,33 +670,154 @@ export default function Dashboard() {
                 />
               </div>
 
-              {data?.stats.daily && <DailyGraph data={data.stats.daily} />}
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-2">
+                <h2 className="text-xl font-bold text-white flex items-center gap-3">
+                  <BarChart2 className="w-6 h-6 text-primary" />
+                  Analytics Overview
+                </h2>
+                <div className="flex bg-white/5 p-1 rounded-xl self-start">
+                  {(
+                    ["today", "yesterday", "7d", "14d", "30d", "all"] as const
+                  ).map((range) => (
+                    <button
+                      key={range}
+                      onClick={() => setAnalyticsRange(range)}
+                      className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${
+                        analyticsRange === range
+                          ? "bg-primary text-white shadow-lg"
+                          : "text-text-muted hover:text-white"
+                      }`}
+                    >
+                      {range}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {data?.stats.daily && (
+                <DailyGraph
+                  data={filteredDailyData}
+                  days={
+                    analyticsRange === "all"
+                      ? Object.keys(data.stats.daily).length
+                      : analyticsRange === "today" ||
+                          analyticsRange === "yesterday"
+                        ? 1
+                        : parseInt(analyticsRange)
+                  }
+                />
+              )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="bg-background-secondary/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6 shadow-xl">
+                <div className="bg-background-secondary/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6 shadow-xl flex flex-col h-[500px]">
                   <h2 className="text-lg font-bold mb-4 flex items-center gap-3">
                     <BarChart2 className="w-5 h-5 text-amber-400" />
-                    Lifetime Game Statistics
+                    Game Statistics
                   </h2>
-                  <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
-                    {sortedGameStats.map(([game, count]) => (
-                      <div
-                        key={game}
-                        className="flex items-center justify-between group p-2 rounded-lg hover:bg-white/5 transition-all"
-                      >
-                        <span className="text-sm font-medium text-slate-300 group-hover:text-white transition-colors capitalize">
-                          {game}
-                        </span>
-                        <div className="flex items-center gap-3">
-                          <span className="text-sm font-bold font-mono text-primary">
-                            {count}
-                          </span>
-                          <span className="text-[10px] text-text-muted">
-                            plays
-                          </span>
-                        </div>
-                      </div>
-                    ))}
+                  <div className="overflow-x-auto border border-white/5 rounded-xl bg-white/2 flex-1 custom-scrollbar">
+                    <table className="w-full text-left text-[10px]">
+                      <thead className="bg-white/5 text-text-muted font-bold uppercase tracking-wider sticky top-0 z-10 backdrop-blur-md">
+                        <tr>
+                          <th
+                            className="px-4 py-3 border-b border-white/5 cursor-pointer hover:text-white transition-colors"
+                            onClick={() => {
+                              const dir =
+                                gameStatsSort.key === "game" &&
+                                gameStatsSort.direction === "asc"
+                                  ? "desc"
+                                  : "asc";
+                              setGameStatsSort({ key: "game", direction: dir });
+                            }}
+                          >
+                            <div className="flex items-center gap-1">
+                              Game
+                              {gameStatsSort.key === "game" &&
+                                (gameStatsSort.direction === "asc" ? (
+                                  <ChevronUp className="w-3 h-3 text-primary" />
+                                ) : (
+                                  <ChevronDown className="w-3 h-3 text-primary" />
+                                ))}
+                            </div>
+                          </th>
+                          <th
+                            className="px-4 py-3 border-b border-white/5 cursor-pointer hover:text-white transition-colors"
+                            onClick={() => {
+                              const dir =
+                                gameStatsSort.key === "plays" &&
+                                gameStatsSort.direction === "desc"
+                                  ? "asc"
+                                  : "desc";
+                              setGameStatsSort({
+                                key: "plays",
+                                direction: dir,
+                              });
+                            }}
+                          >
+                            <div className="flex items-center gap-1">
+                              Plays
+                              {gameStatsSort.key === "plays" &&
+                                (gameStatsSort.direction === "asc" ? (
+                                  <ChevronUp className="w-3 h-3 text-primary" />
+                                ) : (
+                                  <ChevronDown className="w-3 h-3 text-primary" />
+                                ))}
+                            </div>
+                          </th>
+                          <th
+                            className="px-4 py-3 border-b border-white/5 cursor-pointer hover:text-white transition-colors"
+                            onClick={() => {
+                              const dir =
+                                gameStatsSort.key === "dataTransfer" &&
+                                gameStatsSort.direction === "desc"
+                                  ? "asc"
+                                  : "desc";
+                              setGameStatsSort({
+                                key: "dataTransfer",
+                                direction: dir,
+                              });
+                            }}
+                          >
+                            <div className="flex items-center gap-1">
+                              Usage
+                              {gameStatsSort.key === "dataTransfer" &&
+                                (gameStatsSort.direction === "asc" ? (
+                                  <ChevronUp className="w-3 h-3 text-primary" />
+                                ) : (
+                                  <ChevronDown className="w-3 h-3 text-primary" />
+                                ))}
+                            </div>
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/5 font-mono">
+                        {aggregatedGameStats.map(([game, stats]) => (
+                          <tr
+                            key={game}
+                            className="hover:bg-white/5 transition-colors group"
+                          >
+                            <td className="px-4 py-3 capitalize text-white/90 font-bold group-hover:text-primary transition-colors">
+                              {game}
+                            </td>
+                            <td className="px-4 py-3 text-primary font-bold">
+                              {stats.plays.toLocaleString()}
+                            </td>
+                            <td className="px-4 py-3 text-emerald-400 font-bold">
+                              {formatBytes(stats.dataTransfer)}
+                            </td>
+                          </tr>
+                        ))}
+                        {aggregatedGameStats.length === 0 && (
+                          <tr>
+                            <td
+                              colSpan={3}
+                              className="py-10 text-center text-text-muted italic opacity-30 text-xs"
+                            >
+                              No game data for this period
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
 
@@ -1371,9 +1569,21 @@ function DailyGraph({
           (a, b) => a + b,
           0,
         ),
+        raw: dayData,
       };
     });
   }, [data, days]);
+
+  const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
+
+  const toggleExpand = (date: string) => {
+    setExpandedDates((prev) => {
+      const next = new Set(prev);
+      if (next.has(date)) next.delete(date);
+      else next.add(date);
+      return next;
+    });
+  };
 
   if (chartData.length < 2) return null;
 
@@ -1424,7 +1634,7 @@ function DailyGraph({
         </div>
       </div>
 
-      <div className="relative aspect-4/1 w-full">
+      <div className="relative aspect-4/1 w-full mb-10">
         <svg
           viewBox={`0 0 ${width} ${height}`}
           className="w-full h-full overflow-visible"
@@ -1498,12 +1708,143 @@ function DailyGraph({
 
         {/* Date Labels */}
         <div className="flex justify-between mt-4 px-[20px]">
-          {chartData.map((d: any, i: number) => (
-            <div key={i} className="text-[10px] text-text-muted font-mono">
-              {d.date.split("-").slice(1).join("/")}
-            </div>
-          ))}
+          {chartData.map((d: any, i: number) => {
+            // Only show labels for every few days if the range is large
+            const showLabel =
+              chartData.length <= 7 ||
+              i % Math.ceil(chartData.length / 7) === 0 ||
+              i === chartData.length - 1;
+            return (
+              <div
+                key={i}
+                className={`text-[10px] text-text-muted font-mono ${!showLabel ? "opacity-0" : ""}`}
+              >
+                {d.date.split("-").slice(1).join("/")}
+              </div>
+            );
+          })}
         </div>
+      </div>
+
+      {/* Numerical Data Table */}
+      <div className="overflow-x-auto border border-white/5 rounded-xl bg-white/2">
+        <table className="w-full text-left text-[10px]">
+          <thead className="bg-white/5 text-text-muted font-bold uppercase tracking-wider">
+            <tr>
+              <th className="px-4 py-2 border-b border-white/5">Date</th>
+              <th className="px-4 py-2 border-b border-white/5">Plays</th>
+              <th className="px-4 py-2 border-b border-white/5">
+                Data Transfer
+              </th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/5 font-mono">
+            {chartData
+              .slice()
+              .reverse()
+              .map((d) => (
+                <React.Fragment key={d.date}>
+                  <tr className="hover:bg-white/5 transition-colors">
+                    <td className="px-4 py-2 text-white/70 flex items-center gap-2">
+                      <button
+                        onClick={() => toggleExpand(d.date)}
+                        className="p-1 hover:bg-white/10 rounded-md transition-colors"
+                      >
+                        <ChevronLeft
+                          className={`w-3 h-3 transition-transform ${expandedDates.has(d.date) ? "-rotate-90" : ""}`}
+                        />
+                      </button>
+                      {new Date(d.date).toLocaleDateString([], {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                      })}
+                    </td>
+                    <td className="px-4 py-2 text-primary font-bold">
+                      {d.plays.toLocaleString()}
+                    </td>
+                    <td className="px-4 py-2 text-emerald-400 font-bold">
+                      {formatBytes(d.dataTransfer)}
+                    </td>
+                  </tr>
+                  {expandedDates.has(d.date) && (
+                    <tr className="bg-white/5 border-l-2 border-primary/30">
+                      <td colSpan={3} className="px-8 py-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                          <div className="space-y-3">
+                            <h4 className="text-[10px] font-black uppercase tracking-tighter text-primary/80 border-b border-primary/10 pb-1.5 flex items-center gap-2">
+                              <TrendingUp className="w-3 h-3" />
+                              Plays Distribution
+                            </h4>
+                            <div className="space-y-1.5 max-h-[200px] overflow-y-auto custom-scrollbar pr-2">
+                              {Object.entries(d.raw.plays)
+                                .sort(([, a], [, b]) => b - a)
+                                .map(([game, count]) => (
+                                  <div
+                                    key={game}
+                                    className="flex justify-between items-center text-[10px] group/item"
+                                  >
+                                    <span className="capitalize text-text-muted group-hover/item:text-white/80 transition-colors">
+                                      {game}
+                                    </span>
+                                    <div className="flex items-center gap-2">
+                                      <div className="w-16 h-1 bg-white/5 rounded-full overflow-hidden">
+                                        <div
+                                          className="h-full bg-primary/40"
+                                          style={{
+                                            width: `${(count / d.plays) * 100}%`,
+                                          }}
+                                        />
+                                      </div>
+                                      <span className="font-bold text-white/90 min-w-[30px] text-right">
+                                        {count.toLocaleString()}
+                                      </span>
+                                    </div>
+                                  </div>
+                                ))}
+                            </div>
+                          </div>
+                          <div className="space-y-3">
+                            <h4 className="text-[10px] font-black uppercase tracking-tighter text-emerald-400/80 border-b border-emerald-400/10 pb-1.5 flex items-center gap-2">
+                              <Database className="w-3 h-3" />
+                              Data Usage Breakdown
+                            </h4>
+                            <div className="space-y-1.5 max-h-[200px] overflow-y-auto custom-scrollbar pr-2">
+                              {Object.entries(d.raw.dataTransfer)
+                                .sort(([, a], [, b]) => b - a)
+                                .map(([game, bytes]) => (
+                                  <div
+                                    key={game}
+                                    className="flex justify-between items-center text-[10px] group/item"
+                                  >
+                                    <span className="capitalize text-text-muted group-hover/item:text-white/80 transition-colors">
+                                      {game}
+                                    </span>
+                                    <div className="flex items-center gap-2">
+                                      <div className="w-16 h-1 bg-white/5 rounded-full overflow-hidden">
+                                        <div
+                                          className="h-full bg-emerald-500/40"
+                                          style={{
+                                            width: `${(bytes / d.dataTransfer) * 100}%`,
+                                          }}
+                                        />
+                                      </div>
+                                      <span className="font-bold text-white/90 min-w-[40px] text-right">
+                                        {formatBytes(bytes)}
+                                      </span>
+                                    </div>
+                                  </div>
+                                ))}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );
