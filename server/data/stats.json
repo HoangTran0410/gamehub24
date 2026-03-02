@@ -1,55 +1,55 @@
 {
   "plays": {
-    "werewolf": 44,
-    "billiard": 47,
-    "thirteen": 125,
-    "baucua": 84,
-    "youtube": 47,
-    "dotsandboxes": 28,
-    "draw": 35,
-    "maze": 53,
-    "gunnywars": 138,
-    "monopoly": 58,
-    "tictactoe": 11,
-    "caro": 211,
-    "poker": 48,
-    "oanquan": 30,
-    "uno": 33,
-    "chess": 17,
-    "connect4": 15,
-    "ludo": 25,
-    "reversi": 16,
-    "explodingkittens": 67,
-    "irokaruta": 22,
-    "phom": 18,
-    "maubinh": 13,
-    "parabox": 9
+    "werewolf": 59,
+    "billiard": 53,
+    "thirteen": 182,
+    "baucua": 109,
+    "youtube": 59,
+    "dotsandboxes": 33,
+    "draw": 51,
+    "maze": 64,
+    "gunnywars": 149,
+    "monopoly": 76,
+    "tictactoe": 15,
+    "caro": 267,
+    "poker": 70,
+    "oanquan": 39,
+    "uno": 56,
+    "chess": 23,
+    "connect4": 18,
+    "ludo": 38,
+    "reversi": 21,
+    "explodingkittens": 101,
+    "irokaruta": 32,
+    "phom": 24,
+    "maubinh": 23,
+    "parabox": 39
   },
   "dataTransfer": {
-    "billiard": 820934,
-    "baucua": 361527,
-    "monopoly": 5439902,
-    "gunnywars": 685664,
-    "caro": 3285406,
-    "maze": 442425,
-    "poker": 777195,
-    "oanquan": 66892,
-    "uno": 705441,
-    "draw": 6260731,
-    "thirteen": 3317069,
-    "werewolf": 365350,
-    "connect4": 153167,
-    "dotsandboxes": 216907,
+    "billiard": 839615,
+    "baucua": 737271,
+    "monopoly": 14403264,
+    "gunnywars": 779334,
+    "caro": 3899812,
+    "maze": 566594,
+    "poker": 1387626,
+    "oanquan": 90379,
+    "uno": 1073419,
+    "draw": 9166178,
+    "thirteen": 5683597,
+    "werewolf": 1946913,
+    "connect4": 158422,
+    "dotsandboxes": 305654,
     "chess": 11680,
-    "ludo": 1071651,
-    "reversi": 320182,
-    "tictactoe": 12857,
-    "youtube": 12426,
-    "explodingkittens": 722596,
-    "irokaruta": 24794,
+    "ludo": 1469009,
+    "reversi": 440118,
+    "tictactoe": 15763,
+    "youtube": 17829,
+    "explodingkittens": 2020917,
+    "irokaruta": 531575,
     "phom": 380430,
-    "maubinh": 35627,
-    "parabox": 58013
+    "maubinh": 51946,
+    "parabox": 73673
   },
   "daily": {
     "2026-02-12": {
@@ -111,27 +111,398 @@
     "2026-02-14": {
       "plays": {
         "caro": 3,
-        "thirteen": 4,
+        "thirteen": 7,
         "reversi": 2,
         "billiard": 1,
         "maze": 2,
         "monopoly": 1,
         "irokaruta": 1,
-        "chess": 2,
+        "chess": 3,
         "dotsandboxes": 1,
         "parabox": 1,
         "draw": 1,
         "uno": 2,
-        "werewolf": 2
+        "werewolf": 2,
+        "maubinh": 1
       },
       "dataTransfer": {
         "caro": 130809,
         "reversi": 29045,
         "maze": 13851,
         "irokaruta": 12993,
-        "thirteen": 52320,
+        "thirteen": 57722,
         "chess": 2293,
         "uno": 13260
+      }
+    },
+    "2026-02-15": {
+      "plays": {
+        "thirteen": 3,
+        "baucua": 2,
+        "poker": 2,
+        "oanquan": 1,
+        "youtube": 1,
+        "maubinh": 1,
+        "irokaruta": 1,
+        "explodingkittens": 1,
+        "draw": 2,
+        "maze": 1,
+        "reversi": 1,
+        "caro": 1,
+        "monopoly": 2,
+        "ludo": 1
+      },
+      "dataTransfer": {
+        "draw": 85635,
+        "thirteen": 44802,
+        "caro": 17311,
+        "baucua": 1442,
+        "monopoly": 1305957,
+        "ludo": 36554,
+        "poker": 19988
+      }
+    },
+    "2026-02-16": {
+      "plays": {
+        "monopoly": 3,
+        "thirteen": 4,
+        "tictactoe": 3,
+        "maubinh": 1,
+        "explodingkittens": 6,
+        "draw": 1,
+        "parabox": 1,
+        "ludo": 2,
+        "baucua": 4,
+        "caro": 2
+      },
+      "dataTransfer": {
+        "thirteen": 20549,
+        "explodingkittens": 85374,
+        "draw": 623523,
+        "monopoly": 3324,
+        "baucua": 37810,
+        "ludo": 61508,
+        "caro": 47633,
+        "tictactoe": 2906
+      }
+    },
+    "2026-02-17": {
+      "plays": {
+        "thirteen": 2,
+        "parabox": 2,
+        "ludo": 3,
+        "chess": 1,
+        "connect4": 1,
+        "maze": 2,
+        "baucua": 2,
+        "explodingkittens": 4,
+        "youtube": 1,
+        "uno": 7,
+        "gunnywars": 2,
+        "caro": 2,
+        "monopoly": 2,
+        "werewolf": 1,
+        "irokaruta": 1
+      },
+      "dataTransfer": {
+        "caro": 125918,
+        "poker": 15317,
+        "gunnywars": 4250,
+        "uno": 45599,
+        "explodingkittens": 6817,
+        "werewolf": 35542,
+        "baucua": 65461,
+        "maze": 7957,
+        "monopoly": 2027007,
+        "irokaruta": 31077
+      }
+    },
+    "2026-02-18": {
+      "plays": {
+        "ludo": 1,
+        "werewolf": 2,
+        "parabox": 4,
+        "maubinh": 1,
+        "baucua": 5,
+        "draw": 3,
+        "caro": 5,
+        "billiard": 1,
+        "thirteen": 5,
+        "gunnywars": 1,
+        "monopoly": 2,
+        "oanquan": 2,
+        "poker": 4,
+        "maze": 2,
+        "dotsandboxes": 1,
+        "reversi": 1,
+        "irokaruta": 2,
+        "explodingkittens": 5,
+        "uno": 1
+      },
+      "dataTransfer": {
+        "parabox": 11457,
+        "maubinh": 7955,
+        "baucua": 162664,
+        "draw": 1182247,
+        "thirteen": 304235,
+        "monopoly": 3727433,
+        "caro": 45162,
+        "oanquan": 10389,
+        "poker": 236951,
+        "maze": 103047,
+        "dotsandboxes": 32181,
+        "reversi": 119936,
+        "irokaruta": 104072,
+        "werewolf": 202096,
+        "uno": 43795,
+        "explodingkittens": 633211
+      }
+    },
+    "2026-02-19": {
+      "plays": {
+        "explodingkittens": 4,
+        "caro": 3,
+        "ludo": 2,
+        "chess": 2,
+        "reversi": 1,
+        "parabox": 6,
+        "phom": 1,
+        "maubinh": 3,
+        "werewolf": 6,
+        "thirteen": 10,
+        "baucua": 2,
+        "dotsandboxes": 2,
+        "irokaruta": 2,
+        "maze": 1,
+        "draw": 2,
+        "gunnywars": 2,
+        "billiard": 2,
+        "tictactoe": 1,
+        "uno": 3,
+        "oanquan": 2,
+        "connect4": 1
+      },
+      "dataTransfer": {
+        "explodingkittens": 225471,
+        "werewolf": 1338330,
+        "dotsandboxes": 56566,
+        "irokaruta": 350505,
+        "maze": 9984,
+        "baucua": 3820,
+        "draw": 159844,
+        "thirteen": 253334,
+        "uno": 176020,
+        "oanquan": 13098,
+        "parabox": 4039,
+        "ludo": 145541,
+        "caro": 8917,
+        "connect4": 5255
+      }
+    },
+    "2026-02-20": {
+      "plays": {
+        "werewolf": 2,
+        "parabox": 3,
+        "ludo": 1,
+        "poker": 2,
+        "uno": 2,
+        "explodingkittens": 8,
+        "gunnywars": 4,
+        "dotsandboxes": 1,
+        "monopoly": 2,
+        "draw": 1,
+        "thirteen": 5,
+        "maubinh": 2,
+        "phom": 2,
+        "oanquan": 1,
+        "connect4": 1
+      },
+      "dataTransfer": {
+        "uno": 25207,
+        "explodingkittens": 226339,
+        "monopoly": 1164062,
+        "draw": 66254,
+        "thirteen": 56580,
+        "gunnywars": 89420,
+        "maubinh": 8364
+      }
+    },
+    "2026-02-21": {
+      "plays": {
+        "youtube": 2,
+        "parabox": 5,
+        "thirteen": 4,
+        "poker": 3,
+        "monopoly": 1,
+        "billiard": 1,
+        "caro": 4,
+        "gunnywars": 1,
+        "uno": 2,
+        "explodingkittens": 1,
+        "baucua": 1,
+        "werewolf": 1,
+        "irokaruta": 1
+      },
+      "dataTransfer": {
+        "thirteen": 516133,
+        "poker": 1866,
+        "monopoly": 1647,
+        "billiard": 4710,
+        "caro": 8519,
+        "uno": 17194
+      }
+    },
+    "2026-02-22": {
+      "plays": {
+        "draw": 1,
+        "phom": 1,
+        "ludo": 1,
+        "thirteen": 5,
+        "billiard": 1,
+        "monopoly": 2
+      },
+      "dataTransfer": {
+        "thirteen": 441592,
+        "billiard": 13971,
+        "monopoly": 678173
+      }
+    },
+    "2026-02-23": {
+      "plays": {
+        "poker": 3,
+        "billiard": 1,
+        "parabox": 5,
+        "phom": 1,
+        "explodingkittens": 3,
+        "irokaruta": 2,
+        "baucua": 6,
+        "oanquan": 1,
+        "thirteen": 6,
+        "werewolf": 2,
+        "uno": 5,
+        "ludo": 1,
+        "draw": 2,
+        "caro": 1,
+        "monopoly": 1,
+        "maze": 2,
+        "youtube": 1
+      },
+      "dataTransfer": {
+        "thirteen": 634303,
+        "uno": 33542,
+        "werewolf": 5595,
+        "ludo": 15985,
+        "draw": 654716,
+        "caro": 11642,
+        "explodingkittens": 121109,
+        "poker": 61036,
+        "monopoly": 50630,
+        "baucua": 53974
+      }
+    },
+    "2026-02-24": {
+      "plays": {
+        "caro": 3,
+        "parabox": 1,
+        "dotsandboxes": 1,
+        "maze": 1,
+        "chess": 1
+      },
+      "dataTransfer": {
+        "caro": 104961
+      }
+    },
+    "2026-02-25": {
+      "plays": {
+        "baucua": 1,
+        "irokaruta": 1,
+        "thirteen": 4,
+        "monopoly": 2,
+        "explodingkittens": 1,
+        "gunnywars": 1,
+        "werewolf": 1
+      },
+      "dataTransfer": {
+        "irokaruta": 21127,
+        "thirteen": 82793
+      }
+    },
+    "2026-02-26": {
+      "plays": {
+        "phom": 1,
+        "thirteen": 1,
+        "youtube": 2,
+        "maze": 2,
+        "ludo": 1,
+        "uno": 2,
+        "baucua": 1
+      },
+      "dataTransfer": {
+        "ludo": 137770,
+        "uno": 26621,
+        "maze": 3181,
+        "baucua": 50573
+      }
+    },
+    "2026-02-27": {
+      "plays": {
+        "youtube": 4,
+        "draw": 2,
+        "caro": 1,
+        "thirteen": 1,
+        "monopoly": 1,
+        "parabox": 1
+      },
+      "dataTransfer": {
+        "youtube": 5403,
+        "draw": 133046,
+        "caro": 9634,
+        "thirteen": 6805,
+        "monopoly": 5129,
+        "parabox": 164
+      }
+    },
+    "2026-02-28": {
+      "plays": {
+        "poker": 4,
+        "parabox": 1,
+        "youtube": 1,
+        "thirteen": 1,
+        "draw": 2,
+        "chess": 1,
+        "caro": 19
+      },
+      "dataTransfer": {
+        "poker": 75497,
+        "caro": 82564,
+        "draw": 182
+      }
+    },
+    "2026-03-01": {
+      "plays": {
+        "caro": 11,
+        "thirteen": 1
+      },
+      "dataTransfer": {
+        "caro": 26501
+      }
+    },
+    "2026-03-02": {
+      "plays": {
+        "oanquan": 2,
+        "baucua": 1,
+        "uno": 1,
+        "parabox": 1,
+        "thirteen": 2,
+        "reversi": 2,
+        "poker": 4,
+        "caro": 4,
+        "maubinh": 1,
+        "explodingkittens": 1
+      },
+      "dataTransfer": {
+        "poker": 199776,
+        "caro": 125644
       }
     }
   }
