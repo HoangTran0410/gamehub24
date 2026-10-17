@@ -352,6 +352,21 @@ export default function Lobby() {
           </span>
           .
         </p>
+        {window.self === window.top && (
+          <p className="text-text-muted text-xs text-center mt-1">
+            <a
+              href="https://fbaio.org/#/desktop"
+              target="_blank"
+              rel="noopener"
+              className="hover:text-primary"
+            >
+              {ti({
+                en: "More tools & games: AIO Desktop",
+                vi: "Thêm công cụ & trò chơi: AIO Desktop",
+              })}
+            </a>
+          </p>
+        )}
       </footer>
     </div>
   );
